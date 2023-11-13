@@ -1,0 +1,90 @@
+
+state 0
+	$accept: .Expression $end 
+
+	MATCH  shift 3
+	.  error
+
+	Expression  goto 1
+	MatchClause  goto 2
+
+state 1
+	$accept:  Expression.$end 
+
+	$end  accept
+	.  error
+
+
+state 2
+	Expression:  MatchClause.EOF 
+
+	EOF  shift 4
+	.  error
+
+
+state 3
+	MatchClause:  MATCH.NodePattern 
+
+	LPAREN  shift 6
+	.  error
+
+	NodePattern  goto 5
+
+state 4
+	Expression:  MatchClause EOF.    (1)
+
+	.  reduce 1 (src line 31)
+
+
+state 5
+	MatchClause:  MATCH NodePattern.    (2)
+
+	.  reduce 2 (src line 38)
+
+
+state 6
+	NodePattern:  LPAREN.IDENT COLON IDENT RPAREN 
+
+	IDENT  shift 7
+	.  error
+
+
+state 7
+	NodePattern:  LPAREN IDENT.COLON IDENT RPAREN 
+
+	COLON  shift 8
+	.  error
+
+
+state 8
+	NodePattern:  LPAREN IDENT COLON.IDENT RPAREN 
+
+	IDENT  shift 9
+	.  error
+
+
+state 9
+	NodePattern:  LPAREN IDENT COLON IDENT.RPAREN 
+
+	RPAREN  shift 10
+	.  error
+
+
+state 10
+	NodePattern:  LPAREN IDENT COLON IDENT RPAREN.    (3)
+
+	.  reduce 3 (src line 44)
+
+
+9 terminals, 4 nonterminals
+4 grammar rules, 11/16000 states
+0 shift/reduce, 0 reduce/reduce conflicts reported
+53 working sets used
+memory: parser 2/240000
+0 extra closures
+7 shift entries, 1 exceptions
+3 goto entries
+0 entries saved by goto default
+Optimizer space used: output 10/240000
+10 table entries, 0 zero
+maximum spread: 9, maximum offset: 9
