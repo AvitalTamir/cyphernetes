@@ -7,35 +7,31 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"encoding/json"
-	"strings"
-
-	"github.com/yalp/jsonpath"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func extractJSON(data interface{}, path string) (string, error) {
-	// Convert the data to JSON.
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return "", err
-	}
+// func extractJSON(data interface{}, path string) (string, error) {
+// 	// Convert the data to JSON.
+// 	jsonData, err := json.Marshal(data)
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	// Parse the JSONPath expression.
-	expr, err := jsonpath.Read(jsonData, path)
-	if err != nil {
-		return "", err
-	}
+// 	// Parse the JSONPath expression.
+// 	expr, err := jsonpath.Read(jsonData, path)
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	// Convert the result to a string.
-	result, ok := expr.(string)
-	if !ok {
-		return "", fmt.Errorf("expected string result, got %T", expr)
-	}
+// 	// Convert the result to a string.
+// 	result, ok := expr.(string)
+// 	if !ok {
+// 		return "", fmt.Errorf("expected string result, got %T", expr)
+// 	}
 
-	// Trim any leading/trailing whitespace and return the result.
-	return strings.TrimSpace(result), nil
-}
+// 	// Trim any leading/trailing whitespace and return the result.
+// 	return strings.TrimSpace(result), nil
+// }
 
 type QueryExecutor struct {
 	Clientset *kubernetes.Clientset
@@ -63,7 +59,7 @@ func getK8sResources(clientset *kubernetes.Clientset, kind string) (interface{},
 	switch kind {
 	case "Pod":
 		// Get the list of pods using the k8s client's corev1 method.
-		pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
+		pods, err := clientset.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			fmt.Println("Error getting list of pods: ", err)
 			return nil, err
@@ -71,7 +67,7 @@ func getK8sResources(clientset *kubernetes.Clientset, kind string) (interface{},
 		return pods, nil
 	case "Deployment":
 		// Get the list of deployments using the k8s client's appsv1 method.
-		deployments, err := clientset.AppsV1().Deployments("").List(context.Background(), metav1.ListOptions{})
+		deployments, err := clientset.AppsV1().Deployments(Namespace).List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			fmt.Println("Error getting list of deployments: ", err)
 			return nil, err

@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// queryCmd represents the query command
 var queryCmd = &cobra.Command{
 	Use:   "query [Cypher-inspired query]",
 	Short: "Execute a Cypher-inspired query against Kubernetes",
