@@ -71,14 +71,14 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 ### Phase 1: Basic MATCH Support
 
 - [x] Support for basic `MATCH` queries (e.g., `MATCH (k:Kind)`).
-- [ ] Write unit tests for basic `MATCH` query parsing.
+- [x] Write unit tests for basic `MATCH` query parsing.
 
-### Phase 2: Node Properties
+### Phase 2: RETURN Clause
 
-- [ ] Extend the parser to handle node properties.
-  - [ ] Update the lexer to recognize curly braces and commas.
-  - [ ] Update the yacc file to handle node properties syntax.
-  - [ ] Write unit tests for `MATCH` queries with node properties.
+- [ ] Implement parsing of the `RETURN` clause.
+  - [ ] Update the lexer to recognize the `RETURN` keyword.
+  - [ ] Extend the yacc grammar to include `RETURN` statement rules.
+  - [ ] Write unit tests for queries with `RETURN` clauses.
 
 ### Phase 3: Relationships
 
@@ -87,12 +87,12 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
   - [ ] Extend the yacc grammar to handle relationship patterns.
   - [ ] Write unit tests for `MATCH` queries involving relationships.
 
-### Phase 4: RETURN Clause
+### Phase 4: Node Properties
 
-- [ ] Implement parsing of the `RETURN` clause.
-  - [ ] Update the lexer to recognize the `RETURN` keyword.
-  - [ ] Extend the yacc grammar to include `RETURN` statement rules.
-  - [ ] Write unit tests for queries with `RETURN` clauses.
+- [ ] Extend the parser to handle node properties.
+  - [ ] Update the lexer to recognize curly braces and commas.
+  - [ ] Update the yacc file to handle node properties syntax.
+  - [ ] Write unit tests for `MATCH` queries with node properties.
 
 ### Phase 5: CREATE Statement
 
