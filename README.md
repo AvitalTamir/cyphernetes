@@ -64,6 +64,56 @@ Use the Makefile commands to build the project:
 
 Contributions are welcome! Please feel free to submit pull requests, open issues, and provide feedback.
 
+## Project Roadmap
+
+### Initial Project Setup
+
+- [x] Initialize the project repository.
+- [x] Set up version control with Git.
+- [x] Create and document the project directory structure.
+- [x] Choose a Go package management tool and initialize the package.
+- [x] Set up a Go workspace with the necessary Go modules.
+
+### Tooling and Framework
+
+- [x] Set up a testing framework using Go's built-in testing package.
+- [x] Configure a continuous integration service.
+- [x] Establish linting and code formatting tools.
+- [x] Implement logging and debug output mechanisms.
+
+### Lexer and Parser Development
+
+- [x] Create the basic lexer with support for initial tokens.
+- [x] Develop a yacc file for the initial grammar rules.
+- [x] Write unit tests for basic tokenization.
+- [x] Implement a basic parser to handle `MATCH` queries.
+- [x] Test and debug the lexer and parser with simple queries.
+
+### Expanding Lexer and Parser
+
+- [ ] Add support for additional tokens (e.g., braces, commas, relationship types).
+- [ ] Extend grammar rules to cover node properties and relationships.
+- [ ] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
+- [ ] Refine error handling for syntax and parsing errors.
+- [ ] Optimize lexer and parser for performance.
+- [ ] Continuously write tests for new grammar rules and features.
+
+### Kubernetes Client Integration
+
+- [ ] Evaluate and select a Go Kubernetes client library.
+- [ ] Set up authentication and configuration for accessing a Kubernetes cluster.
+- [ ] Implement a wrapper around the Kubernetes client to execute basic queries.
+- [ ] Develop mapping logic to convert parsed queries into Kubernetes API calls.
+- [ ] Test Kubernetes client integration with mock and real clusters.
+- [ ] Add support for complex queries involving multiple Kubernetes resources.
+
+### Interactive Shell Interface
+
+- [ ] Design a CLI interface for inputting queries and displaying results.
+- [ ] Implement CLI commands corresponding to query operations.
+- [ ] Integrate the CLI with the parser and Kubernetes client.
+- [ ] Test CLI with various input scenarios.
+
 ## Cypher-Like Query Language Parser Roadmap
 
 The goal of this roadmap is to incrementally develop a parser that can handle a Cypher-like query language. The final version should support complex queries involving `MATCH`, `RETURN`, `CREATE`, `SET`, and `DELETE` statements.
