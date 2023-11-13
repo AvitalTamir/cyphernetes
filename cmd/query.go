@@ -2,7 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
+
+	"encoding/json"
 
 	"github.com/spf13/cobra"
 )
@@ -14,17 +15,35 @@ var queryCmd = &cobra.Command{
 	Long:  `Use the 'query' subcommand to execute a single Cypher-inspired query against your Kubernetes resources.`,
 	Args:  cobra.ExactArgs(1), // This ensures that exactly one argument is provided
 	Run: func(cmd *cobra.Command, args []string) {
-		// args[0] is the Cypher-inspired query string
-		parsedResult, err := ParseQuery(args[0])
+		// Parse the query to get an AST.
+		ast, err := ParseQuery(args[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing query: %v\n", err)
-			os.Exit(1)
+			// Handle error.
+			fmt.Println("Error parsing query: ", err)
+			return
 		}
-		// Now use the parsedResult to interact with Kubernetes
-		fmt.Printf("Parsed result: %#v\n", parsedResult)
-		// pretty print the parsed result
 
-		// Handle the parsedResult to perform Kubernetes operations
+		// Execute the query against the Kubernetes API.
+		executor, err := NewQueryExecutor()
+		if err != nil {
+			// Handle error.
+			fmt.Println("Error creating query executor: ", err)
+			return
+		}
+		results, err := executor.Execute(ast)
+		if err != nil {
+			// Handle error.
+			fmt.Println("Error executing query: ", err)
+			return
+		}
+		// Print the results as pretty JSON.
+		json, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			// Handle error.
+			fmt.Println("Error marshalling results: ", err)
+			return
+		}
+		fmt.Println(string(json))
 	},
 }
 

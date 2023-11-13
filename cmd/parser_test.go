@@ -1,37 +1,58 @@
+// parser_test.go
 package cmd
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 )
 
-func TestParseMatchQuery(t *testing.T) {
-	// The query to test
-	query := "MATCH (k:Kind)"
+// TestParseQueryWithReturn tests the parsing of a query with a MATCH and RETURN clause.
+func TestParseQueryWithReturn(t *testing.T) {
+	fmt.Println("-------------------- TestParseQueryWithReturn --------------------")
+	// Define the query to parse.
+	query := "MATCH (k:Kind) RETURN k.name"
 
-	// Call the parser
+	// Define the expected AST structure after parsing.
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				NodePattern: &NodePattern{
+					Name: "k",
+					Kind: "Kind",
+				},
+			},
+			&ReturnClause{
+				JsonPath: "k.name",
+			},
+		},
+	}
+
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
-		t.Fatalf("ParseQuery failed: %v", err)
+		t.Fatalf("ParseQuery() error = %v", err)
 	}
 
-	// Check if the result is nil
-	if expr == nil {
-		t.Fatal("Resulting expression is nil")
-	}
-
-	// Check if the result has the expected structure
-	if len(expr.Clauses) != 1 {
-		t.Fatalf("Expected 1 clause, got %d", len(expr.Clauses))
-	}
-
-	// Type assert the first clause to a *MatchClause
-	matchClause, ok := expr.Clauses[0].(*MatchClause)
-	if !ok {
-		t.Fatal("First clause is not a MatchClause")
-	}
-
-	// Check the contents of the NodePattern
-	if matchClause.NodePattern.Name != "k" || matchClause.NodePattern.Kind != "Kind" {
-		t.Errorf("Expected NodePattern with Name 'k' and Kind 'Kind', got Name '%s' and Kind '%s'", matchClause.NodePattern.Name, matchClause.NodePattern.Kind)
+	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
 	}
 }
+
+// TODO: Test invalid input to ensure the parser properly handles errors.
+// func TestParseQueryWithReturnInvalid(t *testing.T) {
+// 	invalidQueries := []string{
+// 		"MATCH (k:Kind) RETURN",          // Missing jsonPath
+// 		"MATCH (k:Kind) RETURN k.",       // Incomplete jsonPath
+// 		"MATCH (k:Kind) RETURN k.(name)", // Invalid jsonPath
+// 		// ... other invalid queries
+// 	}
+
+// 	for _, query := range invalidQueries {
+// 		_, err := ParseQuery(query)
+// 		if err == nil {
+// 			t.Errorf("ParseQuery() with query %q; want error, got nil", query)
+// 		}
+// 	}
+// }

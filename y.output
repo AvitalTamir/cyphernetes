@@ -16,75 +16,96 @@ state 1
 
 
 state 2
-	Expression:  MatchClause.EOF 
+	Expression:  MatchClause.ReturnClause EOF 
 
-	EOF  shift 4
+	RETURN  shift 5
 	.  error
 
+	ReturnClause  goto 4
 
 state 3
 	MatchClause:  MATCH.NodePattern 
 
-	LPAREN  shift 6
+	LPAREN  shift 7
 	.  error
 
-	NodePattern  goto 5
+	NodePattern  goto 6
 
 state 4
-	Expression:  MatchClause EOF.    (1)
+	Expression:  MatchClause ReturnClause.EOF 
 
-	.  reduce 1 (src line 31)
+	EOF  shift 8
+	.  error
 
 
 state 5
-	MatchClause:  MATCH NodePattern.    (2)
+	ReturnClause:  RETURN.JSONPATH 
 
-	.  reduce 2 (src line 38)
-
-
-state 6
-	NodePattern:  LPAREN.IDENT COLON IDENT RPAREN 
-
-	IDENT  shift 7
+	JSONPATH  shift 9
 	.  error
 
 
-state 7
-	NodePattern:  LPAREN IDENT.COLON IDENT RPAREN 
+state 6
+	MatchClause:  MATCH NodePattern.    (2)
 
-	COLON  shift 8
+	.  reduce 2 (src line 43)
+
+
+state 7
+	NodePattern:  LPAREN.IDENT COLON IDENT RPAREN 
+
+	IDENT  shift 10
 	.  error
 
 
 state 8
-	NodePattern:  LPAREN IDENT COLON.IDENT RPAREN 
+	Expression:  MatchClause ReturnClause EOF.    (1)
 
-	IDENT  shift 9
-	.  error
+	.  reduce 1 (src line 37)
 
 
 state 9
-	NodePattern:  LPAREN IDENT COLON IDENT.RPAREN 
+	ReturnClause:  RETURN JSONPATH.    (3)
 
-	RPAREN  shift 10
-	.  error
+	.  reduce 3 (src line 50)
 
 
 state 10
-	NodePattern:  LPAREN IDENT COLON IDENT RPAREN.    (3)
+	NodePattern:  LPAREN IDENT.COLON IDENT RPAREN 
 
-	.  reduce 3 (src line 44)
+	COLON  shift 11
+	.  error
 
 
-9 terminals, 4 nonterminals
-4 grammar rules, 11/16000 states
+state 11
+	NodePattern:  LPAREN IDENT COLON.IDENT RPAREN 
+
+	IDENT  shift 12
+	.  error
+
+
+state 12
+	NodePattern:  LPAREN IDENT COLON IDENT.RPAREN 
+
+	RPAREN  shift 13
+	.  error
+
+
+state 13
+	NodePattern:  LPAREN IDENT COLON IDENT RPAREN.    (4)
+
+	.  reduce 4 (src line 57)
+
+
+11 terminals, 5 nonterminals
+5 grammar rules, 14/16000 states
 0 shift/reduce, 0 reduce/reduce conflicts reported
-53 working sets used
-memory: parser 2/240000
+54 working sets used
+memory: parser 3/240000
 0 extra closures
-7 shift entries, 1 exceptions
-3 goto entries
+9 shift entries, 1 exceptions
+4 goto entries
 0 entries saved by goto default
-Optimizer space used: output 10/240000
-10 table entries, 0 zero
-maximum spread: 9, maximum offset: 9
+Optimizer space used: output 13/240000
+13 table entries, 0 zero
+maximum spread: 11, maximum offset: 11

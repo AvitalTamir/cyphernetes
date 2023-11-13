@@ -29,9 +29,9 @@ type MatchClause struct {
 // 	PropertyValue string
 // }
 
-// type DeleteClause struct {
-// 	Identifier string
-// }
+type ReturnClause struct {
+	JsonPath string
+}
 
 // type ReturnClause struct {
 // 	ReturnItems []string
@@ -54,7 +54,7 @@ func (m *MatchClause) isClause() {}
 // func (c *CreateClause) isClause() {}
 // func (s *SetClause) isClause()    {}
 // func (d *DeleteClause) isClause() {}
-// func (r *ReturnClause) isClause() {}
+func (r *ReturnClause) isClause() {}
 
 var result *Expression
 

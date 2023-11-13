@@ -14,30 +14,43 @@ func yyerror(s string) {
 %union {
     strVal  string
     pattern *NodePattern
-    clause  *MatchClause
+    clause  *Clause
     expression *Expression
+    matchClause *MatchClause
+    returnClause *ReturnClause
+    jsonPath     string
 }
 
 %token <strVal> IDENT
-%token LPAREN RPAREN COLON MATCH EOF
+%token <strVal> JSONPATH
+%token LPAREN RPAREN COLON MATCH RETURN EOF
 
 %type<expression> Expression
-%type<clause> MatchClause
+%type<matchClause> MatchClause
+%type<returnClause> ReturnClause
 %type<pattern> NodePattern
 %type<strVal> IDENT
+%type<strVal> JSONPATH
 
 %%
 
 Expression:
-    MatchClause EOF {
-        fmt.Println("Parsed MATCH expression for Name:", $1.NodePattern.Name, "Kind:", $1.NodePattern.Kind)
-        result = &Expression{Clauses: []Clause{$1}} // Store the result in a global variable
+    MatchClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2}} // Store the result in a global variable
     }
 ;
 
 MatchClause:
     MATCH NodePattern {
+        fmt.Println("Parsed MATCH expression for Name:", $2.Name, "Kind:", $2.Kind)
         $$ = &MatchClause{NodePattern: $2}
+    }
+;
+
+ReturnClause:
+    RETURN JSONPATH {
+        fmt.Println("Parsed RETURN expression for JsonPath:", $2)
+        $$ = &ReturnClause{JsonPath: $2}
     }
 ;
 

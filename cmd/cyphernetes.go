@@ -17,29 +17,36 @@ func yyerror(s string) {
 
 //line grammer/cyphernetes.y:14
 type yySymType struct {
-	yys        int
-	strVal     string
-	pattern    *NodePattern
-	clause     *MatchClause
-	expression *Expression
+	yys          int
+	strVal       string
+	pattern      *NodePattern
+	clause       *Clause
+	expression   *Expression
+	matchClause  *MatchClause
+	returnClause *ReturnClause
+	jsonPath     string
 }
 
 const IDENT = 57346
-const LPAREN = 57347
-const RPAREN = 57348
-const COLON = 57349
-const MATCH = 57350
-const EOF = 57351
+const JSONPATH = 57347
+const LPAREN = 57348
+const RPAREN = 57349
+const COLON = 57350
+const MATCH = 57351
+const RETURN = 57352
+const EOF = 57353
 
 var yyToknames = [...]string{
 	"$end",
 	"error",
 	"$unk",
 	"IDENT",
+	"JSONPATH",
 	"LPAREN",
 	"RPAREN",
 	"COLON",
 	"MATCH",
+	"RETURN",
 	"EOF",
 }
 
@@ -49,7 +56,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line grammer/cyphernetes.y:50
+//line grammer/cyphernetes.y:63
 
 //line yacctab:1
 var yyExca = [...]int8{
@@ -60,37 +67,38 @@ var yyExca = [...]int8{
 
 const yyPrivate = 57344
 
-const yyLast = 10
+const yyLast = 13
 
 var yyAct = [...]int8{
-	4, 3, 8, 10, 6, 9, 7, 5, 2, 1,
+	8, 5, 3, 11, 13, 7, 9, 12, 10, 6,
+	4, 2, 1,
 }
 
 var yyPact = [...]int16{
-	-7, -1000, -9, -1, -1000, -1000, 2, -5, 1, -3,
-	-1000,
+	-7, -1000, -9, -1, -11, 1, -1000, 4, -1000, -1000,
+	-5, 3, -3, -1000,
 }
 
 var yyPgo = [...]int8{
-	0, 9, 8, 7,
+	0, 12, 11, 10, 9,
 }
 
 var yyR1 = [...]int8{
-	0, 1, 2, 3,
+	0, 1, 2, 3, 4,
 }
 
 var yyR2 = [...]int8{
-	0, 2, 2, 5,
+	0, 3, 2, 2, 5,
 }
 
 var yyChk = [...]int16{
-	-1000, -1, -2, 8, 9, -3, 5, 4, 7, 4,
-	6,
+	-1000, -1, -2, 9, -3, 10, -4, 6, 11, 5,
+	4, 8, 4, 7,
 }
 
 var yyDef = [...]int8{
-	0, -2, 0, 0, 1, 2, 0, 0, 0, 0,
-	3,
+	0, -2, 0, 0, 0, 0, 2, 0, 1, 3,
+	0, 0, 0, 4,
 }
 
 var yyTok1 = [...]int8{
@@ -98,7 +106,7 @@ var yyTok1 = [...]int8{
 }
 
 var yyTok2 = [...]int8{
-	2, 3, 4, 5, 6, 7, 8, 9,
+	2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 }
 
 var yyTok3 = [...]int8{
@@ -443,21 +451,28 @@ yydefault:
 	switch yynt {
 
 	case 1:
-		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:32
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line grammer/cyphernetes.y:38
 		{
-			fmt.Println("Parsed MATCH expression for Name:", yyDollar[1].clause.NodePattern.Name, "Kind:", yyDollar[1].clause.NodePattern.Kind)
-			result = &Expression{Clauses: []Clause{yyDollar[1].clause}} // Store the result in a global variable
+			result = &Expression{Clauses: []Clause{yyDollar[1].matchClause, yyDollar[2].returnClause}} // Store the result in a global variable
 		}
 	case 2:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:39
+//line grammer/cyphernetes.y:44
 		{
-			yyVAL.clause = &MatchClause{NodePattern: yyDollar[2].pattern}
+			fmt.Println("Parsed MATCH expression for Name:", yyDollar[2].pattern.Name, "Kind:", yyDollar[2].pattern.Kind)
+			yyVAL.matchClause = &MatchClause{NodePattern: yyDollar[2].pattern}
 		}
 	case 3:
+		yyDollar = yyS[yypt-2 : yypt+1]
+//line grammer/cyphernetes.y:51
+		{
+			fmt.Println("Parsed RETURN expression for JsonPath:", yyDollar[2].strVal)
+			yyVAL.returnClause = &ReturnClause{JsonPath: yyDollar[2].strVal}
+		}
+	case 4:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line grammer/cyphernetes.y:45
+//line grammer/cyphernetes.y:58
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal}
 		}

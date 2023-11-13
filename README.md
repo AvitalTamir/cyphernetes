@@ -125,10 +125,10 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 
 ### Phase 2: RETURN Clause
 
-- [ ] Implement parsing of the `RETURN` clause.
-  - [ ] Update the lexer to recognize the `RETURN` keyword.
-  - [ ] Extend the yacc grammar to include `RETURN` statement rules.
-  - [ ] Write unit tests for queries with `RETURN` clauses.
+- [x] Implement parsing of the `RETURN` clause.
+  - [x] Update the lexer to recognize the `RETURN` keyword.
+  - [x] Extend the yacc grammar to include `RETURN` statement rules.
+  - [x] Write unit tests for queries with `RETURN` clauses.
 
 ### Phase 3: Relationships
 
