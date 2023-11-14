@@ -45,7 +45,7 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 	return &QueryExecutor{Clientset: clientset, DynamicClient: dynamicClient}, nil
 }
 
-func (q *QueryExecutor) getK8sResources(kind string) (unstructured.UnstructuredList, error) {
+func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string) (unstructured.UnstructuredList, error) {
 	// Use discovery client to find the GVR for the given kind
 	gvr, err := findGVR(q.Clientset, kind)
 	if err != nil {
@@ -54,7 +54,24 @@ func (q *QueryExecutor) getK8sResources(kind string) (unstructured.UnstructuredL
 	}
 
 	// Use dynamic client to list resources
-	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{})
+	logDebug("Listing resources of kind:", kind, "with fieldSelector:", fieldSelector, "and labelSelector:", labelSelector)
+	labelSelectorParsed, err := metav1.ParseToLabelSelector(labelSelector)
+	if err != nil {
+		fmt.Println("Error parsing label selector: ", err)
+		var emptyList unstructured.UnstructuredList
+		return emptyList, err
+	}
+	labelMap, err := metav1.LabelSelectorAsSelector(labelSelectorParsed)
+	if err != nil {
+		fmt.Println("Error converting label selector to label map: ", err)
+		var emptyList unstructured.UnstructuredList
+		return emptyList, err
+	}
+
+	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
+		FieldSelector: fieldSelector,
+		LabelSelector: labelMap.String(),
+	})
 	if err != nil {
 		fmt.Println("Error getting list of resources: ", err)
 		var emptyList unstructured.UnstructuredList
@@ -121,9 +138,24 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			debugLog("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
 			name, kind := c.NodePattern.Name, c.NodePattern.Kind
 
+			var fieldSelector string
+			var labelSelector string
+			if c.NodePattern.Properties != nil {
+				for _, prop := range c.NodePattern.Properties.PropertyList {
+					if prop.Key == "name" || prop.Key == "metadata.name" {
+						fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
+					} else {
+						labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
+					}
+				}
+				fieldSelector = strings.TrimSuffix(fieldSelector, ",")
+				labelSelector = strings.TrimSuffix(labelSelector, ",")
+
+			}
+
 			// Get the list of resources of the specified kind.
 			var err error
-			list, err = q.getK8sResources(kind)
+			list, err = q.getK8sResources(kind, fieldSelector, labelSelector)
 			if err != nil {
 				fmt.Println("Error getting list of resources: ", err)
 				return nil, err
@@ -141,7 +173,6 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			// Add the list to the results under the 'name' key
 			resultMap = results.(map[string]interface{})
 			resultMap[name] = converted
-
 			resultMapJson, err = json.Marshal(resultMap)
 			if err != nil {
 				fmt.Println("Error marshalling results to JSON: ", err)
@@ -165,12 +196,13 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				c.JsonPath = "$." + c.JsonPath
 			}
 
+			// if there's a nil key in jsonData, convert it to empty array
+			jsonData = convertNilKey(jsonData)
 			results, err := jsonpath.JsonPathLookup(jsonData, c.JsonPath)
 			if err != nil {
-				fmt.Println("Error executing jsonpath: ", err)
+				fmt.Println("Path not found:", c.JsonPath)
 				return nil, err
 			}
-
 			k8sResources = results
 
 		default:
@@ -184,4 +216,20 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	return k8sResources, nil
 }
 
-// Implement specific methods to handle each clause type.
+func convertNilKey(jsonData interface{}) interface{} {
+	switch jsonData.(type) {
+	case map[string]interface{}:
+		for k, v := range jsonData.(map[string]interface{}) {
+			if v == nil {
+				jsonData.(map[string]interface{})[k] = []interface{}{}
+			} else {
+				jsonData.(map[string]interface{})[k] = convertNilKey(v)
+			}
+		}
+	case []interface{}:
+		for i, v := range jsonData.([]interface{}) {
+			jsonData.([]interface{})[i] = convertNilKey(v)
+		}
+	}
+	return jsonData
+}
