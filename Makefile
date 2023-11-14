@@ -2,7 +2,10 @@
 BINARY_NAME=cyphernetes
 
 # Define the default make target
-all: test build
+all: bt
+
+# Build then Test
+bt: build test
 
 # Define how to build the project
 build: gen-parser

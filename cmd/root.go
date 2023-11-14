@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Namespace string = "default"
+var Namespace string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -39,5 +39,5 @@ func init() {
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cyphernetes.yaml)")
 
 	// Add a namespace flag
-	rootCmd.PersistentFlags().StringVarP(&Namespace, "namespace", "n", "", "The namespace to query against")
+	rootCmd.PersistentFlags().StringVarP(&Namespace, "namespace", "n", "default", "The namespace to query against")
 }

@@ -25,3 +25,5 @@ cyphernetes
 # IDE files
 .idea/
 .vscode/
+
+__debug*
