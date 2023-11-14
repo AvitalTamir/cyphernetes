@@ -38,8 +38,9 @@ type ReturnClause struct {
 // }
 
 type NodePattern struct {
-	Name string
-	Kind string
+	Name       string
+	Kind       string
+	Properties *Properties
 }
 
 // type RelationshipPattern struct {
@@ -47,6 +48,24 @@ type NodePattern struct {
 // 	Label      string
 // 	Direction  string
 // }
+
+type Properties struct {
+	PropertyList []*Property
+}
+
+type Property struct {
+	Key string
+	// Value is string int or bool
+	Value interface{}
+}
+
+type JSONPathValueList struct {
+	JSONPathValues []*JSONPathValue
+}
+
+type JSONPathValue struct {
+	Value interface{}
+}
 
 // Implement isClause for all Clause types
 func (m *MatchClause) isClause() {}

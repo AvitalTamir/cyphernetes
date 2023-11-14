@@ -18,18 +18,25 @@ func debugLog(v ...interface{}) {
 %}
 
 %union {
-    strVal  string
-    pattern *NodePattern
-    clause  *Clause
-    expression *Expression
-    matchClause *MatchClause
-    returnClause *ReturnClause
-    jsonPath     string
+    strVal            string
+    jsonPath          string
+    pattern           *NodePattern
+    clause            *Clause
+    expression        *Expression
+    matchClause       *MatchClause
+    returnClause      *ReturnClause
+    properties        *Properties
+    jsonPathValue     *Property
+    jsonPathValueList []*Property
+    value             interface{}
+    string            string
+    int               int
+    boolean           bool
 }
 
 %token <strVal> IDENT
 %token <strVal> JSONPATH
-%token LPAREN RPAREN COLON MATCH RETURN EOF
+%token LPAREN RPAREN COLON MATCH RETURN EOF STRING INT BOOLEAN LBRACE RBRACE COMMA
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -37,6 +44,13 @@ func debugLog(v ...interface{}) {
 %type<pattern> NodePattern
 %type<strVal> IDENT
 %type<strVal> JSONPATH
+%type<jsonPathValueList> JSONPathValueList
+%type<jsonPathValue> JSONPathValue
+%type<value> Value
+%type<properties> Properties
+%type<string> STRING
+%type<int> INT
+%type<boolean> BOOLEAN
 
 %%
 
@@ -62,8 +76,37 @@ ReturnClause:
 
 NodePattern:
     LPAREN IDENT COLON IDENT RPAREN {
-        $$ = &NodePattern{Name: $2, Kind: $4}
+        $$ = &NodePattern{Name: $2, Kind: $4, Properties: nil}
+    }
+    | LPAREN IDENT COLON IDENT Properties RPAREN {
+        $$ = &NodePattern{Name: $2, Kind: $4, Properties: $5}
     }
 ;
 
+Properties:
+    LBRACE JSONPathValueList RBRACE {
+        $$ = &Properties{PropertyList: $2}
+    }
+;
+
+JSONPathValueList:
+    JSONPathValue {
+        $$ = []*Property{$1} // Start with one Property element
+    }
+    | JSONPathValueList COMMA JSONPathValue {
+        $$ = append($1, $3) // $1 and $3 are the left and right operands of COMMA
+    }
+;
+
+JSONPathValue:
+    JSONPATH COLON Value {
+        $$ = &Property{Key: $1, Value: $3}
+    }
+;
+
+Value:
+    STRING { $$ = $1 }
+    | INT { $$ = $1 }
+    | BOOLEAN { $$ = $1 }
+;
 %%

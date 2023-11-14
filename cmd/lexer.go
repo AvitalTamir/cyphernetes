@@ -19,7 +19,7 @@ type Lexer struct {
 		tok Token
 		lit string
 	}
-	afterReturn bool
+	definingProps bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -30,13 +30,14 @@ func NewLexer(input string) *Lexer {
 }
 
 func (l *Lexer) Lex(lval *yySymType) int {
+	debugLog("Lexing... ", l.s.Peek(), " (", string(l.s.Peek()), ")")
 	if l.buf.tok == EOF { // If we have already returned EOF, keep returning EOF
 		logDebug("Zero (buffered EOF)")
 		return 0
 	}
 
 	// Check if we are capturing a JSONPATH
-	if l.afterReturn {
+	if l.buf.tok == RETURN || l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) {
 		lval.strVal = ""
 		// Consume and ignore any whitespace
 		ch := l.s.Peek()
@@ -52,7 +53,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			ch = l.s.Peek()
 		}
 
-		l.afterReturn = false
+		l.buf.tok = ILLEGAL // Indicate that we've read a JSONPATH.
 		logDebug("Returning JSONPATH token with value:", lval.strVal)
 		return int(JSONPATH)
 	}
@@ -60,6 +61,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	// Handle normal tokens
 	tok := l.s.Scan()
 	logDebug("Scanned token:", tok)
+	logDebug("Token text:", string(tok))
 
 	switch tok {
 	case scanner.Ident:
@@ -68,10 +70,13 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			logDebug("Returning MATCH token")
 			return int(MATCH)
 		} else if strings.ToUpper(lit) == "RETURN" {
-			l.afterReturn = true // Next we'll capture the jsonPath
-			l.buf.tok = RETURN   // Indicate that we've read a RETURN.
+			l.buf.tok = RETURN // Indicate that we've read a RETURN.
 			logDebug("Returning RETURN token")
 			return int(RETURN)
+		} else if strings.ToUpper(lit) == "TRUE" || strings.ToUpper(lit) == "FALSE" {
+			lval.strVal = l.s.TokenText()
+			logDebug("Returning BOOLEAN token with value:", lval.strVal)
+			return int(BOOLEAN)
 		} else {
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)
@@ -83,17 +88,39 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		return int(EOF)
 	case '(':
 		logDebug("Returning LPAREN token")
+		l.buf.tok = LPAREN // Indicate that we've read a LPAREN.
 		return int(LPAREN)
 	case ':':
-		l.buf.tok = COLON // Indicate that we've read a COLON.
+		l.definingProps = true // Indicate that we've read a COLON.
 		logDebug("Returning COLON token")
 		return int(COLON)
 	case ')':
 		logDebug("Returning RPAREN token")
+		l.definingProps = false // Indicate that we've read a RPAREN.
 		return int(RPAREN)
 	case ' ', '\t', '\r':
 		logDebug("Ignoring whitespace")
 		return int(WS) // Ignore whitespace.
+	case '{':
+		// Capture a JSON object
+		l.buf.tok = LBRACE // Indicate that we've read a LBRACE.
+		logDebug("Returning LBRACE token")
+		return int(LBRACE)
+	case '}':
+		logDebug("Returning RBRACE token")
+		return int(RBRACE)
+	case -6: // QUOTE
+		lval.strVal = l.s.TokenText()
+		logDebug("Returning STRING token with value:", lval.strVal)
+		return int(STRING)
+	case scanner.Int:
+		lval.strVal = l.s.TokenText()
+		logDebug("Returning INT token with value:", lval.strVal)
+		return int(INT)
+	case ',':
+		logDebug("Returning COMMA token")
+		l.buf.tok = COMMA // Indicate that we've read a COMMA.
+		return int(COMMA)
 	default:
 		logDebug("Illegal token:", tok)
 		return int(ILLEGAL)
