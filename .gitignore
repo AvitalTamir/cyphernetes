@@ -16,8 +16,6 @@
 
 # Go Modules
 vendor/
-/go.mod
-/go.sum
 
 # Cyphernetes binary
 cyphernetes
