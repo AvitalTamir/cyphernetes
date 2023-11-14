@@ -3,12 +3,18 @@ package cmd
 
 import (
     "fmt"
+    "log"
 )
 
 func yyerror(s string) {
     fmt.Printf("Syntax error: %s\n", s)
 }
 
+func debugLog(v ...interface{}) {
+	if logLevel == "debug" {
+		log.Println(v...)
+	}
+}
 %}
 
 %union {
@@ -42,14 +48,14 @@ Expression:
 
 MatchClause:
     MATCH NodePattern {
-        fmt.Println("Parsed MATCH expression for Name:", $2.Name, "Kind:", $2.Kind)
+        debugLog("Parsed MATCH expression for Name:", $2.Name, "Kind:", $2.Kind)
         $$ = &MatchClause{NodePattern: $2}
     }
 ;
 
 ReturnClause:
     RETURN JSONPATH {
-        fmt.Println("Parsed RETURN expression for JsonPath:", $2)
+        debugLog("Parsed RETURN expression for JsonPath:", $2)
         $$ = &ReturnClause{JsonPath: $2}
     }
 ;

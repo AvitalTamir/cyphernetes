@@ -117,7 +117,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
-			fmt.Println("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
+			debugLog("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
 			name, kind := c.NodePattern.Name, c.NodePattern.Kind
 
 			// Get the list of resources of the specified kind.
@@ -156,10 +156,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 		// 	// Execute a Kubernetes delete operation based on the DeleteClause.
 		// 	// ...
 		case *ReturnClause:
-			fmt.Println("Executing JSONPath query:", c.JsonPath)
+			debugLog("Executing JSONPath query:", c.JsonPath)
 			result := gjson.Get(string(resultMapJson), c.JsonPath)
 			// Convert result.raw to a map[string]interface{}
-			var processedResults []map[string]interface{}
+			var processedResults interface{}
 			err := json.Unmarshal([]byte(result.Raw), &processedResults)
 			if err != nil {
 				fmt.Println("Error unmarshalling results: ", err)

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"log"
 	"strings"
 	"text/scanner"
 )
@@ -30,9 +30,8 @@ func NewLexer(input string) *Lexer {
 }
 
 func (l *Lexer) Lex(lval *yySymType) int {
-	fmt.Println("Lexing...")
 	if l.buf.tok == EOF { // If we have already returned EOF, keep returning EOF
-		fmt.Println("Zero (buffered EOF)")
+		logDebug("Zero (buffered EOF)")
 		return 0
 	}
 
@@ -54,49 +53,49 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		}
 
 		l.afterReturn = false
-		fmt.Println("Returning JSONPATH token with value:", lval.strVal)
+		logDebug("Returning JSONPATH token with value:", lval.strVal)
 		return int(JSONPATH)
 	}
 
 	// Handle normal tokens
 	tok := l.s.Scan()
-	fmt.Println("Scanned token:", tok)
+	logDebug("Scanned token:", tok)
 
 	switch tok {
 	case scanner.Ident:
 		lit := l.s.TokenText()
 		if strings.ToUpper(lit) == "MATCH" {
-			fmt.Println("Returning MATCH token")
+			logDebug("Returning MATCH token")
 			return int(MATCH)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.afterReturn = true // Next we'll capture the jsonPath
 			l.buf.tok = RETURN   // Indicate that we've read a RETURN.
-			fmt.Println("Returning RETURN token")
+			logDebug("Returning RETURN token")
 			return int(RETURN)
 		} else {
 			lval.strVal = lit
-			fmt.Println("Returning IDENT token with value:", lval.strVal)
+			logDebug("Returning IDENT token with value:", lval.strVal)
 			return int(IDENT)
 		}
 	case scanner.EOF:
-		fmt.Println("Returning EOF token")
+		logDebug("Returning EOF token")
 		l.buf.tok = EOF // Indicate that we've read an EOF.
 		return int(EOF)
 	case '(':
-		fmt.Println("Returning LPAREN token")
+		logDebug("Returning LPAREN token")
 		return int(LPAREN)
 	case ':':
 		l.buf.tok = COLON // Indicate that we've read a COLON.
-		fmt.Println("Returning COLON token")
+		logDebug("Returning COLON token")
 		return int(COLON)
 	case ')':
-		fmt.Println("Returning RPAREN token")
+		logDebug("Returning RPAREN token")
 		return int(RPAREN)
 	case ' ', '\t', '\r':
-		fmt.Println("Ignoring whitespace")
+		logDebug("Ignoring whitespace")
 		return int(WS) // Ignore whitespace.
 	default:
-		fmt.Println("Illegal token:", tok)
+		logDebug("Illegal token:", tok)
 		return int(ILLEGAL)
 	}
 }
@@ -109,11 +108,11 @@ func isValidJsonPathChar(tok rune) bool {
 	return char == "." || char == "[" || char == "]" ||
 		(char >= "0" && char <= "9") || char == "_" ||
 		(char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
-		char == "\"" || char == "*"
+		char == "\"" || char == "*" || char == "$" || char == "#"
 }
 
 func (l *Lexer) Error(e string) {
-	fmt.Printf("Error: %v\n", e)
+	log.Printf("Error: %v\n", e)
 }
 
 type ASTNode struct {
@@ -123,4 +122,10 @@ type ASTNode struct {
 
 func NewASTNode(name, kind string) *ASTNode {
 	return &ASTNode{Name: name, Kind: kind}
+}
+
+func logDebug(v ...interface{}) {
+	if logLevel == "debug" {
+		log.Println(v...)
+	}
 }

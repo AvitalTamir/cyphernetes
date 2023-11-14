@@ -9,13 +9,20 @@ import __yyfmt__ "fmt"
 
 import (
 	"fmt"
+	"log"
 )
 
 func yyerror(s string) {
 	fmt.Printf("Syntax error: %s\n", s)
 }
 
-//line grammer/cyphernetes.y:14
+func debugLog(v ...interface{}) {
+	if logLevel == "debug" {
+		log.Println(v...)
+	}
+}
+
+//line grammer/cyphernetes.y:20
 type yySymType struct {
 	yys          int
 	strVal       string
@@ -56,7 +63,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line grammer/cyphernetes.y:63
+//line grammer/cyphernetes.y:69
 
 //line yacctab:1
 var yyExca = [...]int8{
@@ -452,27 +459,27 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammer/cyphernetes.y:38
+//line grammer/cyphernetes.y:44
 		{
 			result = &Expression{Clauses: []Clause{yyDollar[1].matchClause, yyDollar[2].returnClause}} // Store the result in a global variable
 		}
 	case 2:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:44
+//line grammer/cyphernetes.y:50
 		{
-			fmt.Println("Parsed MATCH expression for Name:", yyDollar[2].pattern.Name, "Kind:", yyDollar[2].pattern.Kind)
+			debugLog("Parsed MATCH expression for Name:", yyDollar[2].pattern.Name, "Kind:", yyDollar[2].pattern.Kind)
 			yyVAL.matchClause = &MatchClause{NodePattern: yyDollar[2].pattern}
 		}
 	case 3:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:51
+//line grammer/cyphernetes.y:57
 		{
-			fmt.Println("Parsed RETURN expression for JsonPath:", yyDollar[2].strVal)
+			debugLog("Parsed RETURN expression for JsonPath:", yyDollar[2].strVal)
 			yyVAL.returnClause = &ReturnClause{JsonPath: yyDollar[2].strVal}
 		}
 	case 4:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line grammer/cyphernetes.y:58
+//line grammer/cyphernetes.y:64
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal}
 		}
