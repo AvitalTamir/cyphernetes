@@ -1,14 +1,15 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
-	"github.com/tidwall/gjson"
+	"github.com/oliveagle/jsonpath"
 )
 
 func TestJsonPath(t *testing.T) {
-	jsonData := `{
+	jsonString := `{
 		"d": [
 		  {
 			"apiVersion": "apps/v1",
@@ -228,14 +229,15 @@ func TestJsonPath(t *testing.T) {
 		]
 	  }`
 
-	testQueries := []string{"d", "d*.0", "d.#", "d*.0.kind"}
+	testQueries := []string{"$.d", "$.d[0]", "$.d.#", "$.d[0].kind", "$.d[*].name"}
 
 	for _, query := range testQueries {
-		result := gjson.Get(jsonData, query)
-		if result.Exists() {
-			fmt.Printf("Query '%s' Result: %v\n", query, result.String())
-		} else {
-			t.Errorf("No result for query '%s'", query)
+		var jsonData interface{}
+		json.Unmarshal([]byte(jsonString), &jsonData)
+		_, err := jsonpath.JsonPathLookup(jsonData, query)
+		if err != nil {
+			fmt.Println("Error executing jsonpath: ", err)
+			t.Fail()
 		}
 	}
 }

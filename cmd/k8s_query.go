@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tidwall/gjson"
+	"github.com/oliveagle/jsonpath"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -112,6 +112,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	var resultMap map[string]interface{}
 	var list unstructured.UnstructuredList
 	var resultMapJson []byte
+	var k8sResources interface{}
 
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
@@ -156,16 +157,21 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 		// 	// Execute a Kubernetes delete operation based on the DeleteClause.
 		// 	// ...
 		case *ReturnClause:
-			debugLog("Executing JSONPath query:", c.JsonPath)
-			result := gjson.Get(string(resultMapJson), c.JsonPath)
-			// Convert result.raw to a map[string]interface{}
-			var processedResults interface{}
-			err := json.Unmarshal([]byte(result.Raw), &processedResults)
+			var jsonData interface{}
+			json.Unmarshal(resultMapJson, &jsonData)
+
+			// Make sure query starts with '$'
+			if !strings.HasPrefix(c.JsonPath, "$") {
+				c.JsonPath = "$." + c.JsonPath
+			}
+
+			results, err := jsonpath.JsonPathLookup(jsonData, c.JsonPath)
 			if err != nil {
-				fmt.Println("Error unmarshalling results: ", err)
+				fmt.Println("Error executing jsonpath: ", err)
 				return nil, err
 			}
-			return processedResults, nil
+
+			k8sResources = results
 
 		default:
 			return nil, fmt.Errorf("unknown clause type: %T", c)
@@ -175,7 +181,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	// After executing all clauses, format the results according to the ReturnClause.
 	// ...
 
-	return results, nil
+	return k8sResources, nil
 }
 
 // Implement specific methods to handle each clause type.
