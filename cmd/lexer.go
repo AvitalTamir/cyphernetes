@@ -135,7 +135,8 @@ func isValidJsonPathChar(tok rune) bool {
 	return char == "." || char == "[" || char == "]" ||
 		(char >= "0" && char <= "9") || char == "_" ||
 		(char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
-		char == "\"" || char == "*" || char == "$" || char == "#"
+		char == "\"" || char == "*" || char == "$" || char == "#" ||
+		char == "/" || char == "-"
 }
 
 func (l *Lexer) Error(e string) {
