@@ -3,38 +3,18 @@ package cmd
 import (
 	"context"
 	"fmt"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
-// func extractJSON(data interface{}, path string) (string, error) {
-// 	// Convert the data to JSON.
-// 	jsonData, err := json.Marshal(data)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	// Parse the JSONPath expression.
-// 	expr, err := jsonpath.Read(jsonData, path)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	// Convert the result to a string.
-// 	result, ok := expr.(string)
-// 	if !ok {
-// 		return "", fmt.Errorf("expected string result, got %T", expr)
-// 	}
-
-// 	// Trim any leading/trailing whitespace and return the result.
-// 	return strings.TrimSpace(result), nil
-// }
-
 type QueryExecutor struct {
-	Clientset *kubernetes.Clientset
+	Clientset     *kubernetes.Clientset
+	DynamicClient dynamic.Interface
 }
 
 func NewQueryExecutor() (*QueryExecutor, error) {
@@ -52,55 +32,58 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 		return nil, err
 	}
 
-	return &QueryExecutor{Clientset: clientset}, nil
+	// Create the dynamic client
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		fmt.Println("Error creating dynamic client")
+		return nil, err
+	}
+
+	return &QueryExecutor{Clientset: clientset, DynamicClient: dynamicClient}, nil
 }
 
-func getK8sResources(clientset *kubernetes.Clientset, kind string) (interface{}, error) {
-	switch kind {
-	case "Pod":
-		// Get the list of pods using the k8s client's corev1 method.
-		pods, err := clientset.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Println("Error getting list of pods: ", err)
-			return nil, err
-		}
-		return pods, nil
-	case "Deployment":
-		// Get the list of deployments using the k8s client's appsv1 method.
-		deployments, err := clientset.AppsV1().Deployments(Namespace).List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Println("Error getting list of deployments: ", err)
-			return nil, err
-		}
-		return deployments, nil
-	case "Service":
-		// Get the list of services using the k8s client's corev1 method.
-		services, err := clientset.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Println("Error getting list of services: ", err)
-			return nil, err
-		}
-		return services, nil
-	case "ConfigMap":
-		// Get the list of configmaps using the k8s client's corev1 method.
-		configmaps, err := clientset.CoreV1().ConfigMaps("").List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Println("Error getting list of configmaps: ", err)
-			return nil, err
-		}
-		return configmaps, nil
-	case "Secret":
-		// Get the list of secrets using the k8s client's corev1 method.
-		secrets, err := clientset.CoreV1().Secrets("").List(context.Background(), metav1.ListOptions{})
-		if err != nil {
-			fmt.Println("Error getting list of secrets: ", err)
-			return nil, err
-		}
-		return secrets, nil
-	default:
-		return nil, fmt.Errorf("unknown kind: %s", kind)
+func (q *QueryExecutor) getK8sResources(kind string) (interface{}, error) {
+	// Use discovery client to find the GVR for the given kind
+	gvr, err := findGVR(q.Clientset, kind)
+	if err != nil {
+		return nil, err
 	}
+
+	// Use dynamic client to list resources
+	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		fmt.Println("Error getting list of resources: ", err)
+		return nil, err
+	}
+	return list, nil
 }
+
+func findGVR(clientset *kubernetes.Clientset, kind string) (schema.GroupVersionResource, error) {
+	discoveryClient := clientset.Discovery()
+
+	// Get the list of API resources
+	apiResourceList, err := discoveryClient.ServerPreferredResources()
+	if err != nil {
+		return schema.GroupVersionResource{}, err
+	}
+
+	for _, apiResource := range apiResourceList {
+		for _, resource := range apiResource.APIResources {
+			// Check if the resource Kind matches the specified kind
+			if strings.EqualFold(resource.Kind, kind) {
+				gv, err := schema.ParseGroupVersion(apiResource.GroupVersion)
+				if err != nil {
+					return schema.GroupVersionResource{}, err
+				}
+				return gv.WithResource(resource.Name), nil
+			}
+		}
+	}
+
+	return schema.GroupVersionResource{}, fmt.Errorf("resource kind not found: %s", kind)
+}
+
+// Rest of the code remains the same...
 
 func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	// Initialize the results variable.
@@ -114,7 +97,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			fmt.Println("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
 			name, kind := c.NodePattern.Name, c.NodePattern.Kind
 			// Get the list of resources of the specified kind using the k8s client's custom resource method.
-			list, err := getK8sResources(q.Clientset, kind)
+			list, err := q.getK8sResources(kind)
 			if err != nil {
 				fmt.Println("Error getting list of resources: ", err)
 				return nil, err
@@ -134,14 +117,14 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			// Format the results according to the ReturnClause.
 			// ...
 			// Extract the JSONPath from the ReturnClause.
-			// jsonPath := c.JsonPath
-			// // Extract the JSONPath from the results.
+			jsonPath := c.JsonPath
+			// // TODO: Extract the JSONPath from the results.
 			// result, err := extractJSON(results, "$"+jsonPath)
 			// if err != nil {
 			// 	fmt.Println("Error extracting JSONPath: ", err)
 			// 	return nil, err
 			// }
-			return results, nil
+			return results.(map[string]interface{})[jsonPath], nil
 		default:
 			return nil, fmt.Errorf("unknown clause type: %T", c)
 		}
