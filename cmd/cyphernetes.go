@@ -10,6 +10,8 @@ import __yyfmt__ "fmt"
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 )
 
 func yyerror(s string) {
@@ -22,7 +24,7 @@ func debugLog(v ...interface{}) {
 	}
 }
 
-//line grammer/cyphernetes.y:20
+//line grammer/cyphernetes.y:22
 type yySymType struct {
 	yys               int
 	strVal            string
@@ -36,22 +38,19 @@ type yySymType struct {
 	jsonPathValue     *Property
 	jsonPathValueList []*Property
 	value             interface{}
-	string            string
-	int               int
-	boolean           bool
 }
 
 const IDENT = 57346
 const JSONPATH = 57347
-const LPAREN = 57348
-const RPAREN = 57349
-const COLON = 57350
-const MATCH = 57351
-const RETURN = 57352
-const EOF = 57353
-const STRING = 57354
-const INT = 57355
-const BOOLEAN = 57356
+const INT = 57348
+const BOOLEAN = 57349
+const STRING = 57350
+const LPAREN = 57351
+const RPAREN = 57352
+const COLON = 57353
+const MATCH = 57354
+const RETURN = 57355
+const EOF = 57356
 const LBRACE = 57357
 const RBRACE = 57358
 const COMMA = 57359
@@ -62,15 +61,15 @@ var yyToknames = [...]string{
 	"$unk",
 	"IDENT",
 	"JSONPATH",
+	"INT",
+	"BOOLEAN",
+	"STRING",
 	"LPAREN",
 	"RPAREN",
 	"COLON",
 	"MATCH",
 	"RETURN",
 	"EOF",
-	"STRING",
-	"INT",
-	"BOOLEAN",
 	"LBRACE",
 	"RBRACE",
 	"COMMA",
@@ -82,7 +81,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line grammer/cyphernetes.y:112
+//line grammer/cyphernetes.y:127
 
 //line yacctab:1
 var yyExca = [...]int8{
@@ -96,15 +95,15 @@ const yyPrivate = 57344
 const yyLast = 27
 
 var yyAct = [...]int8{
-	18, 20, 21, 25, 26, 27, 13, 8, 5, 3,
-	22, 11, 16, 7, 15, 19, 9, 12, 10, 14,
+	18, 20, 21, 13, 8, 5, 3, 22, 15, 11,
+	26, 27, 25, 16, 7, 19, 9, 12, 10, 14,
 	24, 17, 23, 6, 4, 2, 1,
 }
 
 var yyPact = [...]int16{
-	0, -1000, -2, 7, -4, 11, -1000, 14, -1000, -1000,
-	3, 13, -1, -1000, 5, 10, -1000, -15, -1000, 2,
-	-1000, 10, -9, -1000, -1000, -1000, -1000, -1000,
+	-6, -1000, -8, 5, -10, 11, -1000, 14, -1000, -1000,
+	-2, 13, -7, -1000, 3, 10, -1000, -15, -1000, -4,
+	-1000, 10, 4, -1000, -1000, -1000, -1000, -1000,
 }
 
 var yyPgo = [...]int8{
@@ -122,9 +121,9 @@ var yyR2 = [...]int8{
 }
 
 var yyChk = [...]int16{
-	-1000, -1, -2, 9, -3, 10, -4, 6, 11, 5,
-	4, 8, 4, 7, -8, 15, 7, -5, -6, 5,
-	16, 17, 8, -6, -7, 12, 13, 14,
+	-1000, -1, -2, 12, -3, 13, -4, 9, 14, 5,
+	4, 11, 4, 10, -8, 15, 10, -5, -6, 5,
+	16, 17, 11, -6, -7, 8, 6, 7,
 }
 
 var yyDef = [...]int8{
@@ -485,77 +484,84 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammer/cyphernetes.y:58
+//line grammer/cyphernetes.y:60
 		{
 			result = &Expression{Clauses: []Clause{yyDollar[1].matchClause, yyDollar[2].returnClause}} // Store the result in a global variable
 		}
 	case 2:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:64
+//line grammer/cyphernetes.y:66
 		{
 			debugLog("Parsed MATCH expression for Name:", yyDollar[2].pattern.Name, "Kind:", yyDollar[2].pattern.Kind)
 			yyVAL.matchClause = &MatchClause{NodePattern: yyDollar[2].pattern}
 		}
 	case 3:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammer/cyphernetes.y:71
+//line grammer/cyphernetes.y:73
 		{
 			debugLog("Parsed RETURN expression for JsonPath:", yyDollar[2].strVal)
 			yyVAL.returnClause = &ReturnClause{JsonPath: yyDollar[2].strVal}
 		}
 	case 4:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line grammer/cyphernetes.y:78
+//line grammer/cyphernetes.y:80
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal, Properties: nil}
 		}
 	case 5:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line grammer/cyphernetes.y:81
+//line grammer/cyphernetes.y:83
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal, Properties: yyDollar[5].properties}
 		}
 	case 6:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammer/cyphernetes.y:87
+//line grammer/cyphernetes.y:89
 		{
 			yyVAL.properties = &Properties{PropertyList: yyDollar[2].jsonPathValueList}
 		}
 	case 7:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammer/cyphernetes.y:93
+//line grammer/cyphernetes.y:95
 		{
 			yyVAL.jsonPathValueList = []*Property{yyDollar[1].jsonPathValue} // Start with one Property element
 		}
 	case 8:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammer/cyphernetes.y:96
+//line grammer/cyphernetes.y:98
 		{
 			yyVAL.jsonPathValueList = append(yyDollar[1].jsonPathValueList, yyDollar[3].jsonPathValue) // $1 and $3 are the left and right operands of COMMA
 		}
 	case 9:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammer/cyphernetes.y:102
+//line grammer/cyphernetes.y:104
 		{
 			yyVAL.jsonPathValue = &Property{Key: yyDollar[1].strVal, Value: yyDollar[3].value}
 		}
 	case 10:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammer/cyphernetes.y:108
+//line grammer/cyphernetes.y:110
 		{
-			yyVAL.value = yyDollar[1].string
+			yyVAL.value = strings.Trim(yyDollar[1].strVal, "\"")
 		}
 	case 11:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammer/cyphernetes.y:109
+//line grammer/cyphernetes.y:113
 		{
-			yyVAL.value = yyDollar[1].int
+			// Parse the int from the string
+			i, err := strconv.Atoi(yyDollar[1].strVal)
+			if err != nil {
+				// ... handle error
+				panic(err)
+			}
+			yyVAL.value = i
 		}
 	case 12:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammer/cyphernetes.y:110
+//line grammer/cyphernetes.y:122
 		{
-			yyVAL.value = yyDollar[1].boolean
+			// Parse the boolean from the string
+			yyVAL.value = strings.ToUpper(yyDollar[1].strVal) == "TRUE"
 		}
 	}
 	goto yystack /* stack new state and value */

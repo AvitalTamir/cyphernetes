@@ -4,6 +4,8 @@ package cmd
 import (
     "fmt"
     "log"
+    "strings"
+    "strconv"
 )
 
 func yyerror(s string) {
@@ -29,14 +31,14 @@ func debugLog(v ...interface{}) {
     jsonPathValue     *Property
     jsonPathValueList []*Property
     value             interface{}
-    string            string
-    int               int
-    boolean           bool
 }
 
 %token <strVal> IDENT
 %token <strVal> JSONPATH
-%token LPAREN RPAREN COLON MATCH RETURN EOF STRING INT BOOLEAN LBRACE RBRACE COMMA
+%token <strVal> INT
+%token <strVal> BOOLEAN
+%token <strVal> STRING
+%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -48,9 +50,9 @@ func debugLog(v ...interface{}) {
 %type<jsonPathValue> JSONPathValue
 %type<value> Value
 %type<properties> Properties
-%type<string> STRING
-%type<int> INT
-%type<boolean> BOOLEAN
+%type<strVal> STRING
+%type<strVal> INT
+%type<strVal> BOOLEAN
 
 %%
 
@@ -105,8 +107,21 @@ JSONPathValue:
 ;
 
 Value:
-    STRING { $$ = $1 }
-    | INT { $$ = $1 }
-    | BOOLEAN { $$ = $1 }
+    STRING { 
+        $$ = strings.Trim($1, "\"")
+    }
+    | INT { 
+        // Parse the int from the string
+        i, err := strconv.Atoi($1)
+        if err != nil {
+            // ... handle error
+            panic(err)
+        }
+        $$ = i
+    }
+    | BOOLEAN {
+        // Parse the boolean from the string
+        $$ = strings.ToUpper($1) == "TRUE"
+    }
 ;
 %%
