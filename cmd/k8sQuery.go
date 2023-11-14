@@ -58,7 +58,7 @@ func (q *QueryExecutor) getK8sResources(kind string) (interface{}, error) {
 	return list, nil
 }
 
-func findGVR(clientset *kubernetes.Clientset, kind string) (schema.GroupVersionResource, error) {
+func findGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
 	discoveryClient := clientset.Discovery()
 
 	// Get the list of API resources
@@ -67,10 +67,16 @@ func findGVR(clientset *kubernetes.Clientset, kind string) (schema.GroupVersionR
 		return schema.GroupVersionResource{}, err
 	}
 
+	// Normalize the resource identifier to lower case for case-insensitive comparison
+	normalizedIdentifier := strings.ToLower(resourceIdentifier)
+
 	for _, apiResource := range apiResourceList {
 		for _, resource := range apiResource.APIResources {
-			// Check if the resource Kind matches the specified kind
-			if strings.EqualFold(resource.Kind, kind) {
+			// Check if the resource name, kind, or short names match the specified identifier
+			if strings.EqualFold(resource.Name, normalizedIdentifier) || // Plural name match
+				strings.EqualFold(resource.Kind, resourceIdentifier) || // Kind name match
+				containsIgnoreCase(resource.ShortNames, normalizedIdentifier) { // Short name match
+
 				gv, err := schema.ParseGroupVersion(apiResource.GroupVersion)
 				if err != nil {
 					return schema.GroupVersionResource{}, err
@@ -80,7 +86,17 @@ func findGVR(clientset *kubernetes.Clientset, kind string) (schema.GroupVersionR
 		}
 	}
 
-	return schema.GroupVersionResource{}, fmt.Errorf("resource kind not found: %s", kind)
+	return schema.GroupVersionResource{}, fmt.Errorf("resource identifier not found: %s", resourceIdentifier)
+}
+
+// Helper function to check if a slice contains a string, case-insensitive
+func containsIgnoreCase(slice []string, str string) bool {
+	for _, item := range slice {
+		if strings.EqualFold(item, str) {
+			return true
+		}
+	}
+	return false
 }
 
 // Rest of the code remains the same...
