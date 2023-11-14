@@ -1,16 +1,15 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
 )
 
-// ShellCommand is the Cobra command for the interactive shell
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Launch an interactive shell",
@@ -18,30 +17,38 @@ var ShellCmd = &cobra.Command{
 }
 
 func runShell(cmd *cobra.Command, args []string) {
-	reader := bufio.NewReader(os.Stdin)
+	rl, err := readline.New("> ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating readline: %s\n", err)
+		return
+	}
+	defer rl.Close()
+
 	fmt.Println("Cyphernetes Interactive Shell")
-	fmt.Println("Type 'exit' or press Ctrl-C to exit")
+	fmt.Println("Type 'exit' or press Ctrl-D to exit")
 
 	for {
-		fmt.Print("> ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			// Handle the error according to your needs
+		line, err := rl.Readline()
+		if err != nil { // io.EOF, Ctrl-D
 			break
 		}
 
-		input = strings.TrimSpace(input)
+		input := strings.TrimSpace(line)
 		if input == "exit" {
 			break
 		}
 
-		// Process the input
-		result, err := processQuery(input)
-		if err != nil {
-			fmt.Printf("Error: %s\n", err)
-		} else {
-			fmt.Println(result)
+		// Process the input if not empty
+		if input != "" {
+			result, err := processQuery(input)
+			if err != nil {
+				fmt.Printf("Error: %s\n", err)
+			} else {
+				fmt.Println(result)
+			}
 		}
+		// Add input to history
+		rl.SaveHistory(input)
 	}
 }
 
