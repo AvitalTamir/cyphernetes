@@ -24,7 +24,7 @@ A high-level list of what's still missing:
 * Relationships pattern tokens (relationship arrows are currently similar to commas)
   This will be required later when we introduce more complex K8s operations
 
-See the [project roadmap](https://github.com/avitaltamir/cyphernetes/ROADMAP.md) for more detailed information on what's still left to do.
+See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.
 
 ## Usage
 
