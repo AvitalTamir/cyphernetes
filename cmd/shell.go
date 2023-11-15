@@ -17,13 +17,15 @@ var ShellCmd = &cobra.Command{
 }
 
 func runShell(cmd *cobra.Command, args []string) {
+	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
 	rl, err := readline.New("> ")
+	rl.SetHistoryPath(historyFile)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating readline: %s\n", err)
 		return
 	}
 	defer rl.Close()
-	rl.Config.HistoryFile = "/tmp/cyphernetes.history"
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")

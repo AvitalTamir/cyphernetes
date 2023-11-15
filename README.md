@@ -89,30 +89,27 @@ Contributions are welcome! Please feel free to submit pull requests, open issues
 - [x] Implement a basic parser to handle `MATCH` queries.
 - [x] Test and debug the lexer and parser with simple queries.
 
-### Expanding Lexer and Parser
-
-- [ ] Add support for additional tokens (e.g., braces, commas, relationship types).
-- [ ] Extend grammar rules to cover node properties and relationships.
-- [ ] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
-- [ ] Refine error handling for syntax and parsing errors.
-- [ ] Optimize lexer and parser for performance.
-- [ ] Continuously write tests for new grammar rules and features.
-
 ### Kubernetes Client Integration
 
-- [ ] Evaluate and select a Go Kubernetes client library.
-- [ ] Set up authentication and configuration for accessing a Kubernetes cluster.
-- [ ] Implement a wrapper around the Kubernetes client to execute basic queries.
-- [ ] Develop mapping logic to convert parsed queries into Kubernetes API calls.
+- [x] Evaluate and select a Go Kubernetes client library.
+- [x] Set up authentication and configuration for accessing a Kubernetes cluster.
+- [x] Implement a wrapper around the Kubernetes client to execute basic queries.
+- [x] Develop mapping logic to convert parsed queries into Kubernetes API calls.
 - [ ] Test Kubernetes client integration with mock and real clusters.
 - [ ] Add support for complex queries involving multiple Kubernetes resources.
 
+### Expanding Lexer and Parser
+
+- [i] Add support for additional tokens (e.g., braces, commas, relationship types).
+- [i] Extend grammar rules to cover node properties and relationships.
+- [ ] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
+- [ ] Refine error handling for syntax and parsing errors.
+- [ ] Optimize lexer and parser for performance.
+
 ### Interactive Shell Interface
 
-- [ ] Design a CLI interface for inputting queries and displaying results.
-- [ ] Implement CLI commands corresponding to query operations.
-- [ ] Integrate the CLI with the parser and Kubernetes client.
-- [ ] Test CLI with various input scenarios.
+- [x] Basic shell interface for inputting queries and displaying results.
+- [ ] Test shell with various input scenarios.
 
 ## Cypher-Like Query Language Parser Roadmap
 
@@ -126,50 +123,51 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 ### Phase 2: RETURN Clause
 
 - [x] Implement parsing of the `RETURN` clause.
-  - [x] Update the lexer to recognize the `RETURN` keyword.
-  - [x] Extend the yacc grammar to include `RETURN` statement rules.
-  - [x] Write unit tests for queries with `RETURN` clauses.
+- [x] Update the lexer to recognize the `RETURN` keyword.
+- [x] Extend the yacc grammar to include `RETURN` statement rules.
+- [x] Write unit tests for queries with `RETURN` clauses.
 
-### Phase 3: Relationships
+### Phase 3: Node Properties
+
+- [x] Extend the parser to handle node properties.
+- [x] Update the lexer to recognize curly braces and commas.
+- [x] Update the yacc file to handle node properties syntax.
+- [x] Write unit tests for `MATCH` queries with node properties.
+
+### Phase 4: Relationships
 
 - [ ] Support parsing of relationships in `MATCH` queries.
-  - [ ] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
-  - [ ] Extend the yacc grammar to handle relationship patterns.
-  - [ ] Write unit tests for `MATCH` queries involving relationships.
+- [ ] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
+- [ ] Extend the yacc grammar to handle relationship patterns.
+- [ ] Write unit tests for `MATCH` queries involving relationships.
 
-### Phase 4: Node Properties
-
-- [ ] Extend the parser to handle node properties.
-  - [ ] Update the lexer to recognize curly braces and commas.
-  - [ ] Update the yacc file to handle node properties syntax.
-  - [ ] Write unit tests for `MATCH` queries with node properties.
 
 ### Phase 5: CREATE Statement
 
 - [ ] Add support for `CREATE` statements.
-  - [ ] Update the lexer to recognize the `CREATE` keyword.
-  - [ ] Extend the yacc grammar to parse `CREATE` statements.
-  - [ ] Write unit tests for `CREATE` statement parsing.
+- [ ] Update the lexer to recognize the `CREATE` keyword.
+- [ ] Extend the yacc grammar to parse `CREATE` statements.
+- [ ] Write unit tests for `CREATE` statement parsing.
 
 ### Phase 6: SET Clause
 
 - [ ] Implement parsing of the `SET` clause.
-  - [ ] Update the lexer to recognize the `SET` keyword and property assignment syntax.
-  - [ ] Extend the yacc grammar to include `SET` statement rules.
-  - [ ] Write unit tests for queries with `SET` clauses.
+- [ ] Update the lexer to recognize the `SET` keyword and property assignment syntax.
+- [ ] Extend the yacc grammar to include `SET` statement rules.
+- [ ] Write unit tests for queries with `SET` clauses.
 
 ### Phase 7: DELETE Statement
 
 - [ ] Add support for `DELETE` statements.
-  - [ ] Update the lexer to recognize the `DELETE` keyword.
-  - [ ] Extend the yacc grammar to parse `DELETE` statements.
-  - [ ] Write unit tests for `DELETE` statement parsing.
+- [ ] Update the lexer to recognize the `DELETE` keyword.
+- [ ] Extend the yacc grammar to parse `DELETE` statements.
+- [ ] Write unit tests for `DELETE` statement parsing.
 
 ### Phase 8: Complex Query Parsing
 
 - [ ] Combine all elements to support full query parsing.
-  - [ ] Ensure the lexer and yacc grammar can handle complex queries with multiple clauses.
-  - [ ] Write unit tests for parsing full queries including `MATCH`, `RETURN`, `CREATE`, `SET`, and `DELETE`.
+- [ ] Ensure the lexer and yacc grammar can handle complex queries with multiple clauses.
+- [ ] Write unit tests for parsing full queries including `MATCH`, `RETURN`, `CREATE`, `SET`, and `DELETE`.
 
 ## License
 
