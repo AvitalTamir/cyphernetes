@@ -1,6 +1,6 @@
-<div style="display: flex;">
+<div float="left">
   <div>
-    <img src="./logo.png" alt="Cyphernetes Logo" width="430">
+    <img src="./logo.png" alt="Cyphernetes Logo" width="120">
   </div>
   <div style="padding-left: 20px">
     <h1>Cyphernetes</h1>
