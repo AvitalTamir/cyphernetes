@@ -33,7 +33,13 @@ func filterInput(r rune) (rune, bool) {
 }
 
 func nameSpacePrompt() string {
-	return fmt.Sprintf("\033[32m%s »\033[0m ", Namespace)
+	ns := Namespace
+	color := "32"
+	if ns == "" {
+		ns = "ALL NAMESPACES"
+		color = "31"
+	}
+	return fmt.Sprintf("\033[%sm%s »\033[0m ", color, ns)
 }
 
 func runShell(cmd *cobra.Command, args []string) {
@@ -71,7 +77,11 @@ func runShell(cmd *cobra.Command, args []string) {
 		// if input starts with '\n '
 		if strings.HasPrefix(input, "\\n ") {
 			input = strings.TrimPrefix(input, "\\n ")
-			Namespace = input
+			if strings.ToLower(input) == "all" {
+				Namespace = ""
+			} else {
+				Namespace = strings.ToLower(input)
+			}
 			rl.SetPrompt(nameSpacePrompt())
 		} else if input != "" {
 			// Process the input if not empty
