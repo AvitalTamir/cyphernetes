@@ -170,8 +170,8 @@ The Cypher-like grammer implementation is incomplete, still missing:
 
 ### Expanding Lexer and Parser
 
-- [i] Add support for additional tokens (e.g., braces, commas, relationship types).
-- [i] Extend grammar rules to cover node properties and relationships.
+- [x] Add support for additional tokens (e.g., braces, commas, relationship types).
+- [x] Extend grammar rules to cover node properties and relationships.
 - [ ] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
 - [ ] Refine error handling for syntax and parsing errors.
 - [ ] Optimize lexer and parser for performance.
