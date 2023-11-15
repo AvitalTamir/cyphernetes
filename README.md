@@ -249,6 +249,4 @@ Cyphernetes is open-sourced under the MIT license. See the [LICENSE](LICENSE) fi
 
 ## Authors
 
-- Your Name - _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
-
-See also the list of [contributors](https://github.com/yourusername/cyphernetes/contributors) who participated in this project.
+- _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
