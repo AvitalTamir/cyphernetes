@@ -51,10 +51,10 @@ Retrieves Deployments where the app label is 'nginx'.
 ### Multiple Nodes
 
 ```graphql
-// With a relationship
+# With a relationship
 MATCH (d:Deployment)->(s:Service) RETURN d, s
 
-// Multiple matches
+# Multiple matches
 MATCH (d:Deployment), (s:Service) RETURN d, s
 ```
 Lists Deployments and their associated Services.
