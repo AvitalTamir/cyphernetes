@@ -21,6 +21,7 @@ var completer = readline.NewPrefixCompleter(
 	readline.PcItem("match"),
 	readline.PcItem("RETURN"),
 	readline.PcItem("return"),
+	readline.PcItem("help"),
 )
 
 func filterInput(r rune) (rune, bool) {
@@ -62,6 +63,7 @@ func runShell(cmd *cobra.Command, args []string) {
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
+	fmt.Println("Type 'help' for information on how to use the shell")
 
 	for {
 		line, err := rl.Readline()
@@ -83,6 +85,12 @@ func runShell(cmd *cobra.Command, args []string) {
 				Namespace = strings.ToLower(input)
 			}
 			rl.SetPrompt(nameSpacePrompt())
+		} else if input == "help" {
+			fmt.Println("Cyphernetes Interactive Shell")
+			fmt.Println("exit           - Exit the shell")
+			fmt.Println("help           - Print this help message")
+			fmt.Println("\\n <namespace> - Change the namespace")
+			fmt.Println("\\n all         - Query all namespaces")
 		} else if input != "" {
 			// Process the input if not empty
 			result, err := processQuery(input)
