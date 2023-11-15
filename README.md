@@ -126,6 +126,16 @@ Contributions are welcome! Please feel free to submit pull requests, open issues
 
 ## Project Roadmap
 
+The project is at it's earliest milestone and supports performing GET operations.
+The Cypher-like grammer implementation is incomplete, still missing:
+* CREATE, SET, DELETE clauses
+* Match clauses with more than 2 comma-separated Node patterns
+* Match clauses with multiple relationship patterns
+* Relationships between more than 2 nodes
+* Map Relationships to structs (relationship arrows are currently similar to commas)
+  This will be required later when we introduce more complex K8s operations
+
+
 ### Initial Project Setup
 
 - [x] Initialize the project repository.
@@ -199,7 +209,7 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 - [x] Support parsing of relationships in `MATCH` queries.
 - [x] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
 - [x] Extend the yacc grammar to handle relationship patterns.
-- [ ] Write unit tests for `MATCH` queries involving relationships.
+- [x] Write unit tests for `MATCH` queries involving relationships.
 
 
 ### Phase 5: CREATE Statement
