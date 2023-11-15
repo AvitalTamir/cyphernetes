@@ -207,10 +207,9 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 ### Phase 4: Relationships
 
 - [x] Support parsing of relationships in `MATCH` queries.
-- [x] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
 - [x] Extend the yacc grammar to handle relationship patterns.
 - [x] Write unit tests for `MATCH` queries involving relationships.
-- [ ] Pattern tokens in relationships.
+- [ ] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
 - [ ] Support relationships between more than 2 nodes.
 
 ### Phase 5: Advanced MATCH Support
