@@ -22,6 +22,7 @@ func debugLog(v ...interface{}) {
 %union {
     strVal            string
     jsonPath          string
+    jsonPathList      []string
     pattern           *NodePattern
     clause            *Clause
     expression        *Expression
@@ -53,6 +54,7 @@ func debugLog(v ...interface{}) {
 %type<strVal> STRING
 %type<strVal> INT
 %type<strVal> BOOLEAN
+%type<jsonPathList> JSONPathList
 
 %%
 
@@ -74,9 +76,17 @@ MatchClause:
 ;
 
 ReturnClause:
-    RETURN JSONPATH {
-        debugLog("Parsed RETURN expression for JsonPath:", $2)
-        $$ = &ReturnClause{JsonPath: $2}
+    RETURN JSONPathList {
+        $$ = &ReturnClause{JsonPaths: $2}
+    }
+;
+
+JSONPathList:
+    JSONPATH {
+        $$ = []string{$1}
+    }
+|   JSONPathList COMMA JSONPATH {
+        $$ = append($1, $3)
     }
 ;
 

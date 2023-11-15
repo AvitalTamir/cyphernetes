@@ -39,7 +39,7 @@ func TestParseQueryWithReturn(t *testing.T) {
 				},
 			},
 			&ReturnClause{
-				JsonPath: "d[*].metadata.labels",
+				JsonPaths: []string{"d[*].metadata.labels"},
 			},
 		},
 	}

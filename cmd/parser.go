@@ -29,7 +29,7 @@ type MatchClause struct {
 // }
 
 type ReturnClause struct {
-	JsonPath string
+	JsonPaths []string
 }
 
 // type ReturnClause struct {

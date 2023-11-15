@@ -19,7 +19,8 @@ type Lexer struct {
 		tok Token
 		lit string
 	}
-	definingProps bool
+	definingProps  bool
+	definingReturn bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -37,7 +38,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	}
 
 	// Check if we are capturing a JSONPATH
-	if l.buf.tok == RETURN || l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) {
+	if l.buf.tok == RETURN || l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) || l.buf.tok == COMMA && l.definingReturn {
 		lval.strVal = ""
 		// Consume and ignore any whitespace
 		ch := l.s.Peek()
@@ -71,6 +72,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			return int(MATCH)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
+			l.definingReturn = true
 			logDebug("Returning RETURN token")
 			return int(RETURN)
 		} else if strings.ToUpper(lit) == "TRUE" || strings.ToUpper(lit) == "FALSE" {
@@ -84,14 +86,15 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		}
 	case scanner.EOF:
 		logDebug("Returning EOF token")
-		l.buf.tok = EOF // Indicate that we've read an EOF.
+		l.definingReturn = false // End of the RETURN clause
+		l.buf.tok = EOF          // Indicate that we've read an EOF.
 		return int(EOF)
 	case '(':
+		l.definingProps = true // Indicate that we've read a COLON.
 		logDebug("Returning LPAREN token")
 		l.buf.tok = LPAREN // Indicate that we've read a LPAREN.
 		return int(LPAREN)
 	case ':':
-		l.definingProps = true // Indicate that we've read a COLON.
 		logDebug("Returning COLON token")
 		return int(COLON)
 	case ')':

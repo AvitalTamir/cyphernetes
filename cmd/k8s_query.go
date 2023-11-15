@@ -124,106 +124,55 @@ func containsIgnoreCase(slice []string, str string) bool {
 	return false
 }
 
-// Rest of the code remains the same...
+// Initialize the results variable.
+var results interface{}
+var resultMap map[string]interface{}
+var resultMapJson []byte
 
 func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
-	// Initialize the results variable.
-	var results interface{}
-	var resultMap map[string]interface{}
-	var list unstructured.UnstructuredList
-	var resultMapJson []byte
-	var k8sResources interface{}
+	var k8sResources []interface{}
 
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
-			debugLog("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
-			name, kind := c.NodePattern.Name, c.NodePattern.Kind
-
-			if c.NodePattern.Properties != nil && len(c.NodePattern.Properties.PropertyList) > 0 {
-				for i, prop := range c.NodePattern.Properties.PropertyList {
-					if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-						Namespace = prop.Value.(string)
-						// Remove the namespace slice from the properties
-						c.NodePattern.Properties.PropertyList = append(c.NodePattern.Properties.PropertyList[:i], c.NodePattern.Properties.PropertyList[i+1:]...)
-						fmt.Println("Namespace:", Namespace)
-					}
-				}
+			debugLog("Node pattern found. Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
+			getNodeResouces(c.NodePattern, q)
+			if c.ConnectedNodePattern != nil {
+				debugLog("Node pattern found. Name:", c.ConnectedNodePattern.Name, "Kind:", c.ConnectedNodePattern.Kind)
+				getNodeResouces(c.ConnectedNodePattern, q)
 			}
 
-			var fieldSelector string
-			var labelSelector string
-			var hasNameSelector bool
-			if c.NodePattern.Properties != nil {
-				for _, prop := range c.NodePattern.Properties.PropertyList {
-					if prop.Key == "name" || prop.Key == "metadata.name" {
-						fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
-						hasNameSelector = true
-					} else {
-						if hasNameSelector {
-							// both name and label selectors are specified, error out
-							return nil, fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
-						}
-						labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
-					}
-				}
-				fieldSelector = strings.TrimSuffix(fieldSelector, ",")
-				labelSelector = strings.TrimSuffix(labelSelector, ",")
-
-			}
-
-			// Get the list of resources of the specified kind.
-			var err error
-			list, err = q.getK8sResources(kind, fieldSelector, labelSelector)
-			if err != nil {
-				fmt.Println("Error getting list of resources: ", err)
-				return nil, err
-			}
-
-			var converted []map[string]interface{}
-			for _, u := range list.Items {
-				converted = append(converted, u.UnstructuredContent())
-			}
-			// Initialize results as a map if not already done
-			if results == nil {
-				results = make(map[string]interface{})
-			}
-
-			// Add the list to the results under the 'name' key
-			resultMap = results.(map[string]interface{})
-			resultMap[name] = converted
-			resultMapJson, err = json.Marshal(resultMap)
-			if err != nil {
-				fmt.Println("Error marshalling results to JSON: ", err)
-				return nil, err
-			}
-		// case *CreateClause:
-		// 	// Execute a Kubernetes create operation based on the CreateClause.
-		// 	// ...
-		// case *SetClause:
-		// 	// Execute a Kubernetes update operation based on the SetClause.
-		// 	// ...
-		// case *DeleteClause:
-		// 	// Execute a Kubernetes delete operation based on the DeleteClause.
-		// 	// ...
+			// case *CreateClause:
+			// 	// Execute a Kubernetes create operation based on the CreateClause.
+			// 	// ...
+			// case *SetClause:
+			// 	// Execute a Kubernetes update operation based on the SetClause.
+			// 	// ...
+			// case *DeleteClause:
+			// 	// Execute a Kubernetes delete operation based on the DeleteClause.
+			// 	// ...
 		case *ReturnClause:
 			var jsonData interface{}
 			json.Unmarshal(resultMapJson, &jsonData)
 
-			// Make sure query starts with '$'
-			if !strings.HasPrefix(c.JsonPath, "$") {
-				c.JsonPath = "$." + c.JsonPath
-			}
+			for _, jsonPath := range c.JsonPaths {
+				// Ensure the JSONPath starts with '$'
+				if !strings.HasPrefix(jsonPath, "$") {
+					jsonPath = "$." + jsonPath
+				}
 
-			// if there's a nil key in jsonData, convert it to empty array
-			jsonData = convertNilKey(jsonData)
-			results, err := jsonpath.JsonPathLookup(jsonData, c.JsonPath)
-			if err != nil {
-				fmt.Println("Path not found:", c.JsonPath)
-				return nil, err
+				// Convert nil keys in jsonData to empty array if necessary
+				jsonData = convertNilKey(jsonData)
+
+				result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
+				if err != nil {
+					fmt.Println("Path not found:", jsonPath)
+					return nil, err
+				}
+
+				k8sResources = append(k8sResources, result)
 			}
-			k8sResources = results
 
 		default:
 			return nil, fmt.Errorf("unknown clause type: %T", c)
@@ -237,19 +186,77 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 }
 
 func convertNilKey(jsonData interface{}) interface{} {
-	switch jsonData.(type) {
+	switch jsonData := jsonData.(type) {
 	case map[string]interface{}:
-		for k, v := range jsonData.(map[string]interface{}) {
-			if v == nil {
-				jsonData.(map[string]interface{})[k] = []interface{}{}
-			} else {
-				jsonData.(map[string]interface{})[k] = convertNilKey(v)
-			}
+		for k, v := range jsonData {
+			jsonData[k] = convertNilKey(v)
 		}
 	case []interface{}:
-		for i, v := range jsonData.([]interface{}) {
-			jsonData.([]interface{})[i] = convertNilKey(v)
+		for i, v := range jsonData {
+			jsonData[i] = convertNilKey(v)
 		}
+	case nil:
+		return []interface{}{}
 	}
 	return jsonData
+}
+
+func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
+	if n.Properties != nil && len(n.Properties.PropertyList) > 0 {
+		for i, prop := range n.Properties.PropertyList {
+			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
+				Namespace = prop.Value.(string)
+				// Remove the namespace slice from the properties
+				n.Properties.PropertyList = append(n.Properties.PropertyList[:i], n.Properties.PropertyList[i+1:]...)
+				fmt.Println("Namespace:", Namespace)
+			}
+		}
+	}
+
+	var fieldSelector string
+	var labelSelector string
+	var hasNameSelector bool
+	if n.Properties != nil {
+		for _, prop := range n.Properties.PropertyList {
+			if prop.Key == "name" || prop.Key == "metadata.name" {
+				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
+				hasNameSelector = true
+			} else {
+				if hasNameSelector {
+					// both name and label selectors are specified, error out
+					return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
+				}
+				labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
+			}
+		}
+		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
+		labelSelector = strings.TrimSuffix(labelSelector, ",")
+
+	}
+
+	// Get the list of resources of the specified kind.
+	list, err := q.getK8sResources(n.Kind, fieldSelector, labelSelector)
+	if err != nil {
+		fmt.Println("Error getting list of resources: ", err)
+		return err
+	}
+
+	var converted []map[string]interface{}
+	for _, u := range list.Items {
+		converted = append(converted, u.UnstructuredContent())
+	}
+	// Initialize results as a map if not already done
+	if results == nil {
+		results = make(map[string]interface{})
+	}
+
+	// Add the list to the results under the 'name' key
+	resultMap = results.(map[string]interface{})
+	resultMap[n.Name] = converted
+	resultMapJson, err = json.Marshal(resultMap)
+	if err != nil {
+		fmt.Println("Error marshalling results to JSON: ", err)
+		return err
+	}
+	return nil
 }
