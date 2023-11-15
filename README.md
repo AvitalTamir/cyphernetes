@@ -210,30 +210,35 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 - [x] Update the lexer to recognize relationship pattern tokens (e.g., `-[]->`).
 - [x] Extend the yacc grammar to handle relationship patterns.
 - [x] Write unit tests for `MATCH` queries involving relationships.
+- [ ] Pattern tokens in relationships.
+- [ ] Support relationships between more than 2 nodes.
 
+### Phase 5: Advanced MATCH Support
+- [ ] Match Clauses to contain NodePatternLists instead of a single tuple of Node/ConnectedNode
+- [ ] Support more than 2 comma-separated NodePatternLists.
 
-### Phase 5: CREATE Statement
+### Phase 6: CREATE Statement
 
 - [ ] Add support for `CREATE` statements.
 - [ ] Update the lexer to recognize the `CREATE` keyword.
 - [ ] Extend the yacc grammar to parse `CREATE` statements.
 - [ ] Write unit tests for `CREATE` statement parsing.
 
-### Phase 6: SET Clause
+### Phase 7: SET Clause
 
 - [ ] Implement parsing of the `SET` clause.
 - [ ] Update the lexer to recognize the `SET` keyword and property assignment syntax.
 - [ ] Extend the yacc grammar to include `SET` statement rules.
 - [ ] Write unit tests for queries with `SET` clauses.
 
-### Phase 7: DELETE Statement
+### Phase 8: DELETE Statement
 
 - [ ] Add support for `DELETE` statements.
 - [ ] Update the lexer to recognize the `DELETE` keyword.
 - [ ] Extend the yacc grammar to parse `DELETE` statements.
 - [ ] Write unit tests for `DELETE` statement parsing.
 
-### Phase 8: Complex Query Parsing
+### Phase 9: Complex Query Parsing
 
 - [ ] Combine all elements to support full query parsing.
 - [ ] Ensure the lexer and yacc grammar can handle complex queries with multiple clauses.
