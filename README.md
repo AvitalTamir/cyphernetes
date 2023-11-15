@@ -10,6 +10,8 @@
   </tr>
 </table>
 
+![Demo](./demo.gif)
+
 ## Why Cyphernetes?
 
 Kubernetes management often involves dealing with complex and verbose command-line instructions. Cyphernetes simplifies this complexity by introducing a declarative query language that can express these instructions in a more readable and concise form. By leveraging a query language similar to Cypher, users can efficiently perform CRUD operations on Kubernetes resources, visualize resource connections, and manage their Kubernetes clusters with greater ease and flexibility.
