@@ -167,8 +167,9 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
 				if err != nil {
-					fmt.Println("Path not found:", jsonPath)
-					return nil, err
+					logDebug("Path not found:", jsonPath)
+					// result gets empty array if path not found
+					result = []interface{}{}
 				}
 
 				k8sResources = append(k8sResources, result)
