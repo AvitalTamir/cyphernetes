@@ -48,10 +48,14 @@ MATCH (d:Deployment {app: 'nginx'}) RETURN d
 ```
 Retrieves Deployments where the app label is 'nginx'.
 
-### Multiple Nodes with a Relationship
+### Multiple Nodes
 
 ```cypher
-MATCH (d:Deployment)--(s:Service) RETURN d, s
+// With a relationship
+MATCH (d:Deployment)->(s:Service) RETURN d, s
+
+// Multiple matches
+MATCH (d:Deployment), (s:Service) RETURN d, s
 ```
 Lists Deployments and their associated Services.
 
