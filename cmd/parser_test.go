@@ -11,7 +11,7 @@ import (
 // TestParseQueryWithReturn tests the parsing of a query with a MATCH and RETURN clause.
 func TestParseQueryWithReturn(t *testing.T) {
 	// Define the query to parse.
-	query := `MATCH (d:Deployment {foo: "bar", baz: 2, foosh: true}) RETURN d[*].metadata.labels`
+	query := `MATCH (d:deploy { service: "foo", app: "bar"})--(s:Service {service: "foo", app: "bar"}) RETURN s.spec.ports, d.metadata.name`
 
 	// Define the expected AST structure after parsing.
 	expected := &Expression{
@@ -19,27 +19,39 @@ func TestParseQueryWithReturn(t *testing.T) {
 			&MatchClause{
 				NodePattern: &NodePattern{
 					Name: "d",
-					Kind: "Deployment",
+					Kind: "deploy",
 					Properties: &Properties{
 						PropertyList: []*Property{
 							{
-								Key:   "foo",
+								Key:   "service",
+								Value: "foo",
+							},
+							{
+								Key:   "app",
 								Value: "bar",
 							},
+						},
+					},
+				},
+				ConnectedNodePattern: &NodePattern{
+					Name: "s",
+					Kind: "Service",
+					Properties: &Properties{
+						PropertyList: []*Property{
 							{
-								Key:   "baz",
-								Value: 2,
+								Key:   "service",
+								Value: "foo",
 							},
 							{
-								Key:   "foosh",
-								Value: true,
+								Key:   "app",
+								Value: "bar",
 							},
 						},
 					},
 				},
 			},
 			&ReturnClause{
-				JsonPaths: []string{"d[*].metadata.labels"},
+				JsonPaths: []string{"s.spec.ports", "d.metadata.name"},
 			},
 		},
 	}
