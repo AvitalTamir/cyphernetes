@@ -41,7 +41,7 @@ The `quote` command is used for running single Cyphernetes queries from the comm
 Example usage:
 
 ```bash
-$ cyphernetes quote "MATCH (d:Deployment {name: 'nginx'}) RETURN d"
+$ cyphernetes quote 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
 
 This command retrieves information about a Deployment named 'nginx'.
@@ -66,7 +66,7 @@ This query lists all Deployment resources.
 ### Node with Properties
 
 ```graphql
-MATCH (d:Deployment {app: 'nginx'}) RETURN d
+MATCH (d:Deployment {app: "nginx"}) RETURN d
 ```
 Retrieves Deployments where the app label is 'nginx'.
 
@@ -84,9 +84,9 @@ Lists Deployments and their associated Services.
 ### Node with Multiple Properties
 
 ```graphql
-MATCH (s:Service {type: 'LoadBalancer', region: 'us-west'}) RETURN s
+MATCH (s:Service {type: "LoadBalancer", region: "us-west"}) RETURN s
 ```
-Finds Services of type 'LoadBalancer' in the 'us-west' region.
+Finds Services of type "LoadBalancer" in the "us-west" region.
 
 ### Returning specific properties
 
