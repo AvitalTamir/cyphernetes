@@ -141,13 +141,30 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			debugLog("Executing Kubernetes list operation for Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
 			name, kind := c.NodePattern.Name, c.NodePattern.Kind
 
+			if c.NodePattern.Properties != nil && len(c.NodePattern.Properties.PropertyList) > 0 {
+				for i, prop := range c.NodePattern.Properties.PropertyList {
+					if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
+						Namespace = prop.Value.(string)
+						// Remove the namespace slice from the properties
+						c.NodePattern.Properties.PropertyList = append(c.NodePattern.Properties.PropertyList[:i], c.NodePattern.Properties.PropertyList[i+1:]...)
+						fmt.Println("Namespace:", Namespace)
+					}
+				}
+			}
+
 			var fieldSelector string
 			var labelSelector string
+			var hasNameSelector bool
 			if c.NodePattern.Properties != nil {
 				for _, prop := range c.NodePattern.Properties.PropertyList {
 					if prop.Key == "name" || prop.Key == "metadata.name" {
 						fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
+						hasNameSelector = true
 					} else {
+						if hasNameSelector {
+							// both name and label selectors are specified, error out
+							return nil, fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
+						}
 						labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
 					}
 				}
