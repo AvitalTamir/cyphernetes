@@ -36,21 +36,21 @@ Within the shell, you can run queries interactively. Here are some examples:
 
 ### Basic Node Match
 
-```cypher
+```graphql
 MATCH (d:Deployment) RETURN d
 ```
 This query lists all Deployment resources.
 
 ### Node with Properties
 
-```cypher
+```graphql
 MATCH (d:Deployment {app: 'nginx'}) RETURN d
 ```
 Retrieves Deployments where the app label is 'nginx'.
 
 ### Multiple Nodes
 
-```cypher
+```graphql
 // With a relationship
 MATCH (d:Deployment)->(s:Service) RETURN d, s
 
@@ -61,7 +61,7 @@ Lists Deployments and their associated Services.
 
 ### Node with Multiple Properties
 
-```cypher
+```graphql
 MATCH (s:Service {type: 'LoadBalancer', region: 'us-west'}) RETURN s.status.LoadBalancer
 ```
 Finds Services of type 'LoadBalancer' in the 'us-west' region and returns their Load Balancer address.
