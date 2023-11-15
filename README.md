@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://github.com/avitaltamir/cyphernetes/blob/main/demo.gif" alt="Demo">
-</p>
-
 <table style="border-collapse: collapse; border: none">
   <tr>
     <td style="border: none" width="256">
