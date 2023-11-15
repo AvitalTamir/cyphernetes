@@ -11,6 +11,7 @@ import (
 
 var Namespace string
 var logLevel string
+var allNamespaces bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -42,4 +43,5 @@ func init() {
 	// Add a namespace flag
 	rootCmd.PersistentFlags().StringVarP(&Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
+	rootCmd.PersistentFlags().BoolVarP(&allNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 }

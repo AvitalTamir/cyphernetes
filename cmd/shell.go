@@ -23,6 +23,7 @@ func runShell(cmd *cobra.Command, args []string) {
 		return
 	}
 	defer rl.Close()
+	rl.Config.HistoryFile = "/tmp/cyphernetes.history"
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")

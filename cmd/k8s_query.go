@@ -68,6 +68,9 @@ func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, label
 		return emptyList, err
 	}
 
+	if allNamespaces {
+		Namespace = ""
+	}
 	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
 		FieldSelector: fieldSelector,
 		LabelSelector: labelMap.String(),
