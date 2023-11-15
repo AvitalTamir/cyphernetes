@@ -1,12 +1,14 @@
-<div float="left">
-  <div>
-    <img src="./logo.png" alt="Cyphernetes Logo" width="120">
-  </div>
-  <div style="padding-left: 20px">
-    <h1>Cyphernetes</h1>
-    <p>Cyphernetes is a command-line interface (CLI) tool designed to manage Kubernetes resources using a query language inspired by Cypher, the query language of Neo4j. It provides a more intuitive way to interact with Kubernetes clusters, allowing users to express complex operations as graph-like queries.</p>
-  </div>
-</div>
+<table>
+  <tr>
+    <td>
+      <img src="./logo.png" alt="Cyphernetes Logo" width="120">
+    </td>
+    <td style="padding-left: 20px">
+      <h1>Cyphernetes</h1>
+      <p>Cyphernetes is a command-line interface (CLI) tool designed to manage Kubernetes resources using a query language inspired by Cypher, the query language of Neo4j. It provides a more intuitive way to interact with Kubernetes clusters, allowing users to express complex operations as graph-like queries.</p>
+    </td>
+  </tr>
+</table>
 
 ## Why Cyphernetes?
 
