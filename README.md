@@ -32,16 +32,16 @@ See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/R
 
 ## Usage
 
-Cyphernetes offers two main commands: `quote` and `shell`. Below are examples of how to use these commands with different types of queries.
+Cyphernetes offers two main commands: `query` and `shell`. Below are examples of how to use these commands with different types of queries.
 
-### Quote Command
+### Query Command
 
-The `quote` command is used for running single Cyphernetes queries from the command line. 
+The `query` command is used for running single Cyphernetes queries from the command line. 
 
 Example usage:
 
 ```bash
-$ cyphernetes quote 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
+$ cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
 
 This command retrieves information about a Deployment named 'nginx'.
