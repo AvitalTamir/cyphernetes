@@ -121,6 +121,22 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		logDebug("Returning COMMA token")
 		l.buf.tok = COMMA // Indicate that we've read a COMMA.
 		return int(COMMA)
+	case '-':
+		ch := l.s.Peek()
+		if ch == 62 {
+			l.s.Next() // Consume '>'
+			return int(ARROW_RIGHT)
+		}
+		return int(DASH)
+	case '<':
+		ch := l.s.Peek()
+		if ch == '-' {
+			l.s.Next() // Consume '-'
+			return int(ARROW_LEFT)
+		}
+		return int(ILLEGAL)
+	case '>':
+		return int(ILLEGAL)
 	default:
 		logDebug("Illegal token:", tok)
 		return int(ILLEGAL)

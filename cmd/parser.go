@@ -14,9 +14,8 @@ type Clause interface {
 }
 
 type MatchClause struct {
-	NodePattern *NodePattern
-	// RelationshipPattern *RelationshipPattern
-	// ReturnItems         []string
+	NodePattern          *NodePattern
+	ConnectedNodePattern *NodePattern
 }
 
 // type CreateClause struct {

@@ -38,7 +38,7 @@ func debugLog(v ...interface{}) {
 %token <strVal> INT
 %token <strVal> BOOLEAN
 %token <strVal> STRING
-%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA
+%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA DASH ARROW_LEFT ARROW_RIGHT
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -65,7 +65,11 @@ Expression:
 MatchClause:
     MATCH NodePattern {
         debugLog("Parsed MATCH expression for Name:", $2.Name, "Kind:", $2.Kind)
-        $$ = &MatchClause{NodePattern: $2}
+        $$ = &MatchClause{NodePattern: $2, ConnectedNodePattern: nil}
+    }
+    | MATCH NodePattern Relationship NodePattern {
+        debugLog("Parsed MATCH expression for connected nodes", $2.Name, "and", $4.Name)
+        $$ = &MatchClause{NodePattern: $2, ConnectedNodePattern: $4}
     }
 ;
 
@@ -74,6 +78,13 @@ ReturnClause:
         debugLog("Parsed RETURN expression for JsonPath:", $2)
         $$ = &ReturnClause{JsonPath: $2}
     }
+;
+
+Relationship:
+    DASH DASH { debugLog("Found undirectional relationship") } // { $$ = &Relationship{Type: "bidirectional", LeftNode: $1, RightNode: $4} }
+|   ARROW_LEFT { debugLog("Found left relationship") } // { $$ = &Relationship{Type: "left", LeftNode: $1, RightNode: $4} }
+|   ARROW_RIGHT { debugLog("Found right relationship") } // { $$ = &Relationship{Type: "right", LeftNode: $1, RightNode: $4} }
+|   ARROW_LEFT ARROW_RIGHT { debugLog("Found bidirectional relationship") } // { $$ = &Relationship{Type: "both", LeftNode: $1, RightNode: $6} }
 ;
 
 NodePattern:
