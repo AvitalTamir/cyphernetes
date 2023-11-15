@@ -30,7 +30,7 @@ The shell command launches an interactive shell where you can execute multiple q
 To start the shell:
 
 ```bash
-cyphernetes shell
+$ cyphernetes shell
 ```
 Within the shell, you can run queries interactively. Here are some examples:
 
