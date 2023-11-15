@@ -68,9 +68,21 @@ Lists Deployments and their associated Services.
 ### Node with Multiple Properties
 
 ```graphql
-MATCH (s:Service {type: 'LoadBalancer', region: 'us-west'}) RETURN s.status.LoadBalancer
+MATCH (s:Service {type: 'LoadBalancer', region: 'us-west'}) RETURN s
 ```
-Finds Services of type 'LoadBalancer' in the 'us-west' region and returns their Load Balancer address.
+Finds Services of type 'LoadBalancer' in the 'us-west' region.
+
+### Returning specific properties
+
+```graphql
+MATCH (s:Service) RETURN s[*].status.LoadBalancer
+```
+
+### Multiple matches and returns
+
+```graphql
+MATCH (d:Deployment)->(s:Service) RETURN d[*].metadata.name, s[*].status.LoadBalancer
+```
 
 Remember to type exit or press Ctrl-C to leave the shell.
 
