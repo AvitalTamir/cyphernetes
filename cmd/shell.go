@@ -32,10 +32,14 @@ func filterInput(r rune) (rune, bool) {
 	return r, true
 }
 
+func nameSpacePrompt() string {
+	return fmt.Sprintf("\033[32m%s »\033[0m ", Namespace)
+}
+
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "\033[31m»\033[0m ",
+		Prompt:          nameSpacePrompt(),
 		HistoryFile:     historyFile,
 		AutoComplete:    completer,
 		InterruptPrompt: "^C",
@@ -64,8 +68,13 @@ func runShell(cmd *cobra.Command, args []string) {
 			break
 		}
 
-		// Process the input if not empty
-		if input != "" {
+		// if input starts with '\n '
+		if strings.HasPrefix(input, "\\n ") {
+			input = strings.TrimPrefix(input, "\\n ")
+			Namespace = input
+			rl.SetPrompt(nameSpacePrompt())
+		} else if input != "" {
+			// Process the input if not empty
 			result, err := processQuery(input)
 			if err != nil {
 				fmt.Printf("Error: %s\n", err)

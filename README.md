@@ -132,7 +132,7 @@ The Cypher-like grammer implementation is incomplete, still missing:
 * Match clauses with more than 2 comma-separated Node patterns
 * Match clauses with multiple relationship patterns
 * Relationships between more than 2 nodes
-* Map Relationships to structs (relationship arrows are currently similar to commas)
+* Relationships pattern tokens (relationship arrows are currently similar to commas)
   This will be required later when we introduce more complex K8s operations
 
 

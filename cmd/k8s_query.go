@@ -209,7 +209,6 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 				Namespace = prop.Value.(string)
 				// Remove the namespace slice from the properties
 				n.Properties.PropertyList = append(n.Properties.PropertyList[:i], n.Properties.PropertyList[i+1:]...)
-				fmt.Println("Namespace:", Namespace)
 			}
 		}
 	}
