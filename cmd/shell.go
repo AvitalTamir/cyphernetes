@@ -16,16 +16,39 @@ var ShellCmd = &cobra.Command{
 	Run:   runShell,
 }
 
+var completer = readline.NewPrefixCompleter(
+	readline.PcItem("MATCH"),
+	readline.PcItem("match"),
+	readline.PcItem("RETURN"),
+	readline.PcItem("return"),
+)
+
+func filterInput(r rune) (rune, bool) {
+	switch r {
+	// block CtrlZ feature
+	case readline.CharCtrlZ:
+		return r, false
+	}
+	return r, true
+}
+
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
-	rl, err := readline.New("> ")
-	rl.SetHistoryPath(historyFile)
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "\033[31m»\033[0m ",
+		HistoryFile:     historyFile,
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
 
+		HistorySearchFold:   true,
+		FuncFilterInputRune: filterInput,
+	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating readline: %s\n", err)
-		return
+		panic(err)
 	}
 	defer rl.Close()
+	rl.CaptureExitSignal()
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
