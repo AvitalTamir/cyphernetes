@@ -130,7 +130,7 @@ var resultMap map[string]interface{}
 var resultMapJson []byte
 
 func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
-	var k8sResources []interface{}
+	k8sResources := make(map[string]interface{})
 
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
@@ -162,6 +162,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					jsonPath = "$." + jsonPath
 				}
 
+				// Grab the base name of the node pattern from the JSONPath (the part between $. and the first [., [ or space)
+				baseName := strings.Split(jsonPath, ".")[1]
+				baseName = strings.Split(baseName, "[")[0]
+
 				// Convert nil keys in jsonData to empty array if necessary
 				jsonData = convertNilKey(jsonData)
 
@@ -172,7 +176,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					result = []interface{}{}
 				}
 
-				k8sResources = append(k8sResources, result)
+				k8sResources[baseName] = result
 			}
 
 		default:
