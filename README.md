@@ -179,6 +179,9 @@ The Cypher-like grammer implementation is incomplete, still missing:
 ### Interactive Shell Interface
 
 - [x] Basic shell interface for inputting queries and displaying results.
+- [ ] Add help and documentation to the shell.
+- [ ] Autocompletion.
+- [ ] Syntax highlighting.
 - [ ] Test shell with various input scenarios.
 
 ## Cypher-Like Query Language Parser Roadmap
