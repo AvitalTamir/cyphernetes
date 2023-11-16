@@ -91,13 +91,13 @@ Finds Services of type "LoadBalancer" in the "us-west" region.
 ### Returning specific properties
 
 ```graphql
-MATCH (s:Service) RETURN s[*].status.LoadBalancer
+MATCH (s:Service) RETURN s.status.LoadBalancer
 ```
 
 ### Multiple matches and returns
 
 ```graphql
-MATCH (d:Deployment)->(s:Service) RETURN d[*].metadata.name, s[*].status.LoadBalancer
+MATCH (d:Deployment)->(s:Service) RETURN d.metadata.name, s.status.LoadBalancer
 ```
 
 Remember to type exit or press Ctrl-C to leave the shell.
