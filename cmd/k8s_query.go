@@ -136,13 +136,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
-			debugLog("Node pattern found. Name:", c.NodePattern.Name, "Kind:", c.NodePattern.Kind)
-			getNodeResouces(c.NodePattern, q)
-			if c.ConnectedNodePattern != nil {
-				debugLog("Node pattern found. Name:", c.ConnectedNodePattern.Name, "Kind:", c.ConnectedNodePattern.Kind)
-				getNodeResouces(c.ConnectedNodePattern, q)
+			for _, nodePattern := range c.NodePatternList {
+				debugLog("Node pattern found. Name:", nodePattern.Name, "Kind:", nodePattern.Kind)
+				getNodeResouces(nodePattern, q)
 			}
-
 			// case *CreateClause:
 			// 	// Execute a Kubernetes create operation based on the CreateClause.
 			// 	// ...
@@ -162,21 +159,29 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					jsonPath = "$." + jsonPath
 				}
 
-				// Grab the base name of the node pattern from the JSONPath (the part between $. and the first [., [ or space)
-				baseName := strings.Split(jsonPath, ".")[1]
-				baseName = strings.Split(baseName, "[")[0]
+				// baseName := strings.Split(jsonPath, ".")[1]
+				// baseName = strings.Split(baseName, "[")[0]
+				pathParts := strings.Split(jsonPath, ".")[1:]
 
-				// Convert nil keys in jsonData to empty array if necessary
-				jsonData = convertNilKey(jsonData)
-
-				result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
-				if err != nil {
-					logDebug("Path not found:", jsonPath)
-					// result gets empty array if path not found
-					result = []interface{}{}
+				// Drill down to create nested map structure
+				currentMap := k8sResources
+				for i, part := range pathParts {
+					if i == len(pathParts)-1 {
+						// Last part: assign the result
+						result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
+						if err != nil {
+							logDebug("Path not found:", jsonPath)
+							result = []interface{}{}
+						}
+						currentMap[part] = result
+					} else {
+						// Intermediate parts: create nested maps
+						if currentMap[part] == nil {
+							currentMap[part] = make(map[string]interface{})
+						}
+						currentMap = currentMap[part].(map[string]interface{})
+					}
 				}
-
-				k8sResources[baseName] = result
 			}
 
 		default:
@@ -189,6 +194,19 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 	return k8sResources, nil
 }
+
+// Helper function to merge two maps
+// func mergeMaps(m1 map[string]interface{}, m2 map[string]interface{}) {
+// 	for k, v := range m2 {
+// 		if m1[k] != nil {
+// 			// if the key exists in m1, merge the value
+// 			mergeMaps(m1[k].(map[string]interface{}), v.(map[string]interface{}))
+// 		} else {
+// 			// if the key does not exist in m1, add it
+// 			m1[k] = v
+// 		}
+// 	}
+// }
 
 func convertNilKey(jsonData interface{}) interface{} {
 	switch jsonData := jsonData.(type) {

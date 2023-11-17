@@ -73,11 +73,8 @@ Retrieves Deployments where the app label is 'nginx'.
 ### Multiple Nodes
 
 ```graphql
-# With a relationship
-MATCH (d:Deployment)->(s:Service) RETURN d, s
-
 # Multiple matches
-MATCH (d:Deployment), (s:Service) RETURN d, s
+MATCH (d:Deployment), (s:Service), (i:Ingress) RETURN d, s, i
 ```
 Lists Deployments and their associated Services.
 
@@ -97,7 +94,7 @@ MATCH (s:Service) RETURN s.status.LoadBalancer
 ### Multiple matches and returns
 
 ```graphql
-MATCH (d:Deployment)->(s:Service) RETURN d.metadata.name, s.status.LoadBalancer
+MATCH (d:Deployment), (s:Service) RETURN d.metadata.name, s.status.LoadBalancer
 ```
 
 Remember to type exit or press Ctrl-C to leave the shell.
