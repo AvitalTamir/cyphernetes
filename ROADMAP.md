@@ -80,8 +80,8 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 - [ ] Support relationships between more than 2 nodes.
 
 ### Phase 5: Advanced MATCH Support
-- [ ] Match Clauses to contain NodePatternLists instead of a single tuple of Node/ConnectedNode
-- [ ] Support more than 2 comma-separated NodePatternLists.
+- [x] Match Clauses to contain NodePatternLists instead of a single tuple of Node/ConnectedNode
+- [x] Support more than 2 comma-separated NodePatternLists.
 
 ### Phase 6: CREATE Statement
 

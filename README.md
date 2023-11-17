@@ -21,9 +21,6 @@ The project is at it's earliest milestone and supports performing GET operations
 The Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
 * CREATE, SET, DELETE clauses
-* Match clauses with more than 2 comma-separated Node patterns
-* Match clauses with multiple relationship patterns
-* Relationships between more than 2 nodes
 * Relationships pattern tokens (relationship arrows are currently similar to commas)
   This will be required later when we introduce more complex K8s operations
 
