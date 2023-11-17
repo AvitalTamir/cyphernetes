@@ -77,6 +77,14 @@ MATCH (d:Deployment), (s:Service), (i:Ingress) RETURN d, s, i
 ```
 Lists Deployments and their associated Services.
 
+### Relationships
+
+```graphql
+# Match 2 or more related resources
+MATCH (d:Deployment)->(p:Pod)->(s:Service) RETURN d, s, i
+```
+Lists Deployments, Pods that belong to these deployments, and the Service(s) that route to these pods.
+
 ### Node with Multiple Properties
 
 ```graphql
