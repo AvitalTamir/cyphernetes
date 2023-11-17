@@ -8,6 +8,7 @@ import (
 
 	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var ShellCmd = &cobra.Command{
@@ -33,20 +34,42 @@ func filterInput(r rune) (rune, bool) {
 	return r, true
 }
 
-func nameSpacePrompt() string {
+func shellPrompt() string {
 	ns := Namespace
 	color := "32"
 	if ns == "" {
 		ns = "ALL NAMESPACES"
 		color = "31"
 	}
-	return fmt.Sprintf("\033[%sm%s »\033[0m ", color, ns)
+	// Get the name of the current Kubernetes context
+	context, err := getCurrentContext()
+	if err != nil {
+		fmt.Println("Error getting current context: ", err)
+		return ""
+	}
+
+	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, context, ns)
+}
+
+func getCurrentContext() (string, error) {
+	// Use the local kubeconfig context
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: "",
+		}).RawConfig()
+	if err != nil {
+		fmt.Println("Error creating in-cluster config")
+		return "", err
+	}
+	currentContextName := config.CurrentContext
+	return currentContextName, nil
 }
 
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          nameSpacePrompt(),
+		Prompt:          shellPrompt(),
 		HistoryFile:     historyFile,
 		AutoComplete:    completer,
 		InterruptPrompt: "^C",
@@ -84,7 +107,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			} else {
 				Namespace = strings.ToLower(input)
 			}
-			rl.SetPrompt(nameSpacePrompt())
+			rl.SetPrompt(shellPrompt())
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit           - Exit the shell")
