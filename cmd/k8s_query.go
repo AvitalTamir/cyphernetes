@@ -159,8 +159,6 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					jsonPath = "$." + jsonPath
 				}
 
-				// baseName := strings.Split(jsonPath, ".")[1]
-				// baseName = strings.Split(baseName, "[")[0]
 				pathParts := strings.Split(jsonPath, ".")[1:]
 
 				// Drill down to create nested map structure
@@ -189,39 +187,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 		}
 	}
 
-	// After executing all clauses, format the results according to the ReturnClause.
-	// ...
-
 	return k8sResources, nil
-}
-
-// Helper function to merge two maps
-// func mergeMaps(m1 map[string]interface{}, m2 map[string]interface{}) {
-// 	for k, v := range m2 {
-// 		if m1[k] != nil {
-// 			// if the key exists in m1, merge the value
-// 			mergeMaps(m1[k].(map[string]interface{}), v.(map[string]interface{}))
-// 		} else {
-// 			// if the key does not exist in m1, add it
-// 			m1[k] = v
-// 		}
-// 	}
-// }
-
-func convertNilKey(jsonData interface{}) interface{} {
-	switch jsonData := jsonData.(type) {
-	case map[string]interface{}:
-		for k, v := range jsonData {
-			jsonData[k] = convertNilKey(v)
-		}
-	case []interface{}:
-		for i, v := range jsonData {
-			jsonData[i] = convertNilKey(v)
-		}
-	case nil:
-		return []interface{}{}
-	}
-	return jsonData
 }
 
 func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
