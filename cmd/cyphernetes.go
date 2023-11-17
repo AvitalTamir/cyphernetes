@@ -34,6 +34,7 @@ type yySymType struct {
 	clause            *Clause
 	expression        *Expression
 	matchClause       *MatchClause
+	nodePatternList   []*NodePattern
 	returnClause      *ReturnClause
 	properties        *Properties
 	jsonPathValue     *Property
@@ -88,60 +89,66 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line grammar/cyphernetes.y:148
+//line grammar/cyphernetes.y:163
 
 //line yacctab:1
 var yyExca = [...]int8{
 	-1, 1,
 	1, -1,
 	-2, 0,
+	-1, 6,
+	17, 4,
+	-2, 2,
+	-1, 15,
+	17, 5,
+	-2, 3,
 }
 
 const yyPrivate = 57344
 
-const yyLast = 37
+const yyLast = 33
 
 var yyAct = [...]int8{
-	28, 12, 13, 14, 19, 30, 31, 23, 18, 16,
-	8, 5, 25, 3, 6, 32, 20, 36, 37, 35,
-	26, 7, 29, 21, 10, 22, 17, 15, 11, 9,
-	24, 34, 33, 27, 4, 2, 1,
+	24, 26, 27, 14, 12, 19, 9, 5, 6, 3,
+	21, 28, 16, 32, 33, 31, 22, 8, 25, 17,
+	11, 15, 18, 13, 10, 20, 30, 23, 29, 4,
+	7, 2, 1,
 }
 
 var yyPact = [...]int16{
-	1, -1000, -2, 12, -4, 19, -17, 23, -1000, -8,
-	-1000, 12, -10, -16, -1000, 5, 18, -1000, -1000, -1000,
-	21, -1000, -3, -1000, 10, 17, -1000, -11, -1000, 4,
-	-1000, 17, 11, -1000, -1000, -1000, -1000, -1000,
+	-3, -1000, -6, 8, -8, 15, -1000, -13, 19, -1000,
+	-14, -1000, 8, 1, 14, -1000, 18, -1000, -5, -1000,
+	6, 13, -1000, -15, -1000, 0, -1000, 13, 7, -1000,
+	-1000, -1000, -1000, -1000,
 }
 
 var yyPgo = [...]int8{
-	0, 36, 35, 34, 14, 33, 0, 31, 30, 29,
-	28,
+	0, 32, 31, 30, 29, 8, 27, 0, 26, 25,
+	24,
 }
 
 var yyR1 = [...]int8{
-	0, 1, 2, 2, 3, 9, 9, 10, 10, 10,
-	10, 4, 4, 8, 5, 5, 6, 7, 7, 7,
+	0, 1, 2, 2, 3, 3, 4, 10, 10, 5,
+	5, 9, 6, 6, 7, 8, 8, 8,
 }
 
 var yyR2 = [...]int8{
-	0, 3, 2, 4, 2, 1, 3, 2, 1, 1,
-	2, 5, 6, 3, 1, 3, 3, 1, 1, 1,
+	0, 3, 2, 4, 1, 3, 2, 1, 3, 5,
+	6, 3, 1, 3, 3, 1, 1, 1,
 }
 
 var yyChk = [...]int16{
-	-1000, -1, -2, 12, -3, 13, -4, 9, 14, -9,
-	5, -10, 18, 19, 20, 4, 17, -4, 18, 20,
-	11, 5, 4, 10, -8, 15, 10, -5, -6, 5,
-	16, 17, 11, -6, -7, 8, 6, 7,
+	-1000, -1, -2, 12, -4, 13, -5, -3, 9, 14,
+	-10, 5, 17, 4, 17, -5, 11, 5, 4, 10,
+	-9, 15, 10, -6, -7, 5, 16, 17, 11, -7,
+	-8, 8, 6, 7,
 }
 
 var yyDef = [...]int8{
-	0, -2, 0, 0, 0, 0, 2, 0, 1, 4,
-	5, 0, 0, 8, 9, 0, 0, 3, 7, 10,
-	0, 6, 0, 11, 0, 0, 12, 0, 14, 0,
-	13, 0, 0, 15, 16, 17, 18, 19,
+	0, -2, 0, 0, 0, 0, -2, 0, 0, 1,
+	6, 7, 0, 0, 0, -2, 0, 8, 0, 9,
+	0, 0, 10, 0, 12, 0, 11, 0, 0, 13,
+	14, 15, 16, 17,
 }
 
 var yyTok1 = [...]int8{
@@ -496,111 +503,97 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammar/cyphernetes.y:62
+//line grammar/cyphernetes.y:64
 		{
 			result = &Expression{Clauses: []Clause{yyDollar[1].matchClause, yyDollar[2].returnClause}} // Store the result in a global variable
 		}
 	case 2:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammar/cyphernetes.y:68
+//line grammar/cyphernetes.y:70
 		{
-			debugLog("Parsed MATCH expression for Name:", yyDollar[2].pattern.Name, "Kind:", yyDollar[2].pattern.Kind)
-			yyVAL.matchClause = &MatchClause{NodePattern: yyDollar[2].pattern, ConnectedNodePattern: nil}
+			yyVAL.matchClause = &MatchClause{NodePatternList: []*NodePattern{yyDollar[2].pattern}}
 		}
 	case 3:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line grammar/cyphernetes.y:72
+//line grammar/cyphernetes.y:73
 		{
-			debugLog("Parsed MATCH expression for connected nodes", yyDollar[2].pattern.Name, "and", yyDollar[4].pattern.Name)
-			yyVAL.matchClause = &MatchClause{NodePattern: yyDollar[2].pattern, ConnectedNodePattern: yyDollar[4].pattern}
+			yyVAL.matchClause = &MatchClause{NodePatternList: append(yyDollar[2].nodePatternList, yyDollar[4].pattern)}
 		}
 	case 4:
-		yyDollar = yyS[yypt-2 : yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 //line grammar/cyphernetes.y:79
 		{
-			yyVAL.returnClause = &ReturnClause{JsonPaths: yyDollar[2].jsonPathList}
+			yyVAL.nodePatternList = []*NodePattern{yyDollar[1].pattern}
 		}
 	case 5:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:85
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line grammar/cyphernetes.y:82
 		{
-			yyVAL.jsonPathList = []string{yyDollar[1].strVal}
+			yyVAL.nodePatternList = append(yyDollar[1].nodePatternList, yyDollar[3].pattern)
 		}
 	case 6:
-		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammar/cyphernetes.y:88
-		{
-			yyVAL.jsonPathList = append(yyDollar[1].jsonPathList, yyDollar[3].strVal)
-		}
-	case 7:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line grammar/cyphernetes.y:94
 		{
-			debugLog("Found undirectional relationship")
+			yyVAL.returnClause = &ReturnClause{JsonPaths: yyDollar[2].jsonPathList}
+		}
+	case 7:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line grammar/cyphernetes.y:100
+		{
+			yyVAL.jsonPathList = []string{yyDollar[1].strVal}
 		}
 	case 8:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:95
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line grammar/cyphernetes.y:103
 		{
-			debugLog("Found left relationship")
+			yyVAL.jsonPathList = append(yyDollar[1].jsonPathList, yyDollar[3].strVal)
 		}
 	case 9:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:96
-		{
-			debugLog("Found right relationship")
-		}
-	case 10:
-		yyDollar = yyS[yypt-2 : yypt+1]
-//line grammar/cyphernetes.y:97
-		{
-			debugLog("Found bidirectional relationship")
-		}
-	case 11:
 		yyDollar = yyS[yypt-5 : yypt+1]
-//line grammar/cyphernetes.y:101
+//line grammar/cyphernetes.y:116
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal, Properties: nil}
 		}
-	case 12:
+	case 10:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line grammar/cyphernetes.y:104
+//line grammar/cyphernetes.y:119
 		{
 			yyVAL.pattern = &NodePattern{Name: yyDollar[2].strVal, Kind: yyDollar[4].strVal, Properties: yyDollar[5].properties}
 		}
-	case 13:
-		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammar/cyphernetes.y:110
-		{
-			yyVAL.properties = &Properties{PropertyList: yyDollar[2].jsonPathValueList}
-		}
-	case 14:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:116
-		{
-			yyVAL.jsonPathValueList = []*Property{yyDollar[1].jsonPathValue} // Start with one Property element
-		}
-	case 15:
-		yyDollar = yyS[yypt-3 : yypt+1]
-//line grammar/cyphernetes.y:119
-		{
-			yyVAL.jsonPathValueList = append(yyDollar[1].jsonPathValueList, yyDollar[3].jsonPathValue) // $1 and $3 are the left and right operands of COMMA
-		}
-	case 16:
+	case 11:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line grammar/cyphernetes.y:125
 		{
-			yyVAL.jsonPathValue = &Property{Key: yyDollar[1].strVal, Value: yyDollar[3].value}
+			yyVAL.properties = &Properties{PropertyList: yyDollar[2].jsonPathValueList}
 		}
-	case 17:
+	case 12:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line grammar/cyphernetes.y:131
 		{
+			yyVAL.jsonPathValueList = []*Property{yyDollar[1].jsonPathValue} // Start with one Property element
+		}
+	case 13:
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line grammar/cyphernetes.y:134
+		{
+			yyVAL.jsonPathValueList = append(yyDollar[1].jsonPathValueList, yyDollar[3].jsonPathValue) // $1 and $3 are the left and right operands of COMMA
+		}
+	case 14:
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line grammar/cyphernetes.y:140
+		{
+			yyVAL.jsonPathValue = &Property{Key: yyDollar[1].strVal, Value: yyDollar[3].value}
+		}
+	case 15:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line grammar/cyphernetes.y:146
+		{
 			yyVAL.value = strings.Trim(yyDollar[1].strVal, "\"")
 		}
-	case 18:
+	case 16:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:134
+//line grammar/cyphernetes.y:149
 		{
 			// Parse the int from the string
 			i, err := strconv.Atoi(yyDollar[1].strVal)
@@ -610,9 +603,9 @@ yydefault:
 			}
 			yyVAL.value = i
 		}
-	case 19:
+	case 17:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line grammar/cyphernetes.y:143
+//line grammar/cyphernetes.y:158
 		{
 			// Parse the boolean from the string
 			yyVAL.value = strings.ToUpper(yyDollar[1].strVal) == "TRUE"

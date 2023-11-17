@@ -11,40 +11,42 @@ import (
 // TestParseQueryWithReturn tests the parsing of a query with a MATCH and RETURN clause.
 func TestParseQueryWithReturn(t *testing.T) {
 	// Define the query to parse.
-	query := `MATCH (d:deploy { service: "foo", app: "bar"})--(s:Service {service: "foo", app: "bar"}) RETURN s.spec.ports, d.metadata.name`
+	query := `MATCH (d:deploy { service: "foo", app: "bar"}), (s:Service {service: "foo", app: "bar"}) RETURN s.spec.ports, d.metadata.name`
 
 	// Define the expected AST structure after parsing.
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePattern: &NodePattern{
-					Name: "d",
-					Kind: "deploy",
-					Properties: &Properties{
-						PropertyList: []*Property{
-							{
-								Key:   "service",
-								Value: "foo",
-							},
-							{
-								Key:   "app",
-								Value: "bar",
+				NodePatternList: []*NodePattern{
+					&NodePattern{
+						Name: "d",
+						Kind: "deploy",
+						Properties: &Properties{
+							PropertyList: []*Property{
+								{
+									Key:   "service",
+									Value: "foo",
+								},
+								{
+									Key:   "app",
+									Value: "bar",
+								},
 							},
 						},
 					},
-				},
-				ConnectedNodePattern: &NodePattern{
-					Name: "s",
-					Kind: "Service",
-					Properties: &Properties{
-						PropertyList: []*Property{
-							{
-								Key:   "service",
-								Value: "foo",
-							},
-							{
-								Key:   "app",
-								Value: "bar",
+					&NodePattern{
+						Name: "s",
+						Kind: "Service",
+						Properties: &Properties{
+							PropertyList: []*Property{
+								{
+									Key:   "service",
+									Value: "foo",
+								},
+								{
+									Key:   "app",
+									Value: "bar",
+								},
 							},
 						},
 					},

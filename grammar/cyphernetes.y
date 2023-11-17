@@ -27,6 +27,7 @@ func debugLog(v ...interface{}) {
     clause            *Clause
     expression        *Expression
     matchClause       *MatchClause
+    nodePatternList   []*NodePattern
     returnClause      *ReturnClause
     properties        *Properties
     jsonPathValue     *Property
@@ -43,6 +44,7 @@ func debugLog(v ...interface{}) {
 
 %type<expression> Expression
 %type<matchClause> MatchClause
+%type<nodePatternList> NodePatternList
 %type<returnClause> ReturnClause
 %type<pattern> NodePattern
 %type<strVal> IDENT
@@ -66,13 +68,26 @@ Expression:
 
 MatchClause:
     MATCH NodePattern {
-        debugLog("Parsed MATCH expression for Name:", $2.Name, "Kind:", $2.Kind)
-        $$ = &MatchClause{NodePattern: $2, ConnectedNodePattern: nil}
+        $$ = &MatchClause{NodePatternList: []*NodePattern{$2}}
     }
-    | MATCH NodePattern Relationship NodePattern {
+|   MATCH NodePatternList COMMA NodePattern {
+        $$ = &MatchClause{NodePatternList: append($2, $4)}
+    }
+;
+
+NodePatternList:
+    NodePattern {
+        $$ = []*NodePattern{$1}
+    }
+|   NodePatternList COMMA NodePattern {
+        $$ = append($1, $3)
+    }
+;
+
+    /* | MATCH NodePattern Relationship NodePattern {
         debugLog("Parsed MATCH expression for connected nodes", $2.Name, "and", $4.Name)
         $$ = &MatchClause{NodePattern: $2, ConnectedNodePattern: $4}
-    }
+    } */
 ;
 
 ReturnClause:
@@ -90,12 +105,12 @@ JSONPathList:
     }
 ;
 
-Relationship:
+/* Relationship:
     DASH DASH { debugLog("Found undirectional relationship") } // { $$ = &Relationship{Type: "bidirectional", LeftNode: $1, RightNode: $4} }
 |   ARROW_LEFT { debugLog("Found left relationship") } // { $$ = &Relationship{Type: "left", LeftNode: $1, RightNode: $4} }
 |   ARROW_RIGHT { debugLog("Found right relationship") } // { $$ = &Relationship{Type: "right", LeftNode: $1, RightNode: $4} }
 |   ARROW_LEFT ARROW_RIGHT { debugLog("Found bidirectional relationship") } // { $$ = &Relationship{Type: "both", LeftNode: $1, RightNode: $6} }
-;
+; */
 
 NodePattern:
     LPAREN IDENT COLON IDENT RPAREN {

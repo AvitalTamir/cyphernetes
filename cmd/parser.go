@@ -14,8 +14,7 @@ type Clause interface {
 }
 
 type MatchClause struct {
-	NodePattern          *NodePattern
-	ConnectedNodePattern *NodePattern
+	NodePatternList []*NodePattern
 }
 
 // type CreateClause struct {
@@ -46,6 +45,8 @@ type NodePattern struct {
 // 	Identifier string
 // 	Label      string
 // 	Direction  string
+//  LeftNode   *NodePattern
+//  RightNode  *NodePattern
 // }
 
 type Properties struct {
