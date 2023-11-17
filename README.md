@@ -21,8 +21,8 @@ The project is at it's earliest milestone and supports performing GET operations
 The Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
 * CREATE, SET, DELETE clauses
-* Relationships pattern tokens (relationship arrows are currently similar to commas)
-  This will be required later when we introduce more complex K8s operations
+* Relationships pattern tokens
+* The graph model of relationships between common Kubernetes resources
 
 See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.
 
