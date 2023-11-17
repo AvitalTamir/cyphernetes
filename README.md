@@ -1,6 +1,5 @@
 
-
-https://github.com/AvitalTamir/cyphernetes/assets/83203533/11409b6c-68c1-4eb2-8473-52ed2eb54534
+https://github.com/AvitalTamir/cyphernetes/assets/83203533/1cb079e5-8865-40db-9a56-4c82effbdfc1
 
 <table style="border-collapse: collapse; border: none">
   <tr>
