@@ -62,32 +62,42 @@ func debugLog(v ...interface{}) {
 
 Expression:
     MatchClause ReturnClause EOF {
-        result = &Expression{Clauses: []Clause{$1, $2}} // Store the result in a global variable
+        result = &Expression{Clauses: []Clause{$1, $2}}
     }
 ;
 
 MatchClause:
-    MATCH NodePattern {
-        $$ = &MatchClause{NodePatternList: []*NodePattern{$2}}
-    }
-|   MATCH NodePatternList COMMA NodePattern {
-        $$ = &MatchClause{NodePatternList: append($2, $4)}
+    MATCH NodePatternList {
+        $$ = &MatchClause{NodePatternList: $2}
     }
 ;
 
 NodePatternList:
-    NodePattern {
+    NodePattern COMMA NodePatternList {
+        $$ = append([]*NodePattern{$1}, $3...)
+    }
+    | NodePattern Relationship NodePattern Relationship NodePatternList {
+        $$ = []*NodePattern{$1, $3}
+        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
+        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
+        $3.ConnectedNodePatternRight = &NodePattern{Name: $5[0].Name, Kind: $5[0].Kind} // For bidirectional relationships
+        $5[0].ConnectedNodePatternLeft = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking RightNode and LeftNode through Relationship
+        $$ = append($$, $5...)
+    }
+    | NodePattern Relationship NodePattern COMMA NodePatternList {
+        $$ = []*NodePattern{$1, $3}
+        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
+        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
+        $$ = append($$, $5...)
+    }
+    | NodePattern Relationship NodePattern {
+        $$ = []*NodePattern{$1, $3}
+        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
+        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
+    }
+    | NodePattern {
         $$ = []*NodePattern{$1}
     }
-|   NodePatternList COMMA NodePattern {
-        $$ = append($1, $3)
-    }
-;
-
-    /* | MATCH NodePattern Relationship NodePattern {
-        debugLog("Parsed MATCH expression for connected nodes", $2.Name, "and", $4.Name)
-        $$ = &MatchClause{NodePattern: $2, ConnectedNodePattern: $4}
-    } */
 ;
 
 ReturnClause:
@@ -105,12 +115,12 @@ JSONPathList:
     }
 ;
 
-/* Relationship:
-    DASH DASH { debugLog("Found undirectional relationship") } // { $$ = &Relationship{Type: "bidirectional", LeftNode: $1, RightNode: $4} }
-|   ARROW_LEFT { debugLog("Found left relationship") } // { $$ = &Relationship{Type: "left", LeftNode: $1, RightNode: $4} }
-|   ARROW_RIGHT { debugLog("Found right relationship") } // { $$ = &Relationship{Type: "right", LeftNode: $1, RightNode: $4} }
-|   ARROW_LEFT ARROW_RIGHT { debugLog("Found bidirectional relationship") } // { $$ = &Relationship{Type: "both", LeftNode: $1, RightNode: $6} }
-; */
+Relationship:
+    DASH DASH { logDebug("Found relationship (no direction)") }
+|   ARROW_LEFT { logDebug("Found relationship (left)") }
+|   ARROW_RIGHT { logDebug("Found relationship (right)") }
+|   ARROW_LEFT ARROW_RIGHT { logDebug("Found relationship (both)") }
+;
 
 NodePattern:
     LPAREN IDENT COLON IDENT RPAREN {

@@ -36,18 +36,12 @@ type ReturnClause struct {
 // }
 
 type NodePattern struct {
-	Name       string
-	Kind       string
-	Properties *Properties
+	Name                      string
+	Kind                      string
+	Properties                *Properties
+	ConnectedNodePatternLeft  *NodePattern // Reference to the connected node
+	ConnectedNodePatternRight *NodePattern // Reference to the connected node
 }
-
-// type RelationshipPattern struct {
-// 	Identifier string
-// 	Label      string
-// 	Direction  string
-//  LeftNode   *NodePattern
-//  RightNode  *NodePattern
-// }
 
 type Properties struct {
 	PropertyList []*Property
