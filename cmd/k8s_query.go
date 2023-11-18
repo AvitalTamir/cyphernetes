@@ -136,8 +136,8 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
-			for _, nodePattern := range c.NodePatternList {
-				debugLog("Node pattern found. Name:", nodePattern.Name, "Kind:", nodePattern.Kind)
+			for _, nodePattern := range c.Nodes {
+				debugLog("Node pattern found. Name:", nodePattern.ResourceProperties.Name, "Kind:", nodePattern.ResourceProperties.Kind)
 				getNodeResouces(nodePattern, q)
 			}
 			// case *CreateClause:
@@ -191,12 +191,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 }
 
 func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
-	if n.Properties != nil && len(n.Properties.PropertyList) > 0 {
-		for i, prop := range n.Properties.PropertyList {
+	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
+		for i, prop := range n.ResourceProperties.Properties.PropertyList {
 			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
 				Namespace = prop.Value.(string)
 				// Remove the namespace slice from the properties
-				n.Properties.PropertyList = append(n.Properties.PropertyList[:i], n.Properties.PropertyList[i+1:]...)
+				n.ResourceProperties.Properties.PropertyList = append(n.ResourceProperties.Properties.PropertyList[:i], n.ResourceProperties.Properties.PropertyList[i+1:]...)
 			}
 		}
 	}
@@ -204,8 +204,8 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 	var fieldSelector string
 	var labelSelector string
 	var hasNameSelector bool
-	if n.Properties != nil {
-		for _, prop := range n.Properties.PropertyList {
+	if n.ResourceProperties.Properties != nil {
+		for _, prop := range n.ResourceProperties.Properties.PropertyList {
 			if prop.Key == "name" || prop.Key == "metadata.name" {
 				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
 				hasNameSelector = true
@@ -223,7 +223,7 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 	}
 
 	// Get the list of resources of the specified kind.
-	list, err := q.getK8sResources(n.Kind, fieldSelector, labelSelector)
+	list, err := q.getK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
 	if err != nil {
 		fmt.Println("Error getting list of resources: ", err)
 		return err
@@ -240,7 +240,7 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 
 	// Add the list to the results under the 'name' key
 	resultMap = results.(map[string]interface{})
-	resultMap[n.Name] = converted
+	resultMap[n.ResourceProperties.Name] = converted
 	resultMapJson, err = json.Marshal(resultMap)
 	if err != nil {
 		fmt.Println("Error marshalling results to JSON: ", err)

@@ -17,40 +17,45 @@ func TestParseQueryWithReturn(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "d",
-						Kind: "deploy",
-						Properties: &Properties{
-							PropertyList: []*Property{
-								{
-									Key:   "service",
-									Value: "foo",
-								},
-								{
-									Key:   "app",
-									Value: "bar",
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+							Properties: &Properties{
+								PropertyList: []*Property{
+									{
+										Key:   "service",
+										Value: "foo",
+									},
+									{
+										Key:   "app",
+										Value: "bar",
+									},
 								},
 							},
 						},
 					},
 					{
-						Name: "s",
-						Kind: "Service",
-						Properties: &Properties{
-							PropertyList: []*Property{
-								{
-									Key:   "service",
-									Value: "foo",
-								},
-								{
-									Key:   "app",
-									Value: "bar",
+						ResourceProperties: &ResourceProperties{
+							Name: "s",
+							Kind: "Service",
+							Properties: &Properties{
+								PropertyList: []*Property{
+									{
+										Key:   "service",
+										Value: "foo",
+									},
+									{
+										Key:   "app",
+										Value: "bar",
+									},
 								},
 							},
 						},
 					},
 				},
+				Relationships: []*Relationship{},
 			},
 			&ReturnClause{
 				JsonPaths: []string{"s.spec.ports", "d.metadata.name"},
@@ -80,12 +85,15 @@ func TestSingleNodePattern(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "n",
-						Kind: "Node",
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
 					},
 				},
+				Relationships: []*Relationship{},
 			},
 			&ReturnClause{
 				JsonPaths: []string{"n"},
@@ -115,16 +123,21 @@ func TestMultipleNodePatternsCommaSeparated(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "n",
-						Kind: "Node",
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
 					},
 					{
-						Name: "m",
-						Kind: "Module",
+						ResourceProperties: &ResourceProperties{
+							Name: "m",
+							Kind: "Module",
+						},
 					},
 				},
+				Relationships: []*Relationship{},
 			},
 			&ReturnClause{
 				JsonPaths: []string{"n", "m"},
@@ -154,21 +167,34 @@ func TestMultipleNodePatternsRelationship(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "n",
-						Kind: "Node",
-						ConnectedNodePatternRight: &NodePattern{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+					{
+						ResourceProperties: &ResourceProperties{
 							Name: "m",
 							Kind: "Module",
 						},
 					},
+				},
+				Relationships: []*Relationship{
 					{
-						Name: "m",
-						Kind: "Module",
-						ConnectedNodePatternLeft: &NodePattern{
-							Name: "n",
-							Kind: "Node",
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "n",
+								Kind: "Node",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "m",
+								Kind: "Module",
+							},
 						},
 					},
 				},
@@ -201,26 +227,41 @@ func TestComplexNodePatternsAndRelationships(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "a",
-						Kind: "App",
-						ConnectedNodePatternRight: &NodePattern{
-							Name: "b",
-							Kind: "Backend",
-						},
-					},
-					{
-						Name: "b",
-						Kind: "Backend",
-						ConnectedNodePatternLeft: &NodePattern{
+						ResourceProperties: &ResourceProperties{
 							Name: "a",
 							Kind: "App",
 						},
 					},
 					{
-						Name: "c",
-						Kind: "Cache",
+						ResourceProperties: &ResourceProperties{
+							Name: "b",
+							Kind: "Backend",
+						},
+					},
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "c",
+							Kind: "Cache",
+						},
+					},
+				},
+				Relationships: []*Relationship{
+					{
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "a",
+								Kind: "App",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "b",
+								Kind: "Backend",
+							},
+						},
 					},
 				},
 			},
@@ -252,33 +293,55 @@ func TestChainedRelationships(t *testing.T) {
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "a",
-						Kind: "App",
-						ConnectedNodePatternRight: &NodePattern{
+						ResourceProperties: &ResourceProperties{
+							Name: "a",
+							Kind: "App",
+						},
+					},
+					{
+						ResourceProperties: &ResourceProperties{
 							Name: "b",
 							Kind: "Backend",
 						},
 					},
 					{
-						Name: "b",
-						Kind: "Backend",
-						ConnectedNodePatternLeft: &NodePattern{
-							Name: "a",
-							Kind: "App",
-						},
-						ConnectedNodePatternRight: &NodePattern{
+						ResourceProperties: &ResourceProperties{
 							Name: "d",
 							Kind: "Database",
 						},
 					},
+				},
+				Relationships: []*Relationship{
 					{
-						Name: "d",
-						Kind: "Database",
-						ConnectedNodePatternLeft: &NodePattern{
-							Name: "b",
-							Kind: "Backend",
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "a",
+								Kind: "App",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "b",
+								Kind: "Backend",
+							},
+						},
+					},
+					{
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "b",
+								Kind: "Backend",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "d",
+								Kind: "Database",
+							},
 						},
 					},
 				},
@@ -306,43 +369,79 @@ func TestChainedRelationships(t *testing.T) {
 }
 
 func TestChainedRelationshipsWithComma(t *testing.T) {
-	query := `MATCH (a:App)->(b:Backend)->(d:Database), (c:Cache) RETURN a,b,c,d`
+	query := `MATCH (a:App)->(b:Backend)-[r:Relationship {test: "foo"}]->(d:Database), (c:Cache) RETURN a,b,c,d`
 	// Expected AST structure...
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
-				NodePatternList: []*NodePattern{
+				Nodes: []*NodePattern{
 					{
-						Name: "a",
-						Kind: "App",
-						ConnectedNodePatternRight: &NodePattern{
+						ResourceProperties: &ResourceProperties{
+							Name: "a",
+							Kind: "App",
+						},
+					},
+					{
+						ResourceProperties: &ResourceProperties{
 							Name: "b",
 							Kind: "Backend",
 						},
 					},
 					{
-						Name: "b",
-						Kind: "Backend",
-						ConnectedNodePatternLeft: &NodePattern{
-							Name: "a",
-							Kind: "App",
-						},
-						ConnectedNodePatternRight: &NodePattern{
+						ResourceProperties: &ResourceProperties{
 							Name: "d",
 							Kind: "Database",
 						},
 					},
 					{
-						Name: "d",
-						Kind: "Database",
-						ConnectedNodePatternLeft: &NodePattern{
-							Name: "b",
-							Kind: "Backend",
+						ResourceProperties: &ResourceProperties{
+							Name: "c",
+							Kind: "Cache",
+						},
+					},
+				},
+				Relationships: []*Relationship{
+					{
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "a",
+								Kind: "App",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "b",
+								Kind: "Backend",
+							},
 						},
 					},
 					{
-						Name: "c",
-						Kind: "Cache",
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "b",
+								Kind: "Backend",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "d",
+								Kind: "Database",
+							},
+						},
+						ResourceProperties: &ResourceProperties{
+							Name: "r",
+							Kind: "Relationship",
+							Properties: &Properties{
+								PropertyList: []*Property{
+									{
+										Key:   "test",
+										Value: "foo",
+									},
+								},
+							},
+						},
 					},
 				},
 			},
