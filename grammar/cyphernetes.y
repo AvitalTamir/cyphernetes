@@ -20,19 +20,21 @@ func debugLog(v ...interface{}) {
 %}
 
 %union {
-    strVal            string
-    jsonPath          string
-    jsonPathList      []string
-    pattern           *NodePattern
-    clause            *Clause
-    expression        *Expression
-    matchClause       *MatchClause
-    nodePatternList   []*NodePattern
-    returnClause      *ReturnClause
-    properties        *Properties
-    jsonPathValue     *Property
-    jsonPathValueList []*Property
-    value             interface{}
+    strVal                 string
+    jsonPath               string
+    jsonPathList           []string
+    nodePattern            *NodePattern
+    clause                 *Clause
+    expression             *Expression
+    matchClause            *MatchClause
+    returnClause           *ReturnClause
+    properties             *Properties
+    jsonPathValue          *Property
+    jsonPathValueList      []*Property
+    value                  interface{}
+    relationship           *Relationship
+    resourceProperties     *ResourceProperties
+    nodeRelationshipList   *NodeRelationshipList
 }
 
 %token <strVal> IDENT
@@ -40,13 +42,13 @@ func debugLog(v ...interface{}) {
 %token <strVal> INT
 %token <strVal> BOOLEAN
 %token <strVal> STRING
-%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA DASH ARROW_LEFT ARROW_RIGHT
+%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA
+%token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
 %type<matchClause> MatchClause
-%type<nodePatternList> NodePatternList
 %type<returnClause> ReturnClause
-%type<pattern> NodePattern
+%type<nodePattern> NodePattern
 %type<strVal> IDENT
 %type<strVal> JSONPATH
 %type<jsonPathValueList> JSONPathValueList
@@ -57,6 +59,9 @@ func debugLog(v ...interface{}) {
 %type<strVal> INT
 %type<strVal> BOOLEAN
 %type<jsonPathList> JSONPathList
+%type<relationship> Relationship
+%type<resourceProperties> ResourceProperties
+%type<nodeRelationshipList> NodeRelationshipList
 
 %%
 
@@ -67,36 +72,85 @@ Expression:
 ;
 
 MatchClause:
-    MATCH NodePatternList {
-        $$ = &MatchClause{NodePatternList: $2}
+    MATCH NodeRelationshipList {
+        $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships}
     }
 ;
 
-NodePatternList:
+NodeRelationshipList:
+    NodePattern {
+        $$ = &NodeRelationshipList{
+            Nodes:    []*NodePattern{$1},
+            Relationships:   []*Relationship{},
+        }
+    }
+    | NodePattern Relationship NodePattern {
+        $2.LeftNode = $1
+        $2.RightNode = $3
+        $$ = &NodeRelationshipList{
+            Nodes:    []*NodePattern{$1, $3},
+            Relationships:   []*Relationship{$2},
+        }
+    }
+    | NodePattern Relationship NodePattern COMMA NodeRelationshipList {
+        $2.LeftNode = $1
+        $2.RightNode = $3
+        $$ = &NodeRelationshipList{
+            Nodes:    append([]*NodePattern{$1, $3}, $5.Nodes...),
+            Relationships:   append([]*Relationship{$2}, $5.Relationships...),
+        }
+    }
+    | NodePattern Relationship NodePattern Relationship NodeRelationshipList {
+        $2.LeftNode = $1
+        $2.RightNode = $3
+        $4.LeftNode = $3
+        $4.RightNode = $5.Nodes[0]
+        $$ = &NodeRelationshipList{
+            Nodes:    append([]*NodePattern{$1, $3}, $5.Nodes...),
+            Relationships:   append([]*Relationship{$2, $4}, $5.Relationships...),
+        }
+    }
+    | NodePattern COMMA NodeRelationshipList {
+        $$ = &NodeRelationshipList{
+            Nodes:    append([]*NodePattern{$1}, $3.Nodes...),
+            Relationships:   $3.Relationships,
+        }
+    }
+;
+
+
+/* NodePatternList:
     NodePattern COMMA NodePatternList {
         $$ = append([]*NodePattern{$1}, $3...)
     }
     | NodePattern Relationship NodePattern Relationship NodePatternList {
         $$ = []*NodePattern{$1, $3}
-        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
-        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
-        $3.ConnectedNodePatternRight = &NodePattern{Name: $5[0].Name, Kind: $5[0].Kind} // For bidirectional relationships
-        $5[0].ConnectedNodePatternLeft = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking RightNode and LeftNode through Relationship
+        $2.LeftNode = $1
+        $2.RightNode = $3
+        $4.LeftNode = $3
+        $4.RightNode = $5[0]
         $$ = append($$, $5...)
     }
     | NodePattern Relationship NodePattern COMMA NodePatternList {
         $$ = []*NodePattern{$1, $3}
-        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
-        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
+        $2.LeftNode = $1
+        $2.RightNode = $3
         $$ = append($$, $5...)
     }
     | NodePattern Relationship NodePattern {
         $$ = []*NodePattern{$1, $3}
-        $1.ConnectedNodePatternRight = &NodePattern{Name: $3.Name, Kind: $3.Kind} // Linking LeftNode and RightNode through Relationship
-        $3.ConnectedNodePatternLeft = &NodePattern{Name: $1.Name, Kind: $1.Kind} // For bidirectional relationships
+        $2.LeftNode = $1
+        $2.RightNode = $3
     }
     | NodePattern {
         $$ = []*NodePattern{$1}
+    }
+; */
+
+
+NodePattern:
+    LPAREN ResourceProperties RPAREN {
+        $$ = &NodePattern{ResourceProperties: $2}
     }
 ;
 
@@ -116,18 +170,38 @@ JSONPathList:
 ;
 
 Relationship:
-    DASH DASH { logDebug("Found relationship (no direction)") }
-|   ARROW_LEFT { logDebug("Found relationship (left)") }
-|   ARROW_RIGHT { logDebug("Found relationship (right)") }
-|   ARROW_LEFT ARROW_RIGHT { logDebug("Found relationship (both)") }
+    REL_NOPROPS_NONE { 
+        $$ = &Relationship{ResourceProperties: nil, Direction: None, LeftNode: nil, RightNode: nil}
+    }
+|   REL_NOPROPS_LEFT { 
+        $$ = &Relationship{ResourceProperties: nil, Direction: Left, LeftNode: nil, RightNode: nil}
+    }
+|   REL_NOPROPS_RIGHT  { 
+        $$ = &Relationship{ResourceProperties: nil, Direction: Right, LeftNode: nil, RightNode: nil}
+    }
+|   REL_NOPROPS_BOTH { 
+        $$ = &Relationship{ResourceProperties: nil, Direction: Both, LeftNode: nil, RightNode: nil}
+    }
+|   REL_BEGINPROPS_NONE ResourceProperties REL_ENDPROPS_NONE { 
+        $$ = &Relationship{ResourceProperties: $2, Direction: None, LeftNode: nil, RightNode: nil}
+    }
+|   REL_BEGINPROPS_LEFT ResourceProperties REL_ENDPROPS_NONE {
+        $$ = &Relationship{ResourceProperties: $2, Direction: Left, LeftNode: nil, RightNode: nil}
+    }
+|   REL_BEGINPROPS_NONE ResourceProperties REL_ENDPROPS_RIGHT { 
+        $$ = &Relationship{ResourceProperties: $2, Direction: Right, LeftNode: nil, RightNode: nil}
+    }
+|   REL_BEGINPROPS_LEFT ResourceProperties REL_ENDPROPS_RIGHT { 
+        $$ = &Relationship{ResourceProperties: $2, Direction: Both, LeftNode: nil, RightNode: nil}
+    }
 ;
 
-NodePattern:
-    LPAREN IDENT COLON IDENT RPAREN {
-        $$ = &NodePattern{Name: $2, Kind: $4, Properties: nil}
+ResourceProperties:
+    IDENT COLON IDENT {
+        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: nil}
     }
-    | LPAREN IDENT COLON IDENT Properties RPAREN {
-        $$ = &NodePattern{Name: $2, Kind: $4, Properties: $5}
+    | IDENT COLON IDENT Properties  {
+        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: $4}
     }
 ;
 

@@ -14,8 +14,30 @@ type Clause interface {
 }
 
 type MatchClause struct {
-	NodePatternList []*NodePattern
+	Nodes         []*NodePattern
+	Relationships []*Relationship
 }
+
+type Relationship struct {
+	ResourceProperties *ResourceProperties
+	Direction          Direction
+	LeftNode           *NodePattern
+	RightNode          *NodePattern
+}
+
+type NodeRelationshipList struct {
+	Nodes         []*NodePattern
+	Relationships []*Relationship
+}
+
+type Direction string
+
+const (
+	Left  Direction = "left"
+	Right Direction = "right"
+	Both  Direction = "both"
+	None  Direction = "none"
+)
 
 // type CreateClause struct {
 // 	NodePattern         *NodePattern
@@ -36,11 +58,13 @@ type ReturnClause struct {
 // }
 
 type NodePattern struct {
-	Name                      string
-	Kind                      string
-	Properties                *Properties
-	ConnectedNodePatternLeft  *NodePattern // Reference to the connected node
-	ConnectedNodePatternRight *NodePattern // Reference to the connected node
+	ResourceProperties *ResourceProperties
+}
+
+type ResourceProperties struct {
+	Name       string
+	Kind       string
+	Properties *Properties
 }
 
 type Properties struct {

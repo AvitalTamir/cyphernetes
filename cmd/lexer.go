@@ -128,17 +128,47 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		ch := l.s.Peek()
 		if ch == 62 {
 			l.s.Next() // Consume '>'
-			return int(ARROW_RIGHT)
+			return int(REL_NOPROPS_RIGHT)
+		} else if ch == '[' {
+			l.s.Next() // Consume '['
+			return int(REL_BEGINPROPS_NONE)
+		} else if ch == '-' {
+			l.s.Next() // Consume '-'
+			return int(REL_NOPROPS_NONE)
+		} else {
+			return int(ILLEGAL)
 		}
-		return int(DASH)
 	case '<':
 		ch := l.s.Peek()
 		if ch == '-' {
 			l.s.Next() // Consume '-'
-			return int(ARROW_LEFT)
+			ch = l.s.Peek()
+			if ch == '[' {
+				l.s.Next() // Consume '['
+				return int(REL_BEGINPROPS_LEFT)
+			} else if ch == '(' {
+				return int(REL_NOPROPS_LEFT)
+			} else {
+				return int(ILLEGAL)
+			}
 		}
 		return int(ILLEGAL)
-	case '>':
+	case ']':
+		ch := l.s.Peek()
+		if ch == '-' {
+			l.s.Next() // Consume '-'
+			ch = l.s.Peek()
+			if ch == '>' {
+				l.s.Next() // Consume '>'
+				return int(REL_ENDPROPS_RIGHT)
+			} else if ch == '(' {
+				return int(REL_ENDPROPS_NONE)
+			} else {
+				return int(ILLEGAL)
+			}
+		}
+		return int(ILLEGAL)
+	case '>', '[':
 		return int(ILLEGAL)
 	default:
 		logDebug("Illegal token:", tok)
