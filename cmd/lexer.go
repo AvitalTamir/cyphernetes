@@ -154,7 +154,6 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		}
 		return int(ILLEGAL)
 	case ']':
-		logDebug("=------ WERE HERE -------=")
 		ch := l.s.Peek()
 		if ch == '-' {
 			l.s.Next() // Consume '-'
