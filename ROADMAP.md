@@ -43,9 +43,9 @@
 ### Interactive Shell Interface
 
 - [x] Basic shell interface for inputting queries and displaying results.
+- [x] Syntax highlighting.
 - [ ] Add help and documentation to the shell.
 - [ ] Autocompletion.
-- [ ] Syntax highlighting.
 - [ ] Test shell with various input scenarios.
 
 ## Cypher-Like Query Language Parser Roadmap

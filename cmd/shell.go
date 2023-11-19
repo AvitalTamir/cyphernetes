@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/chzyer/readline"
@@ -66,6 +67,60 @@ func getCurrentContext() (string, error) {
 	return currentContextName, nil
 }
 
+type syntaxHighlighter struct{}
+
+var (
+	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|set|delete)\b`)
+	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
+	variableRegex       = regexp.MustCompile(`"(.*?)"`)
+	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
+	propertiesRegex     = regexp.MustCompile(`\{(\w+): "([^"]+)"\}`)
+	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)$`)
+	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
+)
+
+func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
+	lineStr := string(line)
+
+	// Coloring for brackets ((), {}, [], <>)
+	lineStr = bracketsRegex.ReplaceAllString(lineStr, "\033[37m$0\033[0m") // White for brackets
+
+	// Coloring for keywords
+	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		parts := keywordsRegex.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			return "\033[35m" + strings.ToUpper(parts[1]) + "\033[0m"
+		}
+		return match
+	})
+
+	// Coloring for quoted variables
+	lineStr = variableRegex.ReplaceAllString(lineStr, "\033[90m$0\033[0m") // Dark grey for quoted variables
+
+	// Apply coloring for properties in format {key: "value", ...}
+	lineStr = propertiesRegex.ReplaceAllString(lineStr, "{\033[33m$1\033[0m: \033[36m$2\033[0m}") // Yellow for key, Cyan for value
+
+	// Coloring for identifiers (left and right of the colon)
+	lineStr = identifierRegex.ReplaceAllString(lineStr, "\033[33m$1\033[0m:\033[94m$2\033[0m") // Orange for left, Light blue for right
+
+	// Coloring everything after RETURN in purple
+	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		parts := returnRegex.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			// Color "RETURN" in purple and keep the rest of the string in the same color
+			rest := parts[2]
+			// Apply white color to dots and asterisks in the JSONPath list
+			rest = returnJsonPathRegex.ReplaceAllString(rest, "\033[37m$1\033[35m")
+			return "\033[35m" + strings.ToUpper(parts[1]) + rest
+		}
+		return match
+	})
+
+	// add color reset to the end of the line
+	lineStr += "\033[0m"
+	return []rune(lineStr)
+}
+
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
 	rl, err := readline.NewEx(&readline.Config{
@@ -74,6 +129,7 @@ func runShell(cmd *cobra.Command, args []string) {
 		AutoComplete:    completer,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
+		Painter:         &syntaxHighlighter{},
 
 		HistorySearchFold:   true,
 		FuncFilterInputRune: filterInput,
