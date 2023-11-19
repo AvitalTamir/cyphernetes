@@ -29,8 +29,8 @@
 - [x] Set up authentication and configuration for accessing a Kubernetes cluster.
 - [x] Implement a wrapper around the Kubernetes client to execute basic queries.
 - [x] Develop mapping logic to convert parsed queries into Kubernetes API calls.
+- [x] Add support for complex queries involving multiple Kubernetes resources.
 - [ ] Test Kubernetes client integration with mock and real clusters.
-- [ ] Add support for complex queries involving multiple Kubernetes resources.
 
 ### Expanding Lexer and Parser
 
