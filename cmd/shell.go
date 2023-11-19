@@ -75,7 +75,7 @@ var (
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
 	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
 	propertiesRegex     = regexp.MustCompile(`\{(\w+): "([^"]+)"\}`)
-	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)$`)
+	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
 )
 
