@@ -128,6 +128,9 @@ func runShell(cmd *cobra.Command, args []string) {
 	}
 }
 
+// Execute the query against the Kubernetes API.
+var executor = GetQueryExecutorInstance()
+
 func processQuery(query string) (string, error) {
 	// Parse the query to get an AST.
 	ast, err := ParseQuery(query)
@@ -137,13 +140,6 @@ func processQuery(query string) (string, error) {
 		return "", err
 	}
 
-	// Execute the query against the Kubernetes API.
-	executor, err := NewQueryExecutor()
-	if err != nil {
-		// Handle error.
-		fmt.Println("Error creating query executor: ", err)
-		return "", err
-	}
 	results, err := executor.Execute(ast)
 	if err != nil {
 		// Handle error.
