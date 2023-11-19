@@ -75,7 +75,7 @@ var (
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
 	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
 	propertiesRegex     = regexp.MustCompile(`\{(\w+): "([^"]+)"\}`)
-	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)$`)
+	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
 )
 
@@ -106,7 +106,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	// Coloring everything after RETURN in purple
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := returnRegex.FindStringSubmatch(match)
-		if len(parts) == 3 {
+		if len(parts) == 3 || len(parts) == 4 {
 			// Color "RETURN" in purple and keep the rest of the string in the same color
 			rest := parts[2]
 			// Apply white color to dots and asterisks in the JSONPath list
