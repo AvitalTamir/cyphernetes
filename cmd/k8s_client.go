@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,10 +14,29 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var (
+	executorInstance *QueryExecutor
+	once             sync.Once
+)
+
+func GetQueryExecutorInstance() *QueryExecutor {
+	once.Do(func() {
+		executor, err := NewQueryExecutor()
+		if err != nil {
+			// Handle error
+			fmt.Println("Error creating QueryExecutor instance:", err)
+			return
+		}
+		executorInstance = executor
+	})
+	return executorInstance
+}
+
 type QueryExecutor struct {
 	Clientset      *kubernetes.Clientset
 	DynamicClient  dynamic.Interface
 	requestChannel chan *apiRequest
+	semaphore      chan struct{}
 }
 
 type apiRequest struct {
@@ -53,10 +73,14 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 		return nil, err
 	}
 
+	// Initialize the semaphore with a desired concurrency level
+	semaphore := make(chan struct{}, 1) // Set to '1' for single concurrent request
+
 	executor := &QueryExecutor{
 		Clientset:      clientset,
 		DynamicClient:  dynamicClient,
-		requestChannel: make(chan *apiRequest, 1), // Buffer size can be adjusted
+		requestChannel: make(chan *apiRequest), // Unbuffered channel
+		semaphore:      semaphore,
 	}
 
 	go executor.processRequests()
@@ -66,7 +90,9 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 
 func (q *QueryExecutor) processRequests() {
 	for request := range q.requestChannel {
+		q.semaphore <- struct{}{} // Acquire a token
 		list, err := q.fetchResources(request.kind, request.fieldSelector, request.labelSelector)
+		<-q.semaphore // Release the token
 		request.responseChan <- &apiResponse{list: &list, err: err}
 	}
 }
@@ -122,30 +148,45 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 	return *list, err
 }
 
-func findGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
-	discoveryClient := clientset.Discovery()
+var gvrCache = make(map[string]schema.GroupVersionResource)
+var gvrCacheMutex sync.RWMutex
 
-	// Get the list of API resources
+func findGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
+	normalizedIdentifier := strings.ToLower(resourceIdentifier)
+
+	// Check if the GVR is already in the cache
+	gvrCacheMutex.RLock()
+	if gvr, ok := gvrCache[normalizedIdentifier]; ok {
+		gvrCacheMutex.RUnlock()
+		return gvr, nil
+	}
+	gvrCacheMutex.RUnlock()
+
+	// GVR not in cache, find it using discovery
+	discoveryClient := clientset.Discovery()
 	apiResourceList, err := discoveryClient.ServerPreferredResources()
 	if err != nil {
 		return schema.GroupVersionResource{}, err
 	}
 
-	// Normalize the resource identifier to lower case for case-insensitive comparison
-	normalizedIdentifier := strings.ToLower(resourceIdentifier)
-
 	for _, apiResource := range apiResourceList {
 		for _, resource := range apiResource.APIResources {
-			// Check if the resource name, kind, or short names match the specified identifier
-			if strings.EqualFold(resource.Name, normalizedIdentifier) || // Plural name match
-				strings.EqualFold(resource.Kind, resourceIdentifier) || // Kind name match
-				containsIgnoreCase(resource.ShortNames, normalizedIdentifier) { // Short name match
+			if strings.EqualFold(resource.Name, normalizedIdentifier) ||
+				strings.EqualFold(resource.Kind, resourceIdentifier) ||
+				containsIgnoreCase(resource.ShortNames, normalizedIdentifier) {
 
 				gv, err := schema.ParseGroupVersion(apiResource.GroupVersion)
 				if err != nil {
 					return schema.GroupVersionResource{}, err
 				}
-				return gv.WithResource(resource.Name), nil
+				gvr := gv.WithResource(resource.Name)
+
+				// Update the cache
+				gvrCacheMutex.Lock()
+				gvrCache[normalizedIdentifier] = gvr
+				gvrCacheMutex.Unlock()
+
+				return gvr, nil
 			}
 		}
 	}
