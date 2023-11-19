@@ -56,7 +56,7 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 	executor := &QueryExecutor{
 		Clientset:      clientset,
 		DynamicClient:  dynamicClient,
-		requestChannel: make(chan *apiRequest, 3), // Buffer size can be adjusted
+		requestChannel: make(chan *apiRequest, 1), // Buffer size can be adjusted
 	}
 
 	go executor.processRequests()

@@ -9,8 +9,9 @@ type ResourceRelationship struct {
 type RelationshipType string
 
 const (
-	Own    RelationshipType = "OWN"
-	Expose RelationshipType = "EXPOSE"
+	DeployOwnRs RelationshipType = "DEPLOY_OWN_RS"
+	RsOwnPod    RelationshipType = "RS_OWN_POD"
+	Expose      RelationshipType = "EXPOSE"
 	// This is for configMaps, Volumes, Secrets in pods
 	Mount RelationshipType = "MOUNT"
 	// ingress and service:
@@ -22,6 +23,7 @@ type ComparisonType string
 const (
 	ExactMatch    ComparisonType = "ExactMatch"
 	OwnerRefMatch ComparisonType = "OwnerRefMatch"
+	HasLabels     ComparisonType = "HasLabels"
 )
 
 type MatchCriterion struct {
@@ -42,7 +44,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "replicasets",
-		Relationship: Own,
+		Relationship: RsOwnPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.ownerReferences",
@@ -51,6 +53,31 @@ var relationshipRules = []RelationshipRule{
 			},
 		},
 	},
+	{
+		KindA:        "replicasets",
+		KindB:        "deployments",
+		Relationship: DeployOwnRs,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "metadata.ownerReferences",
+				FieldB:         "metadata.name",
+				ComparisonType: OwnerRefMatch,
+			},
+		},
+	},
+	{
+		KindA:        "pods",
+		KindB:        "services",
+		Relationship: Expose,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "metadata.labels",
+				FieldB:         "spec.selector",
+				ComparisonType: HasLabels,
+			},
+		},
+	},
+
 	// Add more rules here...
 }
 
@@ -85,6 +112,29 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 				return false
 			}
 			// Add more cases as needed
+		case HasLabels:
+			// Specific logic for label matching
+			labels, ok := resourceA.(map[string]interface{})["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			selector, ok := resourceB.(map[string]interface{})["spec"].(map[string]interface{})["selector"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if !matchLabels(labels, selector) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func matchLabels(labels, selector map[string]interface{}) bool {
+	// validate all labels in the selector exist on the labels and match
+	for key, value := range selector {
+		if labels[key] != value {
+			return false
 		}
 	}
 	return true
