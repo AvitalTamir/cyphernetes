@@ -44,8 +44,8 @@
 
 - [x] Basic shell interface for inputting queries and displaying results.
 - [x] Syntax highlighting.
+- [x] Autocompletion.
 - [ ] Add help and documentation to the shell.
-- [ ] Autocompletion.
 - [ ] Test shell with various input scenarios.
 
 ## Cypher-Like Query Language Parser Roadmap
