@@ -105,9 +105,6 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 			if !ok {
 				continue
 			}
-			if !ok {
-				return false
-			}
 			if !matchOwnerReferences(ownerRefs, nameB) {
 				return false
 			}
@@ -153,12 +150,18 @@ func matchOwnerReferences(ownerRefs []interface{}, name string) bool {
 	return false
 }
 
-func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule RelationshipRule) []map[string]interface{} {
+func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule RelationshipRule, direction Direction) []map[string]interface{} {
 	var matchedResources []map[string]interface{}
 	for _, resourceA := range resourcesA {
 		for _, resourceB := range resourcesB {
 			if matchByCriteria(resourceA, resourceB, rule.MatchCriteria) {
-				matchedResources = append(matchedResources, resourceB)
+				if direction == Left {
+					matchedResources = append(matchedResources, resourceA)
+				} else if direction == Right {
+					matchedResources = append(matchedResources, resourceB)
+				} else {
+					return nil
+				}
 			}
 		}
 	}
