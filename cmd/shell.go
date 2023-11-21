@@ -18,13 +18,7 @@ var ShellCmd = &cobra.Command{
 	Run:   runShell,
 }
 
-var completer = readline.NewPrefixCompleter(
-	readline.PcItem("MATCH"),
-	readline.PcItem("match"),
-	readline.PcItem("RETURN"),
-	readline.PcItem("return"),
-	readline.PcItem("help"),
-)
+var completer = &CyphernetesCompleter{}
 
 func filterInput(r rune) (rune, bool) {
 	switch r {
@@ -143,6 +137,9 @@ func runShell(cmd *cobra.Command, args []string) {
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
 	fmt.Println("Type 'help' for information on how to use the shell")
+	// Initialize the GRV cache
+	fetchAndCacheGVRs(executor.Clientset)
+	initResourceSpecs()
 
 	for {
 		line, err := rl.Readline()
