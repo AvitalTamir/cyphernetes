@@ -116,6 +116,9 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 				continue
 			}
 			selector, ok := resourceB.(map[string]interface{})["spec"].(map[string]interface{})["selector"].(map[string]interface{})
+			if !ok {
+				logDebug("No resources found for selector: ", selector)
+			}
 			if !matchLabels(labels, selector) {
 				return false
 			}
