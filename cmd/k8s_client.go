@@ -203,3 +203,27 @@ func containsIgnoreCase(slice []string, str string) bool {
 	}
 	return false
 }
+
+func fetchAndCacheGVRs(clientset *kubernetes.Clientset) error {
+	discoveryClient := clientset.Discovery()
+	apiResourceList, err := discoveryClient.ServerPreferredResources()
+	if err != nil {
+		return err
+	}
+
+	for _, apiResourceGroup := range apiResourceList {
+		gv, err := schema.ParseGroupVersion(apiResourceGroup.GroupVersion)
+		if err != nil {
+			// Handle error or continue with the next group
+			continue
+		}
+
+		for _, resource := range apiResourceGroup.APIResources {
+			gvr := gv.WithResource(resource.Name)
+			gvrKey := resource.Name // Or use a more specific key if needed
+			gvrCache[gvrKey] = gvr
+		}
+	}
+
+	return nil
+}
