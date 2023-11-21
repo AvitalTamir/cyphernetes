@@ -73,34 +73,22 @@ Retrieves Deployments where the app label is 'nginx'.
 # Multiple matches
 MATCH (d:Deployment), (s:Service), (i:Ingress) RETURN d, s, i
 ```
-Lists Deployments and their associated Services.
+Lists Deployments, Services and Ingresses in the namespace.
 
 ### Relationships
 
 ```graphql
 # Match 2 or more related resources
-MATCH (d:Deployment)->(p:Pod)->(s:Service) RETURN d, s, i
+MATCH (d:Deployment {name: "nginx"})->(rs:ReplicaSet)->(p:Pod)->(s:Service) RETURN s.metadata.name
 ```
-Lists Deployments, Pods that belong to these deployments, and the Service(s) that route to these pods.
+Return the names of Services that expose Pods that are owned by ReplicaSets that are owned by Deployments called "nginx".
 
 ### Node with Multiple Properties
 
 ```graphql
-MATCH (s:Service {type: "LoadBalancer", region: "us-west"}) RETURN s
+MATCH (s:Service {type: "LoadBalancer", region: "us-west-1"}) RETURN s.metadata.name, s.status.LoadBalancer
 ```
-Finds Services of type "LoadBalancer" in the "us-west" region.
-
-### Returning specific properties
-
-```graphql
-MATCH (s:Service) RETURN s.status.LoadBalancer
-```
-
-### Multiple matches and returns
-
-```graphql
-MATCH (d:Deployment), (s:Service) RETURN d.metadata.name, s.status.LoadBalancer
-```
+Finds Services of type "LoadBalancer" in the "us-west" region and returns their status.
 
 Remember to type exit or press Ctrl-C to leave the shell.
 
