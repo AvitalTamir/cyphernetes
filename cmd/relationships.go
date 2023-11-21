@@ -116,9 +116,6 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 				continue
 			}
 			selector, ok := resourceB.(map[string]interface{})["spec"].(map[string]interface{})["selector"].(map[string]interface{})
-			if !ok {
-				continue
-			}
 			if !matchLabels(labels, selector) {
 				return false
 			}
@@ -128,6 +125,9 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 }
 
 func matchLabels(labels, selector map[string]interface{}) bool {
+	if len(selector) == 0 {
+		return false
+	}
 	// validate all labels in the selector exist on the labels and match
 	for key, value := range selector {
 		if labels[key] != value {
