@@ -1,5 +1,9 @@
 package cmd
 
+import (
+	"github.com/oliveagle/jsonpath"
+)
+
 type ResourceRelationship struct {
 	FromKind string
 	ToKind   string
@@ -11,10 +15,14 @@ type RelationshipType string
 const (
 	DeployOwnRs RelationshipType = "DEPLOY_OWN_RS"
 	RsOwnPod    RelationshipType = "RS_OWN_POD"
-	Expose      RelationshipType = "EXPOSE"
+	StsOwnPod   RelationshipType = "STS_OWN_POD"
+	DsOwnOwnPod RelationshipType = "DS_OWN_OWN_POD"
+	JobOwnPod   RelationshipType = "JOB_OWN_POD"
+	// This is for ingresses
+	Expose RelationshipType = "EXPOSE"
 	// This is for configMaps, Volumes, Secrets in pods
 	Mount RelationshipType = "MOUNT"
-	// ingress and service:
+	// services
 	Route RelationshipType = "ROUTE"
 )
 
@@ -77,7 +85,54 @@ var relationshipRules = []RelationshipRule{
 			},
 		},
 	},
-
+	{
+		KindA:        "pods",
+		KindB:        "statefulsets",
+		Relationship: StsOwnPod,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "metadata.ownerReferences",
+				FieldB:         "metadata.name",
+				ComparisonType: OwnerRefMatch,
+			},
+		},
+	},
+	{
+		KindA:        "pods",
+		KindB:        "daemonsets",
+		Relationship: DsOwnOwnPod,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "metadata.ownerReferences",
+				FieldB:         "metadata.name",
+				ComparisonType: OwnerRefMatch,
+			},
+		},
+	},
+	{
+		KindA:        "pods",
+		KindB:        "jobs",
+		Relationship: JobOwnPod,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "metadata.ownerReferences",
+				FieldB:         "metadata.name",
+				ComparisonType: OwnerRefMatch,
+			},
+		},
+	},
+	{
+		KindA:        "ingresses",
+		KindB:        "services",
+		Relationship: Route,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.rules.http.paths.backend.service.name",
+				FieldB:         "$.metadata.name",
+				ComparisonType: ExactMatch,
+			},
+		},
+	},
 	// Add more rules here...
 }
 
@@ -93,8 +148,6 @@ func findRuleByRelationshipType(relationshipType RelationshipType) RelationshipR
 func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion) bool {
 	for _, criterion := range criteria {
 		switch criterion.ComparisonType {
-		case ExactMatch:
-			// Implement exact match logic (e.g., label selectors)
 		case OwnerRefMatch:
 			// Specific logic for owner reference matching
 			ownerRefs, ok := resourceA.(map[string]interface{})["metadata"].(map[string]interface{})["ownerReferences"].([]interface{})
@@ -122,9 +175,80 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 			if !matchLabels(labels, selector) {
 				return false
 			}
+		case ExactMatch:
+			// Specific logic for field matching
+			// use jsonpath to extract the fields
+
+			// extract the fields
+			fieldsA, err := jsonpath.JsonPathLookup(resourceA, criterion.FieldA)
+			if err != nil {
+				logDebug("Error extracting fieldA: ", err)
+				return false
+			}
+			fieldsB, err := jsonpath.JsonPathLookup(resourceB, criterion.FieldB)
+			if err != nil {
+				logDebug("Error extracting fieldB: ", err)
+				return false
+			}
+			if !matchFields(fieldsA, fieldsB) {
+				return false
+			}
 		}
 	}
 	return true
+}
+
+func matchFields(fieldA, fieldB interface{}) bool {
+	// if fieldA contains fieldB on some nested level, no matter how deep, return true
+	// otherwise return false. make sure to recurse into all levels of the fieldA
+
+	// if fieldA is a string, compare it to fieldB
+	fieldAString, ok := fieldA.(string)
+	if ok {
+		return fieldAString == fieldB
+	}
+
+	// if fieldA is a slice, iterate over it and compare each element to fieldB
+	fieldASlice, ok := fieldA.([]interface{})
+	if ok {
+		for _, element := range fieldASlice {
+			if matchFields(element, fieldB) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// if fieldA is a map, iterate over it and compare each value to fieldB
+	fieldAMap, ok := fieldA.(map[string]interface{})
+	if ok {
+		for _, value := range fieldAMap {
+			if matchFields(value, fieldB) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// if fieldA is a number, compare it to fieldB
+	fieldANumber, ok := fieldA.(float64)
+	if ok {
+		return fieldANumber == fieldB
+	}
+
+	// if fieldA is a bool, compare it to fieldB
+	fieldABool, ok := fieldA.(bool)
+	if ok {
+		return fieldABool == fieldB
+	}
+
+	// if fieldA is nil, return false
+	if fieldA == nil {
+		return false
+	}
+
+	// if fieldA is anything else, return false
+	return false
 }
 
 func matchLabels(labels, selector map[string]interface{}) bool {
