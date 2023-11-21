@@ -74,8 +74,8 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				var filteredDirection Direction
 
 				if rule.KindA == rightKind.Resource {
-					resourcesBInterface = resultMap[rel.RightNode.ResourceProperties.Name]
-					resourcesAInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
+					resourcesAInterface = resultMap[rel.RightNode.ResourceProperties.Name]
+					resourcesBInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
 					filteredDirection = Left
 				} else if rule.KindA == leftKind.Resource {
 					resourcesAInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
@@ -94,17 +94,8 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					continue
 				}
 
-				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule)
-
-				if filteredDirection == Left {
-					resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources
-				} else if filteredDirection == Right {
-					resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources
-				} else {
-					// error out
-					return nil, fmt.Errorf("invalid direction: %s", filteredDirection)
-				}
-
+				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
+				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources
 			}
 
 			// Iterate over the nodes in the match clause.
