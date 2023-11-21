@@ -63,7 +63,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				// Fetch and process related resources based on relationship type
 				for _, node := range c.Nodes {
 					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
-						if resultCache[resourcePropertyName(node)] == nil {
+						if resultMap[node.ResourceProperties.Name] == nil {
 							getNodeResouces(node, q)
 						}
 
@@ -74,12 +74,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				var filteredDirection Direction
 
 				if rule.KindA == rightKind.Resource {
-					resourcesBInterface = resultCache[resourcePropertyName(rel.RightNode)]
-					resourcesAInterface = resultCache[resourcePropertyName(rel.LeftNode)]
+					resourcesBInterface = resultMap[rel.RightNode.ResourceProperties.Name]
+					resourcesAInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
 					filteredDirection = Left
 				} else if rule.KindA == leftKind.Resource {
-					resourcesAInterface = resultCache[resourcePropertyName(rel.LeftNode)]
-					resourcesBInterface = resultCache[resourcePropertyName(rel.RightNode)]
+					resourcesAInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
+					resourcesBInterface = resultMap[rel.RightNode.ResourceProperties.Name]
 					filteredDirection = Right
 				} else {
 					// error out
