@@ -1,4 +1,4 @@
-package cmd
+package main
 
 var resourceSpecs = make(map[string][]string)
 

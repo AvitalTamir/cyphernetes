@@ -1,11 +1,11 @@
-package cmd
+package main
 
 import (
 	"fmt"
 
 	"encoding/json"
 
-	"github.com/avitaltamir/cyphernetes/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/spf13/cobra"
 )
 

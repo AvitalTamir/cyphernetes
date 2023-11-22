@@ -32,10 +32,10 @@ See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/R
 With `go get` / `go install`:
 ```bash
 # Go < 1.17
-$ go get github.com/avitaltamir/cyphernetes
+$ go get github.com/avitaltamir/cyphernetes/cmd/cyphernetes
 
 # Go >= 1.17
-$ go install github.com/avitaltamir/cyphernetes
+$ go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes
 ```
 
 This is currently the only channel to install Cyphernetes.

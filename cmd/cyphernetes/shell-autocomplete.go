@@ -1,11 +1,11 @@
-package cmd
+package main
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 

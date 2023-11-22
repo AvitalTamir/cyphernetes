@@ -1,12 +1,12 @@
 /*
-Copyright © 2023 NAME HERE <EMAIL ADDRESS>
+Copyright © 2023 Avital Tamir <avital.osog@gmail.com>
 */
-package cmd
+package main
 
 import (
 	"os"
 
-	"github.com/avitaltamir/cyphernetes/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "cyphernetes",
 	Short: "Cyphernetes is a CLI tool for managing Kubernetes resources using a Cypher-inspired query language",
-	Long: `Cyphernetes (c9) allows users to interact with their Kubernetes resources 
+	Long: `Cyphernetes allows users to interact with their Kubernetes resources 
            using a graph-like query language for complex operations.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:

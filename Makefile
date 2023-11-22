@@ -10,7 +10,9 @@ bt: build test
 # Define how to build the project
 build: gen-parser
 	@echo "👷 Building ${BINARY_NAME}..."
-	go build -o ${BINARY_NAME} main.go > /dev/null
+	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
+	mkdir -p dist/
+	mv cmd/cyphernetes/${BINARY_NAME} dist/
 	@echo "🎉 Done!"
 
 # Define how to run tests
@@ -21,13 +23,13 @@ test:
 # Define how to generate the grammar parser
 gen-parser:
 	@echo "🧠 Generating parser..."
-	goyacc -o parser/cyphernetes.go -p "yy" grammar/cyphernetes.y
+	goyacc -o pkg/parser/cyphernetes.go -p "yy" grammar/cyphernetes.y
 
 # Define how to clean the build
 clean:
 	@echo "🫧 Cleaning..."
-	go clean > /dev/null
-	rm ${BINARY_NAME} > /dev/null
+	go clean -cache > /dev/null
+	rm -rf dist/
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean

@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
