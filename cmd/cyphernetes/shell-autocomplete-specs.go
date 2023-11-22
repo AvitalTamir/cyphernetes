@@ -1,4 +1,4 @@
-package cmd
+package main
 
 var resourceSpecs = make(map[string][]string)
 
@@ -33,11 +33,11 @@ func initResourceSpecs() {
 		"$.status.podIP",
 		"$.status.conditions",
 		"$.status.containerStatuses",
-		"$.status.containerStatuses[].name",
-		"$.status.containerStatuses[].ready",
-		"$.status.containerStatuses[].restartCount",
-		"$.status.containerStatuses[].image",
-		"$.status.containerStatuses[].state",
+		"$.status.containerStatuses.name",
+		"$.status.containerStatuses.ready",
+		"$.status.containerStatuses.restartCount",
+		"$.status.containerStatuses.image",
+		"$.status.containerStatuses.state",
 		"$.status.hostIP",
 		"$.status.initContainerStatuses",
 	}
@@ -66,6 +66,7 @@ func initResourceSpecs() {
 	}
 	resourceSpecs["services"] = []string{
 		"$.spec",
+		"$.spec.clusterIP",
 		"$.spec.replicas",
 		"$.spec.selector",
 		"$.spec.template",
@@ -86,24 +87,25 @@ func initResourceSpecs() {
 		"$.status.availableReplicas",
 		"$.status.unavailableReplicas",
 		"$.status.conditions",
+		"$.status.LoadBalancer",
 	}
 	resourceSpecs["ingresses"] = []string{
 		"$.spec",
 		"$.spec.rules",
-		"$.spec.rules[].host",
-		"$.spec.rules[].http",
-		"$.spec.rules[].http.paths",
-		"$.spec.rules[].http.paths[].path",
-		"$.spec.rules[].http.paths[].backend",
-		"$.spec.rules[].http.paths[].backend.serviceName",
-		"$.spec.rules[].http.paths[].backend.servicePort",
+		"$.spec.rules.host",
+		"$.spec.rules.http",
+		"$.spec.rules.http.paths",
+		"$.spec.rules.http.paths.path",
+		"$.spec.rules.http.paths.backend",
+		"$.spec.rules.http.paths.backend.serviceName",
+		"$.spec.rules.http.paths.backend.servicePort",
 		"$.spec.tls",
-		"$.spec.tls[].hosts",
-		"$.spec.tls[].secretName",
+		"$.spec.tls.hosts",
+		"$.spec.tls.secretName",
 		"$.status.loadBalancer",
 		"$.status.loadBalancer.ingress",
-		"$.status.loadBalancer.ingress[].ip",
-		"$.status.loadBalancer.ingress[].hostname",
+		"$.status.loadBalancer.ingress.ip",
+		"$.status.loadBalancer.ingress.hostname",
 	}
 	resourceSpecs["replicasets"] = []string{
 		"$.spec",

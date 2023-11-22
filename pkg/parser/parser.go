@@ -1,9 +1,13 @@
-// parser/parser.go
-package cmd
+package parser
 
 import (
 	"fmt"
+	"log"
 )
+
+var Namespace string
+var LogLevel string
+var AllNamespaces bool
 
 type Expression struct {
 	Clauses []Clause
@@ -108,4 +112,10 @@ func ParseQuery(query string) (*Expression, error) {
 
 	// Return the global result variable
 	return result, nil
+}
+
+func logDebug(v ...interface{}) {
+	if LogLevel == "debug" {
+		log.Println(v...)
+	}
 }

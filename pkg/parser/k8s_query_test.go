@@ -1,4 +1,4 @@
-package cmd
+package parser_test
 
 import (
 	"encoding/json"

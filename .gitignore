@@ -18,7 +18,7 @@
 vendor/
 
 # Cyphernetes binary
-cyphernetes
+dist/
 
 # IDE files
 .idea/

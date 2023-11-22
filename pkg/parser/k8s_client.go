@@ -1,4 +1,4 @@
-package cmd
+package parser
 
 import (
 	"context"
@@ -112,7 +112,7 @@ func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, label
 
 func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string) (unstructured.UnstructuredList, error) {
 	// Use discovery client to find the GVR for the given kind
-	gvr, err := findGVR(q.Clientset, kind)
+	gvr, err := FindGVR(q.Clientset, kind)
 	if err != nil {
 		var emptyList unstructured.UnstructuredList
 		return emptyList, err
@@ -133,7 +133,7 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 		return emptyList, err
 	}
 
-	if allNamespaces {
+	if AllNamespaces {
 		Namespace = ""
 	}
 	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
@@ -148,19 +148,19 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 	return *list, err
 }
 
-var gvrCache = make(map[string]schema.GroupVersionResource)
-var gvrCacheMutex sync.RWMutex
+var GvrCache = make(map[string]schema.GroupVersionResource)
+var GvrCacheMutex sync.RWMutex
 
-func findGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
+func FindGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
 	normalizedIdentifier := strings.ToLower(resourceIdentifier)
 
 	// Check if the GVR is already in the cache
-	gvrCacheMutex.RLock()
-	if gvr, ok := gvrCache[normalizedIdentifier]; ok {
-		gvrCacheMutex.RUnlock()
+	GvrCacheMutex.RLock()
+	if gvr, ok := GvrCache[normalizedIdentifier]; ok {
+		GvrCacheMutex.RUnlock()
 		return gvr, nil
 	}
-	gvrCacheMutex.RUnlock()
+	GvrCacheMutex.RUnlock()
 
 	// GVR not in cache, find it using discovery
 	discoveryClient := clientset.Discovery()
@@ -182,9 +182,9 @@ func findGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema
 				gvr := gv.WithResource(resource.Name)
 
 				// Update the cache
-				gvrCacheMutex.Lock()
-				gvrCache[normalizedIdentifier] = gvr
-				gvrCacheMutex.Unlock()
+				GvrCacheMutex.Lock()
+				GvrCache[normalizedIdentifier] = gvr
+				GvrCacheMutex.Unlock()
 
 				return gvr, nil
 			}
@@ -204,7 +204,7 @@ func containsIgnoreCase(slice []string, str string) bool {
 	return false
 }
 
-func fetchAndCacheGVRs(clientset *kubernetes.Clientset) error {
+func FetchAndCacheGVRs(clientset *kubernetes.Clientset) error {
 	discoveryClient := clientset.Discovery()
 	apiResourceList, err := discoveryClient.ServerPreferredResources()
 	if err != nil {
@@ -221,7 +221,7 @@ func fetchAndCacheGVRs(clientset *kubernetes.Clientset) error {
 		for _, resource := range apiResourceGroup.APIResources {
 			gvr := gv.WithResource(resource.Name)
 			gvrKey := resource.Name // Or use a more specific key if needed
-			gvrCache[gvrKey] = gvr
+			GvrCache[gvrKey] = gvr
 		}
 	}
 

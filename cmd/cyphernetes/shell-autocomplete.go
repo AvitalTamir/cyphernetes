@@ -1,10 +1,11 @@
-package cmd
+package main
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -90,7 +91,7 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
 	// first get the full name of the kind from the gvr cache
-	gvr, err := findGVR(executor.Clientset, kind)
+	gvr, err := parser.FindGVR(executor.Clientset, kind)
 	if err == nil {
 		resourceNormalizedName := strings.ToLower(gvr.Resource)
 		// then get the tree structure from the cache, otherwise fetch it from the api
@@ -99,7 +100,6 @@ func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
 		} else {
 			treeStructure, err := fetchResourceAPIDefinition(gvr)
 			if err != nil {
-				logDebug("Error fetching resource definition: ", err)
 				return []string{}, err
 			}
 
@@ -141,7 +141,7 @@ func getKindForIdentifier(line string, identifier string) string {
 func getResourceKinds(identifier string) []string {
 	// iterate over the gvr cache and return all resource kinds that match the identifier
 	var kinds []string
-	for _, gvr := range gvrCache {
+	for _, gvr := range parser.GvrCache {
 		if strings.HasPrefix(gvr.GroupResource().Resource, identifier) {
 			kinds = append(kinds, gvr.Resource)
 		}
