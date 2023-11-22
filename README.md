@@ -29,14 +29,14 @@ See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/R
 
 ## Install
 
-With `go get` / `go install`:
 ```bash
+# With "go install"
 $ go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
 ```
+This is currently the only channel to install Cyphernetes, you'll need go installed for this.
 
-This is currently the only channel to install Cyphernetes.
 Otherwise, clone this repo and run `make`.
-You'll need to have `goyacc` in your path to be able to build.
+You'll need to have go as well as `goyacc` in your path to be able to build.
 
 ## Usage
 
