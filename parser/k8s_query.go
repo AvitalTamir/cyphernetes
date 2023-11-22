@@ -1,4 +1,4 @@
-package cmd
+package parser
 
 import (
 	"encoding/json"
@@ -31,12 +31,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			for _, rel := range c.Relationships {
 				// Determine relationship type and fetch related resources
 				var relType RelationshipType
-				leftKind, err := findGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
+				leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
 				if err != nil {
 					fmt.Println("Error finding API resource: ", err)
 					return nil, err
 				}
-				rightKind, err := findGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
+				rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
 				if err != nil {
 					fmt.Println("Error finding API resource: ", err)
 					return nil, err

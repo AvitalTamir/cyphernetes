@@ -5,6 +5,7 @@ import (
 
 	"encoding/json"
 
+	"github.com/avitaltamir/cyphernetes/parser"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ var queryCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1), // This ensures that exactly one argument is provided
 	Run: func(cmd *cobra.Command, args []string) {
 		// Parse the query to get an AST.
-		ast, err := ParseQuery(args[0])
+		ast, err := parser.ParseQuery(args[0])
 		if err != nil {
 			// Handle error.
 			fmt.Println("Error parsing query: ", err)
@@ -23,7 +24,7 @@ var queryCmd = &cobra.Command{
 		}
 
 		// Execute the query against the Kubernetes API.
-		executor, err := NewQueryExecutor()
+		executor, err := parser.NewQueryExecutor()
 		if err != nil {
 			// Handle error.
 			fmt.Println("Error creating query executor: ", err)

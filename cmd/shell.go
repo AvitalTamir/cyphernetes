@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/avitaltamir/cyphernetes/parser"
 	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
@@ -30,7 +31,7 @@ func filterInput(r rune) (rune, bool) {
 }
 
 func shellPrompt() string {
-	ns := Namespace
+	ns := parser.Namespace
 	color := "32"
 	if ns == "" {
 		ns = "ALL NAMESPACES"
@@ -138,7 +139,7 @@ func runShell(cmd *cobra.Command, args []string) {
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
 	fmt.Println("Type 'help' for information on how to use the shell")
 	// Initialize the GRV cache
-	fetchAndCacheGVRs(executor.Clientset)
+	parser.FetchAndCacheGVRs(executor.Clientset)
 	initResourceSpecs()
 
 	for {
@@ -156,9 +157,9 @@ func runShell(cmd *cobra.Command, args []string) {
 		if strings.HasPrefix(input, "\\n ") {
 			input = strings.TrimPrefix(input, "\\n ")
 			if strings.ToLower(input) == "all" {
-				Namespace = ""
+				parser.Namespace = ""
 			} else {
-				Namespace = strings.ToLower(input)
+				parser.Namespace = strings.ToLower(input)
 			}
 			rl.SetPrompt(shellPrompt())
 		} else if input == "help" {
@@ -182,11 +183,11 @@ func runShell(cmd *cobra.Command, args []string) {
 }
 
 // Execute the query against the Kubernetes API.
-var executor = GetQueryExecutorInstance()
+var executor = parser.GetQueryExecutorInstance()
 
 func processQuery(query string) (string, error) {
 	// Parse the query to get an AST.
-	ast, err := ParseQuery(query)
+	ast, err := parser.ParseQuery(query)
 	if err != nil {
 		// Handle error.
 		fmt.Println("Error parsing query: ", err)

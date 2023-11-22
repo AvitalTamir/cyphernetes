@@ -1,5 +1,5 @@
 // parser_test.go
-package cmd
+package parser
 
 import (
 	"encoding/json"

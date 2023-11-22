@@ -27,6 +27,21 @@ A high-level list of what's still missing:
 
 See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.
 
+## Install
+
+With `go get` / `go install`:
+```bash
+# Go < 1.17
+$ go get github.com/avitaltamir/cyphernetes
+
+# Go >= 1.17
+$ go install github.com/avitaltamir/cyphernetes
+```
+
+This is currently the only channel to install Cyphernetes.
+Otherwise, clone this repo and run `make`.
+You'll need to have `goyacc` in your path to be able to build.
+
 ## Usage
 
 Cyphernetes offers two main commands: `query` and `shell`. Below are examples of how to use these commands with different types of queries.

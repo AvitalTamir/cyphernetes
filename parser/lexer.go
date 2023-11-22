@@ -1,4 +1,4 @@
-package cmd
+package parser
 
 import (
 	"log"
@@ -199,10 +199,4 @@ type ASTNode struct {
 
 func NewASTNode(name, kind string) *ASTNode {
 	return &ASTNode{Name: name, Kind: kind}
-}
-
-func logDebug(v ...interface{}) {
-	if logLevel == "debug" {
-		log.Println(v...)
-	}
 }

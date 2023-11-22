@@ -1,5 +1,5 @@
 %{
-package cmd
+package parser
 
 import (
     "fmt"
@@ -13,7 +13,7 @@ func yyerror(s string) {
 }
 
 func debugLog(v ...interface{}) {
-	if logLevel == "debug" {
+	if LogLevel == "debug" {
 		log.Println(v...)
 	}
 }

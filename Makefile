@@ -21,7 +21,7 @@ test:
 # Define how to generate the grammar parser
 gen-parser:
 	@echo "🧠 Generating parser..."
-	goyacc -o cmd/cyphernetes.go -p "yy" grammar/cyphernetes.y
+	goyacc -o parser/cyphernetes.go -p "yy" grammar/cyphernetes.y
 
 # Define how to clean the build
 clean:

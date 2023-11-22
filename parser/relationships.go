@@ -1,4 +1,4 @@
-package cmd
+package parser
 
 import (
 	"github.com/oliveagle/jsonpath"
@@ -18,11 +18,11 @@ const (
 	StsOwnPod   RelationshipType = "STS_OWN_POD"
 	DsOwnOwnPod RelationshipType = "DS_OWN_OWN_POD"
 	JobOwnPod   RelationshipType = "JOB_OWN_POD"
-	// This is for ingresses
+	// services to pods
 	Expose RelationshipType = "EXPOSE"
 	// This is for configMaps, Volumes, Secrets in pods
 	Mount RelationshipType = "MOUNT"
-	// services
+	// ingresses to services
 	Route RelationshipType = "ROUTE"
 )
 
