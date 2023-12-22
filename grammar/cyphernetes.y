@@ -27,10 +27,13 @@ func debugLog(v ...interface{}) {
     clause                 *Clause
     expression             *Expression
     matchClause            *MatchClause
+    setClause              *SetClause
     returnClause           *ReturnClause
     properties             *Properties
     jsonPathValue          *Property
     jsonPathValueList      []*Property
+    keyValuePairs          []*KeyValuePair
+    keyValuePair           *KeyValuePair
     value                  interface{}
     relationship           *Relationship
     resourceProperties     *ResourceProperties
@@ -42,11 +45,12 @@ func debugLog(v ...interface{}) {
 %token <strVal> INT
 %token <strVal> BOOLEAN
 %token <strVal> STRING
-%token LPAREN RPAREN COLON MATCH RETURN EOF LBRACE RBRACE COMMA
+%token LPAREN RPAREN COLON MATCH SET RETURN EOF LBRACE RBRACE COMMA EQUALS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
 %type<matchClause> MatchClause
+%type<setClause> SetClause
 %type<returnClause> ReturnClause
 %type<nodePattern> NodePattern
 %type<strVal> IDENT
@@ -62,6 +66,8 @@ func debugLog(v ...interface{}) {
 %type<relationship> Relationship
 %type<resourceProperties> ResourceProperties
 %type<nodeRelationshipList> NodeRelationshipList
+%type<keyValuePairs> KeyValuePairs
+%type<keyValuePair> KeyValuePair
 
 %%
 
@@ -69,11 +75,39 @@ Expression:
     MatchClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
     }
+    | MatchClause SetClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | MatchClause SetClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2, $3}}
+    }
 ;
 
 MatchClause:
     MATCH NodeRelationshipList {
         $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships}
+    }
+;
+
+SetClause:
+    SET KeyValuePairs {
+        $$ = &SetClause{KeyValuePairs: $2}
+    }
+;
+
+KeyValuePairs:
+    KeyValuePair {
+        $$ = []*KeyValuePair{$1} // Start with one Property element
+    }
+    | KeyValuePairs COMMA KeyValuePair {
+        $$ = append($1, $3) // $1 and $3 are the left and right operands of COMMA
+    }
+;
+
+// JSONPathValue represents a JSONPath=Value pair
+KeyValuePair:
+    JSONPATH EQUALS Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3}
     }
 ;
 
@@ -117,36 +151,6 @@ NodeRelationshipList:
         }
     }
 ;
-
-
-/* NodePatternList:
-    NodePattern COMMA NodePatternList {
-        $$ = append([]*NodePattern{$1}, $3...)
-    }
-    | NodePattern Relationship NodePattern Relationship NodePatternList {
-        $$ = []*NodePattern{$1, $3}
-        $2.LeftNode = $1
-        $2.RightNode = $3
-        $4.LeftNode = $3
-        $4.RightNode = $5[0]
-        $$ = append($$, $5...)
-    }
-    | NodePattern Relationship NodePattern COMMA NodePatternList {
-        $$ = []*NodePattern{$1, $3}
-        $2.LeftNode = $1
-        $2.RightNode = $3
-        $$ = append($$, $5...)
-    }
-    | NodePattern Relationship NodePattern {
-        $$ = []*NodePattern{$1, $3}
-        $2.LeftNode = $1
-        $2.RightNode = $3
-    }
-    | NodePattern {
-        $$ = []*NodePattern{$1}
-    }
-; */
-
 
 NodePattern:
     LPAREN ResourceProperties RPAREN {

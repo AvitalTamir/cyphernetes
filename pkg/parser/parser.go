@@ -22,6 +22,15 @@ type MatchClause struct {
 	Relationships []*Relationship
 }
 
+type SetClause struct {
+	KeyValuePairs []*KeyValuePair
+}
+
+type KeyValuePair struct {
+	Key   string
+	Value interface{}
+}
+
 type Relationship struct {
 	ResourceProperties *ResourceProperties
 	Direction          Direction
@@ -93,7 +102,8 @@ type JSONPathValue struct {
 func (m *MatchClause) isClause() {}
 
 // func (c *CreateClause) isClause() {}
-// func (s *SetClause) isClause()    {}
+func (s *SetClause) isClause() {}
+
 // func (d *DeleteClause) isClause() {}
 func (r *ReturnClause) isClause() {}
 

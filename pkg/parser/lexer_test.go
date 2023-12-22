@@ -58,7 +58,128 @@ func TestLexer(t *testing.T) {
 				"",       // EOF
 			},
 		},
-		// Add more test cases as needed
+		// {
+		// 	name:  "MATCH and RETURN with props",
+		// 	input: "MATCH (k:Kind {name: \"test\"}) RETURN k.name, k.age",
+		// 	wantTokens: []int{
+		// 		MATCH,
+		// 		LPAREN,
+		// 		IDENT,
+		// 		COLON,
+		// 		IDENT,
+		// 		LBRACE,
+		// 		IDENT,
+		// 		COLON,
+		// 		STRING,
+		// 		RBRACE,
+		// 		RPAREN,
+		// 		RETURN,
+		// 		JSONPATH,
+		// 		COMMA,
+		// 		JSONPATH,
+		// 		EOF,
+		// 	},
+		// 	wantLiterals: []string{
+		// 		"",         // MATCH
+		// 		"",         // LPAREN
+		// 		"k",        // IDENT
+		// 		"",         // COLON
+		// 		"Kind",     // IDENT
+		// 		"",         // LBRACE
+		// 		"name",     // IDENT
+		// 		"",         // COLON
+		// 		"\"test\"", // STRING
+		// 		"",         // RBRACE
+		// 		"",         // RPAREN
+		// 		"",         // RETURN
+		// 		"k.name",   // JSONPATH
+		// 		"",         // COMMA
+		// 		"k.age",    // JSONPATH
+		// 		"",         // EOF
+		// 	},
+		// },
+		// {
+		// 	name:  "MATCH and RETURN with props and relationship",
+		// 	input: "MATCH (k:Kind {name: \"test\"})-[r:REL]->(k2:Kind) RETURN k.name, k.age",
+		// 	wantTokens: []int{
+		// 		MATCH,
+		// 		LPAREN,
+		// 		IDENT,
+		// 		COLON,
+		// 		IDENT,
+		// 		LBRACE,
+		// 		IDENT,
+		// 		COLON,
+		// 		STRING,
+		// 		RBRACE,
+		// 		REL_NOPROPS_RIGHT,
+		// 		LPAREN,
+		// 		IDENT,
+		// 		COLON,
+		// 		IDENT,
+		// 		RPAREN,
+		// 		RETURN,
+		// 		JSONPATH,
+		// 		COMMA,
+		// 		JSONPATH,
+		// 		EOF,
+		// 	},
+		// 	wantLiterals: []string{
+		// 		"",         // MATCH
+		// 		"",         // LPAREN
+		// 		"k",        // IDENT
+		// 		"",         // COLON
+		// 		"Kind",     // IDENT
+		// 		"",         // LBRACE
+		// 		"name",     // IDENT
+		// 		"",         // COLON
+		// 		"\"test\"", // STRING
+		// 		"",         // RBRACE
+		// 		"",         // RPAREN
+		// 		"",         // REL_NOPROPS_RIGHT
+		// 		"",         // LPAREN
+		// 		"k2",       // IDENT
+		// 		"",         // COLON
+		// 		"Kind",     // IDENT
+		// 		"",         // RPAREN
+		// 		"",         // RETURN
+		// 		"k.name",   // JSONPATH
+		// 		"",         // COMMA
+		// 		"k.age",    // JSONPATH
+		// 		"",         // EOF
+		// 	},
+		// },
+		// Add a test for MATCH and SET
+		{
+			name:  "MATCH and SET",
+			input: "MATCH (k:Kind) SET k.name = \"test\"",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				SET,
+				JSONPATH,
+				EQUALS,
+				STRING,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",         // MATCH
+				"",         // LPAREN
+				"k",        // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // RPAREN
+				"",         // SET
+				"k.name",   // JSONPATH
+				"",         // EQUALS
+				"\"test\"", // STRING
+				"",         // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {

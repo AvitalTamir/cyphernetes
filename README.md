@@ -22,7 +22,7 @@ Kubernetes management often involves dealing with complex and verbose command-li
 The project is at it's earliest milestone and supports performing GET operations.
 The Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
-* CREATE, SET, DELETE clauses
+* CREATE, DELETE, WHERE and AS clauses
 * The graph model of relationships between common Kubernetes resources is in very early stages
 
 See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.
@@ -93,6 +93,13 @@ Lists Deployments, Services and Ingresses in the namespace.
 MATCH (d:Deployment {name: "nginx"})->(rs:ReplicaSet)->(p:Pod)->(s:Service) RETURN s.metadata.name
 ```
 Return the names of Services that expose Pods that are owned by ReplicaSets that are owned by Deployments called "nginx".
+
+### Updating resources
+
+```graphql
+# RETURN is optional
+MATCH (d:Deployment {name: "nginx"}) SET d.metadata.labels.app="nginx-updated" RETURN d
+```
 
 ### Node with Multiple Properties
 
