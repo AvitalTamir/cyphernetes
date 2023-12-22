@@ -21,6 +21,7 @@ type Lexer struct {
 	}
 	definingProps  bool
 	definingReturn bool
+	definingSet    bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -38,7 +39,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	}
 
 	// Check if we are capturing a JSONPATH
-	if l.buf.tok == RETURN || l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) || l.buf.tok == COMMA && l.definingReturn {
+	if l.buf.tok == RETURN || l.buf.tok == SET ||
+		l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) ||
+		l.buf.tok == COMMA && l.definingReturn || l.buf.tok == COMMA && l.definingSet {
 		lval.strVal = ""
 		// Consume and ignore any whitespace
 		ch := l.s.Peek()
@@ -70,6 +73,11 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		if strings.ToUpper(lit) == "MATCH" {
 			logDebug("Returning MATCH token")
 			return int(MATCH)
+		} else if strings.ToUpper(lit) == "SET" {
+			l.buf.tok = SET // Indicate that we've read a SET.
+			l.definingSet = true
+			logDebug("Returning SET token")
+			return int(SET)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
 			l.definingReturn = true
@@ -97,6 +105,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	case ':':
 		logDebug("Returning COLON token")
 		return int(COLON)
+	case '=':
+		logDebug("Returning EQUALS token")
+		return int(EQUALS)
 	case ')':
 		logDebug("Returning RPAREN token")
 		l.definingProps = false // Indicate that we've read a RPAREN.

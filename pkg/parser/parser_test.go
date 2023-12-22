@@ -467,3 +467,46 @@ func TestChainedRelationshipsWithComma(t *testing.T) {
 	}
 
 }
+
+func TestMatchSetExpression(t *testing.T) {
+	query := `MATCH (n:Node) SET n.name = "test"`
+	// Expected AST structure...
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+			},
+			&SetClause{
+				KeyValuePairs: []*KeyValuePair{
+					{
+						Key:   "n.name",
+						Value: "test",
+					},
+				},
+			},
+		},
+	}
+
+	// Call the parser.
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		exprJson, _ := json.Marshal(expr)
+		expectedJson, _ := json.Marshal(expected)
+		fmt.Printf("expr: %+v\n", string(exprJson))
+		fmt.Printf("expected: %+v\n", string(expectedJson))
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}

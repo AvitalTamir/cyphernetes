@@ -1,12 +1,15 @@
 package parser
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var resultCache = make(map[string]interface{})
@@ -64,7 +67,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				for _, node := range c.Nodes {
 					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
 						if resultMap[node.ResourceProperties.Name] == nil {
-							getNodeResouces(node, q)
+							getNodeResources(node, q)
 						}
 
 					}
@@ -103,7 +106,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
 				if resultCache[resourcePropertyName(node)] == nil {
-					getNodeResouces(node, q)
+					getNodeResources(node, q)
 				} else if resultMap[node.ResourceProperties.Name] == nil {
 					resultMap[node.ResourceProperties.Name] = resultCache[resourcePropertyName(node)]
 				}
@@ -117,6 +120,64 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			// case *DeleteClause:
 			// 	// Execute a Kubernetes delete operation based on the DeleteClause.
 			// 	// ...
+		case *SetClause:
+			// Execute a Kubernetes update operation based on the SetClause.
+			// ...
+			for idx, kvp := range c.KeyValuePairs {
+				resultMapKey := strings.Split(kvp.Key, ".")[0]
+				path := strings.Split(kvp.Key, ".")[1:]
+
+				patch := make(map[string]interface{})
+				// Drill down to create nested map structure
+				for i, part := range path {
+					if i == len(path)-1 {
+						// Last part: assign the result
+						patch[part] = kvp.Value
+					} else {
+						// Intermediate parts: create nested maps
+						if patch[part] == nil {
+							patch[part] = make(map[string]interface{})
+						}
+						patch = patch[part].(map[string]interface{})
+					}
+				}
+
+				// Patch should be in this format: [{"op": "replace", "path": "/spec/replicas", "value": $value}],
+				// this means we need to join the path parts with '/' and add the value
+				pathStr := "/" + strings.Join(path, "/")
+				patchJson, err := json.Marshal([]map[string]interface{}{{"op": "replace", "path": pathStr, "value": kvp.Value}})
+				if err != nil {
+					fmt.Println("Error marshalling patch to JSON: ", err)
+					return nil, err
+				}
+
+				// Apply the patch to the resources
+				err = q.patchK8sResources(resultMapKey, patchJson)
+				if err != nil {
+					fmt.Println("Error patching resource: ", err)
+					return nil, err
+				}
+
+				// Retrieve the slice of maps for the resultMapKey
+				if resources, ok := resultMap[resultMapKey].([]map[string]interface{}); ok {
+					// Check if the idx is within bounds
+					if idx >= 0 && idx < len(resources) {
+						entry := resources[idx]             // Get the specific map to patch
+						fullPath := strings.Join(path, ".") // Construct the full path
+						patchResultMap(entry, fullPath, kvp.Value)
+						resources[idx] = entry // Update the specific entry in the slice
+					} else {
+						fmt.Printf("Index out of range for key: %s, Index: %d, Length: %d\n", resultMapKey, idx, len(resources))
+						// Handle index out of range
+					}
+				} else {
+					// Handle the case where the resultMap entry isn't a slice of maps
+					fmt.Printf("Failed to assert type for key: %s, Expected: []map[string]interface{}, Actual: %T\n", resultMapKey, resultMap[resultMapKey])
+					// You may want to handle this case according to your application's needs
+				}
+
+			}
+
 		case *ReturnClause:
 			resultMapJson, err := json.Marshal(resultMap)
 			if err != nil {
@@ -165,7 +226,31 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	return k8sResources, nil
 }
 
-func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
+func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) error {
+	resources := resultMap[resultMapKey].([]map[string]interface{})
+
+	for i := range resources {
+		// Look up the resource kind and name in the cache
+		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
+		if err != nil {
+			fmt.Printf("Error finding API resource: %v\n", err)
+			return err
+		}
+		resourceName := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
+
+		_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Patch(context.Background(), resourceName, types.JSONPatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			fmt.Printf("Error patching resource: %v\n", err)
+			return err
+		}
+
+		// refresh the resource in the cache
+
+	}
+	return nil
+}
+
+func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
 	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
 		for i, prop := range n.ResourceProperties.Properties.PropertyList {
 			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
@@ -194,23 +279,11 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 		}
 		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
 		labelSelector = strings.TrimSuffix(labelSelector, ",")
-
 	}
-
 	// Check if the resource has already been fetched
 	if resultCache[resourcePropertyName(n)] == nil {
 		// Get the list of resources of the specified kind.
-		list, err := q.getK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
-		if err != nil {
-			fmt.Println("Error getting list of resources: ", err)
-			return err
-		}
-		// merge list into resultCache
-		var converted []map[string]interface{}
-		for _, u := range list.Items {
-			converted = append(converted, u.UnstructuredContent())
-		}
-		resultCache[resourcePropertyName(n)] = converted
+		resultCache[resourcePropertyName(n)], err = q.getResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
 		if err != nil {
 			fmt.Println("Error marshalling results to JSON: ", err)
 			return err
@@ -220,6 +293,20 @@ func getNodeResouces(n *NodePattern, q *QueryExecutor) (err error) {
 	}
 	resultMap[n.ResourceProperties.Name] = resultCache[resourcePropertyName(n)]
 	return nil
+}
+
+func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) (interface{}, error) {
+	list, err := q.getK8sResources(kind, fieldSelector, labelSelector)
+	if err != nil {
+		fmt.Println("Error getting list of resources: ", err)
+		return nil, err
+	}
+	// merge list into resultCache
+	var converted []map[string]interface{}
+	for _, u := range list.Items {
+		converted = append(converted, u.UnstructuredContent())
+	}
+	return converted, nil
 }
 
 func resourcePropertyName(n *NodePattern) string {
@@ -251,4 +338,28 @@ func resourcePropertyName(n *NodePattern) string {
 
 	// Return the formatted string
 	return fmt.Sprintf("%s_%s_%s", ns, n.ResourceProperties.Kind, joinedPairs)
+}
+
+func patchResultMap(result map[string]interface{}, fullPath string, newValue interface{}) {
+	parts := strings.Split(fullPath, ".") // Split the path into parts
+
+	if len(parts) == 1 {
+		// If we're at the end of the path, set the value directly
+		result[parts[0]] = newValue
+		return
+	}
+
+	// If we're not at the end, move down one level in the path
+	nextLevel := parts[0]
+	remainingPath := strings.Join(parts[1:], ".")
+
+	if nextMap, ok := result[nextLevel].(map[string]interface{}); ok {
+		// If the next level is a map, continue patching
+		patchResultMap(nextMap, remainingPath, newValue)
+	} else {
+		// If the next level is not a map, it needs to be created
+		newMap := make(map[string]interface{})
+		result[nextLevel] = newMap
+		patchResultMap(newMap, remainingPath, newValue)
+	}
 }
