@@ -62,7 +62,10 @@ To start the shell:
 ```bash
 $ cyphernetes shell
 ```
-Within the shell, you can run queries interactively. Here are some examples:
+
+Type 'exit' or press Ctrl-C/Ctrl-D to leave the shell.
+
+## Query Examples
 
 ### Basic Node Match
 
@@ -94,13 +97,6 @@ MATCH (d:Deployment {name: "nginx"})->(rs:ReplicaSet)->(p:Pod)->(s:Service) RETU
 ```
 Return the names of Services that expose Pods that are owned by ReplicaSets that are owned by Deployments called "nginx".
 
-### Updating resources
-
-```graphql
-# RETURN is optional
-MATCH (d:Deployment {name: "nginx"}) SET d.metadata.labels.app="nginx-updated" RETURN d
-```
-
 ### Node with Multiple Properties
 
 ```graphql
@@ -108,7 +104,18 @@ MATCH (s:Service {type: "LoadBalancer", region: "us-west-1"}) RETURN s.metadata.
 ```
 Finds Services of type "LoadBalancer" in the "us-west" region and returns their status.
 
-Remember to type exit or press Ctrl-C to leave the shell.
+### Updating Resources
+
+```graphql
+# RETURN is optional
+MATCH (d:Deployment {name: "nginx"}) SET d.metadata.labels.app="nginx-updated" RETURN d
+```
+
+### Deleting Resources
+```graphql
+MATCH (d:Deployment {name: "nginx"}) DELETE d
+```
+Deletes the "nginx" Deployment.
 
 ## Development
 
