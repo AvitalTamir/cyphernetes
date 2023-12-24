@@ -510,3 +510,43 @@ func TestMatchSetExpression(t *testing.T) {
 		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
 	}
 }
+
+func TestMatchDeleteExpression(t *testing.T) {
+	query := `MATCH (n:Node) DELETE n`
+	// Expected AST structure...
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+			},
+			&DeleteClause{
+				NodeIds: []string{"n"},
+			},
+		},
+	}
+
+	// Call the parser.
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		exprJson, _ := json.Marshal(expr)
+		expectedJson, _ := json.Marshal(expected)
+		fmt.Printf("expr: %+v\n", string(exprJson))
+		fmt.Printf("expected: %+v\n", string(expectedJson))
+		fmt.Printf("expr: %+v\n", expr)
+		fmt.Printf("expected: %+v\n", expected)
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}

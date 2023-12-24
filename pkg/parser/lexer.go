@@ -78,6 +78,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingSet = true
 			logDebug("Returning SET token")
 			return int(SET)
+		} else if strings.ToUpper(lit) == "DELETE" {
+			logDebug("Returning SET token")
+			return int(DELETE)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
 			l.definingReturn = true

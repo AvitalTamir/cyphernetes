@@ -180,6 +180,33 @@ func TestLexer(t *testing.T) {
 				"",         // EOF
 			},
 		},
+		// Add a test for MATCH and DELETE
+		{
+			name:  "MATCH and DELETE",
+			input: "MATCH (k:Kind) DELETE k",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				DELETE,
+				IDENT,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",     // MATCH
+				"",     // LPAREN
+				"k",    // IDENT
+				"",     // COLON
+				"Kind", // IDENT
+				"",     // RPAREN
+				"",     // DELETE
+				"k",    // IDENT
+				"",     // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {

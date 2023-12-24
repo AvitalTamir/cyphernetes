@@ -28,6 +28,7 @@ func debugLog(v ...interface{}) {
     expression             *Expression
     matchClause            *MatchClause
     setClause              *SetClause
+    deleteClause           *DeleteClause
     returnClause           *ReturnClause
     properties             *Properties
     jsonPathValue          *Property
@@ -38,6 +39,7 @@ func debugLog(v ...interface{}) {
     relationship           *Relationship
     resourceProperties     *ResourceProperties
     nodeRelationshipList   *NodeRelationshipList
+    nodeIds        []string
 }
 
 %token <strVal> IDENT
@@ -45,12 +47,13 @@ func debugLog(v ...interface{}) {
 %token <strVal> INT
 %token <strVal> BOOLEAN
 %token <strVal> STRING
-%token LPAREN RPAREN COLON MATCH SET RETURN EOF LBRACE RBRACE COMMA EQUALS
+%token LPAREN RPAREN COLON MATCH SET DELETE RETURN EOF LBRACE RBRACE COMMA EQUALS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
 %type<matchClause> MatchClause
 %type<setClause> SetClause
+%type<deleteClause> DeleteClause
 %type<returnClause> ReturnClause
 %type<nodePattern> NodePattern
 %type<strVal> IDENT
@@ -68,6 +71,7 @@ func debugLog(v ...interface{}) {
 %type<nodeRelationshipList> NodeRelationshipList
 %type<keyValuePairs> KeyValuePairs
 %type<keyValuePair> KeyValuePair
+%type<nodeIds> NodeIds
 
 %%
 
@@ -81,6 +85,9 @@ Expression:
     | MatchClause SetClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2, $3}}
     }
+    | MatchClause DeleteClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2}}
+    }
 ;
 
 MatchClause:
@@ -92,6 +99,21 @@ MatchClause:
 SetClause:
     SET KeyValuePairs {
         $$ = &SetClause{KeyValuePairs: $2}
+    }
+;
+
+DeleteClause:
+    DELETE NodeIds {
+        $$ = &DeleteClause{NodeIds: $2}
+    }
+;
+
+NodeIds:
+    IDENT {
+        $$ = []string{$1}
+    }
+    | NodeIds COMMA IDENT {
+        $$ = append($1, $3)
     }
 ;
 

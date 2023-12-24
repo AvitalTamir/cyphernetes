@@ -178,6 +178,16 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 			}
 
+		case *DeleteClause:
+			// Execute a Kubernetes delete operation based on the DeleteClause.
+			for _, nodeId := range c.NodeIds {
+				// make sure the identifier is a key in the result map
+				if resultMap[nodeId] == nil {
+					return nil, fmt.Errorf("node identifier %s not found in result map", nodeId)
+				}
+				q.deleteK8sResources(nodeId)
+			}
+
 		case *ReturnClause:
 			resultMapJson, err := json.Marshal(resultMap)
 			if err != nil {
@@ -224,6 +234,31 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
 	return k8sResources, nil
+}
+
+func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
+	resources := resultMap[nodeId].([]map[string]interface{})
+
+	for i := range resources {
+		// Look up the resource kind and name in the cache
+		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
+		if err != nil {
+			fmt.Printf("Error finding API resource: %v\n", err)
+			return err
+		}
+		resourceName := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
+
+		err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
+		if err != nil {
+			fmt.Printf("Error deleting resource: %v\n", err)
+			return err
+		}
+
+		// remove the resource from the result map
+		delete(resultMap, nodeId)
+	}
+
+	return nil
 }
 
 func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) error {

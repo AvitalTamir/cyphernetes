@@ -22,7 +22,7 @@ Kubernetes management often involves dealing with complex and verbose command-li
 The project is at it's earliest milestone and supports performing GET operations.
 The Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
-* CREATE, DELETE, WHERE and AS clauses
+* CREATE, WHERE and AS clauses
 * The graph model of relationships between common Kubernetes resources is in very early stages
 
 See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.
