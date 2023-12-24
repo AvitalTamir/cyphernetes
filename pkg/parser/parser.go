@@ -26,6 +26,10 @@ type SetClause struct {
 	KeyValuePairs []*KeyValuePair
 }
 
+type DeleteClause struct {
+	NodeIds []string
+}
+
 type KeyValuePair struct {
 	Key   string
 	Value interface{}
@@ -99,13 +103,14 @@ type JSONPathValue struct {
 }
 
 // Implement isClause for all Clause types
-func (m *MatchClause) isClause() {}
+func (m *MatchClause) isClause()  {}
+func (s *SetClause) isClause()    {}
+func (d *DeleteClause) isClause() {}
+func (r *ReturnClause) isClause() {}
 
 // func (c *CreateClause) isClause() {}
-func (s *SetClause) isClause() {}
-
-// func (d *DeleteClause) isClause() {}
-func (r *ReturnClause) isClause() {}
+// func (w *WhereClause) isClause() {}
+// func (a *AsClause) isClause() {}
 
 var result *Expression
 

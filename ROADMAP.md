@@ -90,19 +90,19 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 - [x] Extend the yacc grammar to include `SET` statement rules.
 - [x] Write unit tests for queries with `SET` clauses.
 
-### Phase 7: CREATE Statement
+### Phase 7: DELETE Statement
+
+- [x] Add support for `DELETE` statements.
+- [x] Update the lexer to recognize the `DELETE` keyword.
+- [x] Extend the yacc grammar to parse `DELETE` statements.
+- [x] Write unit tests for `DELETE` statement parsing.
+
+### Phase 8: CREATE Statement
 
 - [ ] Add support for `CREATE` statements.
 - [ ] Update the lexer to recognize the `CREATE` keyword.
 - [ ] Extend the yacc grammar to parse `CREATE` statements.
 - [ ] Write unit tests for `CREATE` statement parsing.
-
-### Phase 8: DELETE Statement
-
-- [ ] Add support for `DELETE` statements.
-- [ ] Update the lexer to recognize the `DELETE` keyword.
-- [ ] Extend the yacc grammar to parse `DELETE` statements.
-- [ ] Write unit tests for `DELETE` statement parsing.
 
 ### Phase 9: WHERE Clause
 

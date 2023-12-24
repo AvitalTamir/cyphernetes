@@ -151,8 +151,8 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 var GvrCache = make(map[string]schema.GroupVersionResource)
 var GvrCacheMutex sync.RWMutex
 
-func FindGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema.GroupVersionResource, error) {
-	normalizedIdentifier := strings.ToLower(resourceIdentifier)
+func FindGVR(clientset *kubernetes.Clientset, resourceId string) (schema.GroupVersionResource, error) {
+	normalizedIdentifier := strings.ToLower(resourceId)
 
 	// Check if the GVR is already in the cache
 	GvrCacheMutex.RLock()
@@ -172,7 +172,7 @@ func FindGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema
 	for _, apiResource := range apiResourceList {
 		for _, resource := range apiResource.APIResources {
 			if strings.EqualFold(resource.Name, normalizedIdentifier) ||
-				strings.EqualFold(resource.Kind, resourceIdentifier) ||
+				strings.EqualFold(resource.Kind, resourceId) ||
 				containsIgnoreCase(resource.ShortNames, normalizedIdentifier) {
 
 				gv, err := schema.ParseGroupVersion(apiResource.GroupVersion)
@@ -191,7 +191,7 @@ func FindGVR(clientset *kubernetes.Clientset, resourceIdentifier string) (schema
 		}
 	}
 
-	return schema.GroupVersionResource{}, fmt.Errorf("resource identifier not found: %s", resourceIdentifier)
+	return schema.GroupVersionResource{}, fmt.Errorf("resource identifier not found: %s", resourceId)
 }
 
 // Helper function to check if a slice contains a string, case-insensitive
