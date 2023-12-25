@@ -103,7 +103,7 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 - [x] Add support for `CREATE` statements.
 - [x] Update the lexer to recognize the `CREATE` keyword.
 - [x] Extend the yacc grammar to parse `CREATE` statements.
-- [ ] Write unit tests for `CREATE` statement parsing.
+- [x] Write unit tests for `CREATE` statement parsing.
 
 ### Phase 9: WHERE Clause
 
