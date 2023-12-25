@@ -105,20 +105,14 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			for _, node := range c.Nodes {
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
-				if resultCache[resourcePropertyName(node)] == nil {
+				if resultCache[q.resourcePropertyName(node)] == nil {
 					getNodeResources(node, q)
 				} else if resultMap[node.ResourceProperties.Name] == nil {
-					resultMap[node.ResourceProperties.Name] = resultCache[resourcePropertyName(node)]
+					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
 				}
 			}
 			// case *CreateClause:
 			// 	// Execute a Kubernetes create operation based on the CreateClause.
-			// 	// ...
-			// case *SetClause:
-			// 	// Execute a Kubernetes update operation based on the SetClause.
-			// 	// ...
-			// case *DeleteClause:
-			// 	// Execute a Kubernetes delete operation based on the DeleteClause.
 			// 	// ...
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
@@ -316,9 +310,9 @@ func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
 		labelSelector = strings.TrimSuffix(labelSelector, ",")
 	}
 	// Check if the resource has already been fetched
-	if resultCache[resourcePropertyName(n)] == nil {
+	if resultCache[q.resourcePropertyName(n)] == nil {
 		// Get the list of resources of the specified kind.
-		resultCache[resourcePropertyName(n)], err = q.getResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
+		resultCache[q.resourcePropertyName(n)], err = q.getResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
 		if err != nil {
 			fmt.Println("Error marshalling results to JSON: ", err)
 			return err
@@ -326,7 +320,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
 	} else {
 		fmt.Println("Resource already fetched")
 	}
-	resultMap[n.ResourceProperties.Name] = resultCache[resourcePropertyName(n)]
+	resultMap[n.ResourceProperties.Name] = resultCache[q.resourcePropertyName(n)]
 	return nil
 }
 
@@ -344,10 +338,17 @@ func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) 
 	return converted, nil
 }
 
-func resourcePropertyName(n *NodePattern) string {
+func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 	var ns string
+
+	gvr, err := FindGVR(q.Clientset, n.ResourceProperties.Kind)
+	if err != nil {
+		fmt.Println("Error finding API resource: ", err)
+		return ""
+	}
+
 	if n.ResourceProperties.Properties == nil {
-		return fmt.Sprintf("%s_%s", Namespace, n.ResourceProperties.Kind)
+		return fmt.Sprintf("%s_%s", Namespace, gvr.Resource)
 	}
 	for _, prop := range n.ResourceProperties.Properties.PropertyList {
 		if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
@@ -372,7 +373,7 @@ func resourcePropertyName(n *NodePattern) string {
 	joinedPairs := strings.Join(keyValuePairs, "_")
 
 	// Return the formatted string
-	return fmt.Sprintf("%s_%s_%s", ns, n.ResourceProperties.Kind, joinedPairs)
+	return fmt.Sprintf("%s_%s_%s", ns, gvr.Resource, joinedPairs)
 }
 
 func patchResultMap(result map[string]interface{}, fullPath string, newValue interface{}) {

@@ -13,13 +13,20 @@ type ResourceRelationship struct {
 type RelationshipType string
 
 const (
-	DeployOwnRs RelationshipType = "DEPLOY_OWN_RS"
-	RsOwnPod    RelationshipType = "RS_OWN_POD"
-	StsOwnPod   RelationshipType = "STS_OWN_POD"
-	DsOwnOwnPod RelationshipType = "DS_OWN_OWN_POD"
-	JobOwnPod   RelationshipType = "JOB_OWN_POD"
-	// services to pods
-	Expose RelationshipType = "EXPOSE"
+	// deployments to replicasets / replicasets to pods / statefulsets to pods / daemonsets to pods etc.
+	DeploymentOwnReplicaset RelationshipType = "DEPLOYMENT_OWN_REPLICASET"
+	ReplicasetOwnPod        RelationshipType = "REPLICASET_OWN_POD"
+	StatefulsetOwnPod       RelationshipType = "STATEFULSET_OWN_POD"
+	DaemonsetOwnPod         RelationshipType = "DAEMONSET_OWN_POD"
+	JobOwnPod               RelationshipType = "JOB_OWN_POD"
+
+	// services to pods / deployments / statefulsets / daemonsets / replicasets
+	ServiceExposePod         RelationshipType = "SERVICE_EXPOSE_POD"
+	ServiceExposeDeployment  RelationshipType = "SERVICE_EXPOSE_DEPLOYMENT"
+	ServiceExposeStatefulset RelationshipType = "SERVICE_EXPOSE_STATEFULSET"
+	ServiceExposeDaemonset   RelationshipType = "SERVICE_EXPOSE_DAEMONSET"
+	ServiceExposeReplicaset  RelationshipType = "SERVICE_EXPOSE_REPLICASET"
+
 	// This is for configMaps, Volumes, Secrets in pods
 	Mount RelationshipType = "MOUNT"
 	// ingresses to services
@@ -52,7 +59,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "replicasets",
-		Relationship: RsOwnPod,
+		Relationship: ReplicasetOwnPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.ownerReferences",
@@ -64,7 +71,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "replicasets",
 		KindB:        "deployments",
-		Relationship: DeployOwnRs,
+		Relationship: DeploymentOwnReplicaset,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.ownerReferences",
@@ -76,7 +83,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "services",
-		Relationship: Expose,
+		Relationship: ServiceExposePod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.labels",
@@ -88,7 +95,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "statefulsets",
-		Relationship: StsOwnPod,
+		Relationship: StatefulsetOwnPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.ownerReferences",
@@ -100,7 +107,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "daemonsets",
-		Relationship: DsOwnOwnPod,
+		Relationship: DaemonsetOwnPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "metadata.ownerReferences",
@@ -130,6 +137,54 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "$.spec.rules.http.paths.backend.service.name",
 				FieldB:         "$.metadata.name",
 				ComparisonType: ExactMatch,
+			},
+		},
+	},
+	{
+		KindA:        "replicasets",
+		KindB:        "services",
+		Relationship: ServiceExposeReplicaset,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.template.metadata.labels",
+				FieldB:         "$.spec.selector",
+				ComparisonType: HasLabels,
+			},
+		},
+	},
+	{
+		KindA:        "statefulsets",
+		KindB:        "services",
+		Relationship: ServiceExposeStatefulset,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.template.metadata.labels",
+				FieldB:         "$.spec.selector",
+				ComparisonType: HasLabels,
+			},
+		},
+	},
+	{
+		KindA:        "daemonsets",
+		KindB:        "services",
+		Relationship: ServiceExposeDaemonset,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.template.metadata.labels",
+				FieldB:         "$.spec.selector",
+				ComparisonType: HasLabels,
+			},
+		},
+	},
+	{
+		KindA:        "deployments",
+		KindB:        "services",
+		Relationship: ServiceExposeDeployment,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.template.metadata.labels",
+				FieldB:         "$.spec.selector",
+				ComparisonType: HasLabels,
 			},
 		},
 	},
