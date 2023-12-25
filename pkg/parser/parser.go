@@ -35,6 +35,11 @@ type KeyValuePair struct {
 	Value interface{}
 }
 
+type CreateClause struct {
+	Nodes         []*NodePattern
+	Relationships []*Relationship
+}
+
 type Relationship struct {
 	ResourceProperties *ResourceProperties
 	Direction          Direction
@@ -82,6 +87,7 @@ type ResourceProperties struct {
 	Name       string
 	Kind       string
 	Properties *Properties
+	JsonData   string
 }
 
 type Properties struct {
@@ -107,8 +113,8 @@ func (m *MatchClause) isClause()  {}
 func (s *SetClause) isClause()    {}
 func (d *DeleteClause) isClause() {}
 func (r *ReturnClause) isClause() {}
+func (c *CreateClause) isClause() {}
 
-// func (c *CreateClause) isClause() {}
 // func (w *WhereClause) isClause() {}
 // func (a *AsClause) isClause() {}
 

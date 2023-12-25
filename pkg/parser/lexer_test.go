@@ -207,6 +207,41 @@ func TestLexer(t *testing.T) {
 				"",     // EOF
 			},
 		},
+		// TEST MATCH and CREATE
+		{
+			name:  "MATCH and CREATE",
+			input: "MATCH (k:Kind) CREATE (k2:Kind)",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				CREATE,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",     // MATCH
+				"",     // LPAREN
+				"k",    // IDENT
+				"",     // COLON
+				"Kind", // IDENT
+				"",     // RPAREN
+				"",     // CREATE
+				"",     // LPAREN
+				"k2",   // IDENT
+				"",     // COLON
+				"Kind", // IDENT
+				"",     // RPAREN
+				"",     // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {

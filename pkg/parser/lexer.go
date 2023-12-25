@@ -22,6 +22,8 @@ type Lexer struct {
 	definingProps  bool
 	definingReturn bool
 	definingSet    bool
+	definingCreate bool
+	definingMatch  bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -40,7 +42,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 
 	// Check if we are capturing a JSONPATH
 	if l.buf.tok == RETURN || l.buf.tok == SET ||
-		l.buf.tok == LBRACE || (l.buf.tok == COMMA && l.definingProps) ||
+		l.buf.tok == LBRACE && l.definingMatch || (l.buf.tok == COMMA && l.definingProps) ||
 		l.buf.tok == COMMA && l.definingReturn || l.buf.tok == COMMA && l.definingSet {
 		lval.strVal = ""
 		// Consume and ignore any whitespace
@@ -60,6 +62,26 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		l.buf.tok = ILLEGAL // Indicate that we've read a JSONPATH.
 		logDebug("Returning JSONPATH token with value:", lval.strVal)
 		return int(JSONPATH)
+		// Check if we are capturing a JSONDATA
+	} else if l.buf.tok == LBRACE && l.definingCreate {
+		// add a first '{', consume the string until we find a ')', and return JSONDATA token with the string as value
+		lval.strVal = "{"
+		// Consume and ignore any whitespace
+		ch := l.s.Peek()
+		// Capture the JSONDATA
+		for ch != ')' {
+			l.s.Next() // Consume the character
+			// ignore whitespace
+			if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+				lval.strVal += string(ch)
+			}
+			ch = l.s.Peek()
+		}
+
+		l.buf.tok = ILLEGAL // Indicate that we've read a JSONDATA.
+		l.definingCreate = false
+		logDebug("Returning JSONDATA token with value:", lval.strVal)
+		return int(JSONDATA)
 	}
 
 	// Handle normal tokens
@@ -72,18 +94,36 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		lit := l.s.TokenText()
 		if strings.ToUpper(lit) == "MATCH" {
 			logDebug("Returning MATCH token")
+			l.buf.tok = MATCH // Indicate that we've read a MATCH.
+			l.definingMatch = true
+			l.definingSet = false
+			l.definingCreate = false
+			l.definingReturn = false
 			return int(MATCH)
 		} else if strings.ToUpper(lit) == "SET" {
 			l.buf.tok = SET // Indicate that we've read a SET.
 			l.definingSet = true
+			l.definingCreate = false
+			l.definingMatch = false
+			l.definingReturn = false
 			logDebug("Returning SET token")
 			return int(SET)
 		} else if strings.ToUpper(lit) == "DELETE" {
 			logDebug("Returning SET token")
 			return int(DELETE)
+		} else if strings.ToUpper(lit) == "CREATE" {
+			logDebug("Returning CREATE token")
+			l.definingCreate = true
+			l.definingSet = false
+			l.definingMatch = false
+			l.definingReturn = false
+			return int(CREATE)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
 			l.definingReturn = true
+			l.definingSet = false
+			l.definingCreate = false
+			l.definingMatch = false
 			logDebug("Returning RETURN token")
 			return int(RETURN)
 		} else if strings.ToUpper(lit) == "TRUE" || strings.ToUpper(lit) == "FALSE" {

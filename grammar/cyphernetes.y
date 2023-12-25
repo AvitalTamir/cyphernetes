@@ -29,6 +29,7 @@ func debugLog(v ...interface{}) {
     matchClause            *MatchClause
     setClause              *SetClause
     deleteClause           *DeleteClause
+    createClause           *CreateClause
     returnClause           *ReturnClause
     properties             *Properties
     jsonPathValue          *Property
@@ -47,13 +48,15 @@ func debugLog(v ...interface{}) {
 %token <strVal> INT
 %token <strVal> BOOLEAN
 %token <strVal> STRING
-%token LPAREN RPAREN COLON MATCH SET DELETE RETURN EOF LBRACE RBRACE COMMA EQUALS
+%token <strVal> JSONDATA
+%token LPAREN RPAREN COLON MATCH SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
 %type<matchClause> MatchClause
 %type<setClause> SetClause
 %type<deleteClause> DeleteClause
+%type<createClause> CreateClause
 %type<returnClause> ReturnClause
 %type<nodePattern> NodePattern
 %type<strVal> IDENT
@@ -88,11 +91,29 @@ Expression:
     | MatchClause DeleteClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
     }
+    | CreateClause EOF {
+        result = &Expression{Clauses: []Clause{$1}}
+    }
+    | CreateClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | MatchClause CreateClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | MatchClause CreateClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$1, $2, $3}}
+    }
 ;
 
 MatchClause:
     MATCH NodeRelationshipList {
         $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships}
+    }
+;
+
+CreateClause:
+    CREATE NodeRelationshipList {
+        $$ = &CreateClause{Nodes: $2.Nodes, Relationships: $2.Relationships}
     }
 ;
 
@@ -178,6 +199,9 @@ NodePattern:
     LPAREN ResourceProperties RPAREN {
         $$ = &NodePattern{ResourceProperties: $2}
     }
+    | LPAREN IDENT RPAREN {
+        $$ = &NodePattern{&ResourceProperties{Name: $2, Kind: "", Properties: nil, JsonData: ""}}
+    }
 ;
 
 ReturnClause:
@@ -224,10 +248,13 @@ Relationship:
 
 ResourceProperties:
     IDENT COLON IDENT {
-        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: nil}
+        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: nil, JsonData: ""}
     }
     | IDENT COLON IDENT Properties  {
-        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: $4}
+        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: $4, JsonData: ""}
+    }
+    | IDENT COLON IDENT LBRACE JSONDATA {
+        $$ = &ResourceProperties{Name: $1, Kind: $3, Properties: nil, JsonData: $5}
     }
 ;
 
@@ -268,6 +295,9 @@ Value:
     | BOOLEAN {
         // Parse the boolean from the string
         $$ = strings.ToUpper($1) == "TRUE"
+    }
+    | JSONDATA {
+        $$ = $1
     }
 ;
 %%

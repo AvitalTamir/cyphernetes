@@ -550,3 +550,67 @@ func TestMatchDeleteExpression(t *testing.T) {
 		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
 	}
 }
+
+func TestMatchCreateExpression(t *testing.T) {
+	query := `MATCH (n:Node) CREATE (n)->(n2:Node)`
+	// Expected AST structure...
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+			},
+			&CreateClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "",
+						},
+					},
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n2",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{
+					{
+						Direction: Right,
+						LeftNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "n",
+								Kind: "",
+							},
+						},
+						RightNode: &NodePattern{
+							ResourceProperties: &ResourceProperties{
+								Name: "n2",
+								Kind: "Node",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Call the parser.
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}
