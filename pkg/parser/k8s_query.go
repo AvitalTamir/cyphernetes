@@ -264,67 +264,116 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				// If the node to be created matches neither KindA nor KindB in the relationship, then error out
 				var criteriaField string
 				var foreignCriteriaField string
+				var defaultPropFields []string
+				var foreignDefaultPropFields []string
 
 				if rule.KindA == targetGVR.Resource {
 					criteriaField = rule.MatchCriteria[0].FieldA
 					foreignCriteriaField = rule.MatchCriteria[0].FieldB
+
+					// for each default prop, push into defaultProps and foreignDefaultProps
+					for _, prop := range rule.MatchCriteria[0].DefaultProps {
+						defaultPropFields = append(defaultPropFields, prop.FieldA)
+						foreignDefaultPropFields = append(foreignDefaultPropFields, prop.FieldB)
+					}
+
 				} else if rule.KindA == foreignGVR.Resource {
 					criteriaField = rule.MatchCriteria[0].FieldB
 					foreignCriteriaField = rule.MatchCriteria[0].FieldA
+
+					// for each default prop, push into defaultProps and foreignDefaultProps
+					for _, prop := range rule.MatchCriteria[0].DefaultProps {
+						defaultPropFields = append(defaultPropFields, prop.FieldB)
+						foreignDefaultPropFields = append(foreignDefaultPropFields, prop.FieldA)
+					}
 				} else {
 					// error out
 					return nil, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
 				}
 
-				foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
-				// find the value of the right node's FieldB
-				foreignField := strings.TrimPrefix(foreignCriteriaField, "$.")
-				foreignPath := strings.Split(foreignField, ".")
-				var value interface{}
-				// Drill down to create nested map structure
-				currentForeignPart := foreignSpec
-				for _, part := range foreignPath {
-					if currentForeignPart[part] == nil {
-						// error out
-						return nil, fmt.Errorf("field %s not found in %s", foreignCriteriaField, foreignNode.ResourceProperties.Name)
-					}
-					// if this is the last part, assign the value
-					if part == foreignPath[len(foreignPath)-1] {
-						value = currentForeignPart[part]
-						break
-					}
-					// recurse into the path in the foreignSpec
-					currentForeignPart = currentForeignPart[part].(map[string]interface{})
-				}
-
-				// assign the value of the right node's FieldB to the left node's FieldA
-				// iterate over fieldB after splitting it on dot (make sure to remove the '$.' if they exist in the jsonPath)
-				// create the nested structure in the spec if it doesn't exist
-				// assign the value to the last part of the jsonPath
-
-				// remove the '$.' if they exist in the jsonPath
-				targetField := strings.TrimPrefix(criteriaField, "$.")
-				path := strings.Split(targetField, ".")
 				var resourceTemplate map[string]interface{}
-				err = json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
-				if err != nil {
-					fmt.Println("Error unmarshalling node JsonData: ", err)
-					return nil, err
-				} // Drill down to create nested map structure
-				currentPart := resourceTemplate
-				for i, part := range path {
-					if i == len(path)-1 {
-						// Last part: assign the result
-						currentPart[part] = value
-					} else {
-						// Intermediate parts: create nested maps
-						if currentPart[part] == nil {
-							currentPart[part] = make(map[string]interface{})
+				if node.ResourceProperties.JsonData != "" {
+					err = json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
+					if err != nil {
+						fmt.Println("Error unmarshalling node JsonData: ", err)
+						return nil, err
+					}
+				} else {
+					resourceTemplate = make(map[string]interface{})
+				}
+
+				foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
+
+				fields := append([]string{criteriaField}, defaultPropFields...)
+				foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
+
+				for i, jsonpath := range fields {
+					var value interface{}
+					if foreignFields[i] != "" {
+						foreignPath := strings.Split(strings.TrimPrefix(foreignFields[i], "$."), ".")
+
+						// Drill down to create nested map structure
+						currentForeignPart := foreignSpec
+						for _, part := range foreignPath {
+							if currentForeignPart[part] == nil {
+								// no default in foreign node, assign the relationship default if exists
+								value = rule.MatchCriteria[0].DefaultProps[i-1].Default
+								break
+							}
+							// if this is the last part, assign the value
+							if part == foreignPath[len(foreignPath)-1] {
+								value = currentForeignPart[part]
+								break
+							}
+							// recurse into the path in the foreignSpec if not an array
+							if _, ok := currentForeignPart[part].([]interface{}); !ok {
+								currentForeignPart = currentForeignPart[part].(map[string]interface{})
+							} else if strings.HasSuffix(part, "[]") {
+								part = strings.TrimSuffix(part, "[]")
+								// create the first element in an array
+								currentForeignPart[part] = []interface{}{}
+								currentForeignPart = currentForeignPart[part].([]interface{})[0].(map[string]interface{})
+							}
 						}
-						currentPart = currentPart[part].(map[string]interface{})
+					} else {
+						// no default in foreign node, assign the relationship default if exists
+						value = rule.MatchCriteria[0].DefaultProps[i-1].Default
+					}
+					// assign the value of the right node's FieldB to the left node's FieldA
+					// iterate over fieldB after splitting it on dot (make sure to remove the '$.' if they exist in the jsonPath)
+					// create the nested structure in the spec if it doesn't exist
+					// assign the value to the last part of the jsonPath
+
+					if value != nil && value != "" {
+						targetField := strings.TrimPrefix(jsonpath, "$.")
+						path := strings.Split(targetField, ".")
+						currentPart := resourceTemplate
+						for j, part := range path {
+							if j == len(path)-1 {
+								// Last part: assign the result
+								currentPart[part] = value
+							} else {
+								// Intermediate parts: create nested maps
+								if currentPart[part] == nil {
+									// if part ends with '[]', create an array and recurse into the first element
+									if strings.HasSuffix(part, "[]") {
+										part = strings.TrimSuffix(part, "[]")
+										currentPart[part] = []interface{}{}
+										currentPart[part] = append(currentPart[part].([]interface{}), make(map[string]interface{}))
+										currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
+									} else {
+										currentPart[part] = make(map[string]interface{})
+										currentPart = currentPart[part].(map[string]interface{})
+									}
+								} else {
+									currentPart = currentPart[part].(map[string]interface{})
+								}
+							}
+						}
 					}
 				}
-				name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name)
+
+				name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
 				q.createK8sResource(node, resourceTemplate, name)
 
 			}
@@ -353,7 +402,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 						return nil, err
 					}
 
-					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name)
+					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
 					q.createK8sResource(node, resourceTemplate, name)
 				}
@@ -407,24 +456,20 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	return k8sResources, nil
 }
 
-func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string) string {
-	// get the name of the resource from the template
-	// if the template has a metadata.name field or name field, use it
-	// otherwise, use the resourceName
-	name, ok := resourceTemplate["name"].(string)
-	if !ok {
-		metadata, ok := resourceTemplate["metadata"].(map[string]interface{})
-		if !ok {
-			return resourceName
-		}
-		name, ok = metadata["name"].(string)
-		if !ok {
-			return resourceName
-		}
-	}
-
-	if name == "" {
-		return resourceName
+func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {
+	// We'll use these in order of preference:
+	// 1. The .name or .metadata.name specified in the resource template
+	// 2. The name of the kubernetes resource represented by the foreign node
+	// 3. The name of the node
+	name := ""
+	if resourceTemplate["name"] != nil {
+		name = resourceTemplate["name"].(string)
+	} else if resourceTemplate["metadata"] != nil && resourceTemplate["metadata"].(map[string]interface{})["name"] != nil {
+		name = resourceTemplate["metadata"].(map[string]interface{})["name"].(string)
+	} else if foreignName != "" {
+		name = resultMap[foreignName].([]map[string]interface{})[0]["metadata"].(map[string]interface{})["name"].(string)
+	} else {
+		name = resourceName
 	}
 	return name
 }

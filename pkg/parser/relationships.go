@@ -45,12 +45,20 @@ type MatchCriterion struct {
 	FieldA         string
 	FieldB         string
 	ComparisonType ComparisonType
+	DefaultProps   []DefaultProp
+}
+
+type DefaultProp struct {
+	FieldA  string
+	FieldB  string
+	Default interface{}
 }
 
 type RelationshipRule struct {
-	KindA         string
-	KindB         string
-	Relationship  RelationshipType
+	KindA        string
+	KindB        string
+	Relationship RelationshipType
+	// Currently only supports one match criterion but can be extended to support multiple
 	MatchCriteria []MatchCriterion
 }
 
@@ -89,6 +97,13 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "metadata.labels",
 				FieldB:         "spec.selector",
 				ComparisonType: HasLabels,
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "",
+						FieldB:  "$.spec.ports[].port",
+						Default: 80,
+					},
+				},
 			},
 		},
 	},
@@ -149,6 +164,13 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
 				ComparisonType: HasLabels,
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "",
+						FieldB:  "$.spec.ports[].port",
+						Default: 80,
+					},
+				},
 			},
 		},
 	},
@@ -161,6 +183,13 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
 				ComparisonType: HasLabels,
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "",
+						FieldB:  "$.spec.ports[].port",
+						Default: 80,
+					},
+				},
 			},
 		},
 	},
@@ -173,6 +202,13 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
 				ComparisonType: HasLabels,
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "",
+						FieldB:  "$.spec.ports[].port",
+						Default: 80,
+					},
+				},
 			},
 		},
 	},
@@ -182,8 +218,15 @@ var relationshipRules = []RelationshipRule{
 		Relationship: ServiceExposeDeployment,
 		MatchCriteria: []MatchCriterion{
 			{
-				FieldA:         "$.spec.template.metadata.labels",
-				FieldB:         "$.spec.selector",
+				FieldA: "$.spec.template.metadata.labels",
+				FieldB: "$.spec.selector",
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "",
+						FieldB:  "$.spec.ports[].port",
+						Default: 80,
+					},
+				},
 				ComparisonType: HasLabels,
 			},
 		},
