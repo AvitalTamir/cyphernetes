@@ -9,6 +9,8 @@ import (
 
 	"github.com/oliveagle/jsonpath"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -34,6 +36,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			for _, rel := range c.Relationships {
 				// Determine relationship type and fetch related resources
 				var relType RelationshipType
+				if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
+					// error out
+					return nil, fmt.Errorf("must specify kind for all nodes in match clause")
+				}
 				leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
 				if err != nil {
 					fmt.Println("Error finding API resource: ", err)
@@ -103,6 +109,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 			// Iterate over the nodes in the match clause.
 			for _, node := range c.Nodes {
+				if node.ResourceProperties.Kind == "" {
+					// error out
+					return nil, fmt.Errorf("must specify kind for all nodes in match clause")
+				}
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
 				if resultCache[q.resourcePropertyName(node)] == nil {
@@ -182,6 +192,173 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				q.deleteK8sResources(nodeId)
 			}
 
+		case *CreateClause:
+			// Same as in Match clauses, we'll first look at relationships, then nodes
+			// we'll iterates over the replationships then nodes, and from each we'll extract a spec and create the resource
+			// in relationships, we'll need to find the matching node in the nodes list, we'll then construct the spec from the node properties and from the relevant part of the spec that's defined in the relationship
+			// in nodes, we'll just construct the spec from the node properties
+
+			// Iterate over the relationships in the create clause.
+			// Process Relationships
+			for _, rel := range c.Relationships {
+				// Determine which (if any) of the nodes in the relationship have already been fetched in a match clause, and which are new creations
+				var node *NodePattern
+				var foreignNode *NodePattern
+
+				// If both nodes exist in the match clause, error out
+				if resultMap[rel.LeftNode.ResourceProperties.Name] != nil && resultMap[rel.RightNode.ResourceProperties.Name] != nil {
+					return nil, fmt.Errorf("both nodes '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+				}
+
+				// TODO: create both nodes and determine the spec from the relationship instead of this:
+				// If neither node exists in the match clause, error out
+				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil && resultMap[rel.RightNode.ResourceProperties.Name] == nil {
+					return nil, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+				}
+
+				// find out whice node exists in the match clause, then use it to construct the spec according to the relationship
+				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil {
+					node = rel.LeftNode
+					foreignNode = rel.RightNode
+				} else {
+					node = rel.RightNode
+					foreignNode = rel.LeftNode
+				}
+
+				// The foreign node is currently only a name reference, we'll need to find the matching node in the result map
+				foreignNode.ResourceProperties.Kind = resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]["kind"].(string)
+
+				var relType RelationshipType
+				targetGVR, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
+				if err != nil {
+					fmt.Println("Error finding API resource: ", err)
+					return nil, err
+				}
+				foreignGVR, err := FindGVR(q.Clientset, foreignNode.ResourceProperties.Kind)
+				if err != nil {
+					fmt.Println("Error finding API resource: ", err)
+					return nil, err
+				}
+
+				for _, resourceRelationship := range relationshipRules {
+					if (strings.EqualFold(targetGVR.Resource, resourceRelationship.KindA) && strings.EqualFold(foreignGVR.Resource, resourceRelationship.KindB)) ||
+						(strings.EqualFold(foreignGVR.Resource, resourceRelationship.KindA) && strings.EqualFold(targetGVR.Resource, resourceRelationship.KindB)) {
+						relType = resourceRelationship.Relationship
+					}
+				}
+
+				if relType == "" {
+					// no relationship type found, error out
+					return nil, fmt.Errorf("relationship type not found between %s and %s", targetGVR.Resource, foreignGVR.Resource)
+				}
+
+				rule := findRuleByRelationshipType(relType)
+				if err != nil {
+					fmt.Println("Error determining relationship type: ", err)
+					return nil, err
+				}
+
+				// Now according to which is the node that needs to be created, we'll construct the spec from the node properties and from the relevant part of the spec that's defined in the relationship
+				// If the node to be created matches KindA in the relationship, then it's spec's nested structure described in the jsonPath in FieldA will have the value of the other node's FieldB
+				// If the node to be created matches KindB in the relationship, then it's spec's nested structure described in the jsonPath in FieldB will have the value of the other node's FieldA
+				// If the node to be created matches neither KindA nor KindB in the relationship, then error out
+				var criteriaField string
+				var foreignCriteriaField string
+
+				if rule.KindA == targetGVR.Resource {
+					criteriaField = rule.MatchCriteria[0].FieldA
+					foreignCriteriaField = rule.MatchCriteria[0].FieldB
+				} else if rule.KindA == foreignGVR.Resource {
+					criteriaField = rule.MatchCriteria[0].FieldB
+					foreignCriteriaField = rule.MatchCriteria[0].FieldA
+				} else {
+					// error out
+					return nil, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
+				}
+
+				foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
+				// find the value of the right node's FieldB
+				foreignField := strings.TrimPrefix(foreignCriteriaField, "$.")
+				foreignPath := strings.Split(foreignField, ".")
+				var value interface{}
+				// Drill down to create nested map structure
+				currentForeignPart := foreignSpec
+				for _, part := range foreignPath {
+					if currentForeignPart[part] == nil {
+						// error out
+						return nil, fmt.Errorf("field %s not found in %s", foreignCriteriaField, foreignNode.ResourceProperties.Name)
+					}
+					// if this is the last part, assign the value
+					if part == foreignPath[len(foreignPath)-1] {
+						value = currentForeignPart[part]
+						break
+					}
+					// recurse into the path in the foreignSpec
+					currentForeignPart = currentForeignPart[part].(map[string]interface{})
+				}
+
+				// assign the value of the right node's FieldB to the left node's FieldA
+				// iterate over fieldB after splitting it on dot (make sure to remove the '$.' if they exist in the jsonPath)
+				// create the nested structure in the spec if it doesn't exist
+				// assign the value to the last part of the jsonPath
+
+				// remove the '$.' if they exist in the jsonPath
+				targetField := strings.TrimPrefix(criteriaField, "$.")
+				path := strings.Split(targetField, ".")
+				var resourceTemplate map[string]interface{}
+				err = json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
+				if err != nil {
+					fmt.Println("Error unmarshalling node JsonData: ", err)
+					return nil, err
+				} // Drill down to create nested map structure
+				currentPart := resourceTemplate
+				for i, part := range path {
+					if i == len(path)-1 {
+						// Last part: assign the result
+						currentPart[part] = value
+					} else {
+						// Intermediate parts: create nested maps
+						if currentPart[part] == nil {
+							currentPart[part] = make(map[string]interface{})
+						}
+						currentPart = currentPart[part].(map[string]interface{})
+					}
+				}
+				name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name)
+				q.createK8sResource(node, resourceTemplate, name)
+
+			}
+			// Iterate over the nodes in the create clause.
+			for _, node := range c.Nodes {
+				// check if node exists in a relationship in the clause, if so, ignore it
+				ignoreNode := false
+				for _, rel := range c.Relationships {
+					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
+						ignoreNode = true
+						break
+					}
+				}
+
+				if !ignoreNode {
+					// check if the node has already been fetched, if so, error out
+					if resultMap[node.ResourceProperties.Name] != nil {
+						return nil, fmt.Errorf("can't create: node '%s' already exists in match clause", node.ResourceProperties.Name)
+					}
+
+					// unmarsall the node JsonData into a map
+					var resourceTemplate map[string]interface{}
+					err := json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
+					if err != nil {
+						fmt.Println("Error unmarshalling node JsonData: ", err)
+						return nil, err
+					}
+
+					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name)
+					// create the resource
+					q.createK8sResource(node, resourceTemplate, name)
+				}
+			}
+
 		case *ReturnClause:
 			resultMapJson, err := json.Marshal(resultMap)
 			if err != nil {
@@ -228,6 +405,79 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
 	return k8sResources, nil
+}
+
+func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string) string {
+	// get the name of the resource from the template
+	// if the template has a metadata.name field or name field, use it
+	// otherwise, use the resourceName
+	name, ok := resourceTemplate["name"].(string)
+	if !ok {
+		metadata, ok := resourceTemplate["metadata"].(map[string]interface{})
+		if !ok {
+			return resourceName
+		}
+		name, ok = metadata["name"].(string)
+		if !ok {
+			return resourceName
+		}
+	}
+
+	if name == "" {
+		return resourceName
+	}
+	return name
+}
+
+func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string]interface{}, name string) error {
+	// Look up the resource kind and name in the cache
+	gvr, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
+	if err != nil {
+		fmt.Printf("Error finding API resource: %v\n", err)
+		return err
+	}
+	kind := q.getSingularNameForGVR(gvr)
+	if kind == "" {
+		fmt.Printf("Error finding singular name for resource: %v\n", err)
+		return err
+	}
+
+	// Construct the resource from the spec
+	//resource := make(map[string]interface{})
+	resource := template
+	resource["apiVersion"] = gvr.GroupVersion().String()
+	resource["kind"] = kind
+	resource["metadata"] = make(map[string]interface{})
+	resource["metadata"].(map[string]interface{})["name"] = name
+	resource["metadata"].(map[string]interface{})["namespace"] = Namespace
+
+	// Create the resource
+	_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Create(context.Background(), &unstructured.Unstructured{Object: resource}, metav1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("Error creating resource: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (q *QueryExecutor) getSingularNameForGVR(gvr schema.GroupVersionResource) string {
+	// Get the singular name for the resource
+	// This is a workaround for the fact that the k8s API doesn't provide a way to get the singular name
+	// See
+	apiResourceList, err := q.Clientset.DiscoveryClient.ServerPreferredResources()
+	if err != nil {
+		panic(err.Error())
+	}
+	for _, resourceGroup := range apiResourceList {
+		for _, resource := range resourceGroup.APIResources {
+			if resource.Name == gvr.Resource {
+				return resource.Kind
+			}
+		}
+	}
+
+	return ""
 }
 
 func (q *QueryExecutor) deleteK8sResources(nodeId string) error {

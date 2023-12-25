@@ -150,6 +150,7 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 
 var GvrCache = make(map[string]schema.GroupVersionResource)
 var GvrCacheMutex sync.RWMutex
+var apiResourceListCache []*metav1.APIResourceList
 
 func FindGVR(clientset *kubernetes.Clientset, resourceId string) (schema.GroupVersionResource, error) {
 	normalizedIdentifier := strings.ToLower(resourceId)
@@ -164,12 +165,15 @@ func FindGVR(clientset *kubernetes.Clientset, resourceId string) (schema.GroupVe
 
 	// GVR not in cache, find it using discovery
 	discoveryClient := clientset.Discovery()
-	apiResourceList, err := discoveryClient.ServerPreferredResources()
-	if err != nil {
-		return schema.GroupVersionResource{}, err
+	if apiResourceListCache == nil {
+		apiResourceList, err := discoveryClient.ServerPreferredResources()
+		if err != nil {
+			return schema.GroupVersionResource{}, err
+		}
+		apiResourceListCache = apiResourceList
 	}
 
-	for _, apiResource := range apiResourceList {
+	for _, apiResource := range apiResourceListCache {
 		for _, resource := range apiResource.APIResources {
 			if strings.EqualFold(resource.Name, normalizedIdentifier) ||
 				strings.EqualFold(resource.Kind, resourceId) ||
