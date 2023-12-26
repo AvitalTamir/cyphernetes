@@ -121,9 +121,6 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
 				}
 			}
-			// case *CreateClause:
-			// 	// Execute a Kubernetes create operation based on the CreateClause.
-			// 	// ...
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
 			// ...
@@ -354,7 +351,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 								currentPart[part] = value
 							} else {
 								// Intermediate parts: create nested maps
-								if currentPart[part] == nil {
+								if currentPart[part] == nil && currentPart[strings.TrimSuffix(part, "[]")] == nil {
 									// if part ends with '[]', create an array and recurse into the first element
 									if strings.HasSuffix(part, "[]") {
 										part = strings.TrimSuffix(part, "[]")
@@ -366,7 +363,13 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 										currentPart = currentPart[part].(map[string]interface{})
 									}
 								} else {
-									currentPart = currentPart[part].(map[string]interface{})
+									if strings.HasSuffix(part, "[]") {
+										part = strings.TrimSuffix(part, "[]")
+										// if the part is an array, recurse into the first element
+										currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
+									} else {
+										currentPart = currentPart[part].(map[string]interface{})
+									}
 								}
 							}
 						}
