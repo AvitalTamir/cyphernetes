@@ -131,8 +131,11 @@ Deletes the "nginx" Deployment.
 ### Creating Resources
 
 ```graphql
+# Notice the payload inside CREATE caluse nodes must be valid JSON (quotes key names)
+# This will be improved in a future version
+
 # Single resource
-CREATE (d:Deployment {name: "nginx", replicas: 3, image: "nginx:latest"})
+CREATE (d:Deployment {"name": "nginx", "replicas": 3, "image": "nginx:latest"})
 
 # Create by relationship
 MATCH (d:Deployment {name: "nginx"}) CREATE (d)->(s:Service)
