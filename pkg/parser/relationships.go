@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strings"
+
 	"github.com/oliveagle/jsonpath"
 )
 
@@ -149,9 +151,26 @@ var relationshipRules = []RelationshipRule{
 		Relationship: Route,
 		MatchCriteria: []MatchCriterion{
 			{
-				FieldA:         "$.spec.rules.http.paths.backend.service.name",
+				FieldA:         "$.spec.rules[].http.paths[].backend.service.name",
 				FieldB:         "$.metadata.name",
 				ComparisonType: ExactMatch,
+				DefaultProps: []DefaultProp{
+					{
+						FieldA:  "$.spec.rules[].http.paths[].pathType",
+						FieldB:  "",
+						Default: "ImplementationSpecific",
+					},
+					{
+						FieldA:  "$.spec.rules[].http.paths[].path",
+						FieldB:  "",
+						Default: "/",
+					},
+					{
+						FieldA:  "$.spec.rules[].http.paths[].backend.service.port.number",
+						FieldB:  "",
+						Default: 80,
+					},
+				},
 			},
 		},
 	},
@@ -278,12 +297,12 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 			// use jsonpath to extract the fields
 
 			// extract the fields
-			fieldsA, err := jsonpath.JsonPathLookup(resourceA, criterion.FieldA)
+			fieldsA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
 			if err != nil {
 				logDebug("Error extracting fieldA: ", err)
 				return false
 			}
-			fieldsB, err := jsonpath.JsonPathLookup(resourceB, criterion.FieldB)
+			fieldsB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
 			if err != nil {
 				logDebug("Error extracting fieldB: ", err)
 				return false
