@@ -131,7 +131,7 @@ Deletes the "nginx" Deployment.
 ### Creating Resources
 
 ```graphql
-# Notice the payload inside CREATE caluse nodes must be valid JSON (quotes key names)
+# Notice the payload inside CREATE caluse nodes must be valid JSON (quotes surround key names)
 # This will be improved in a future version
 
 # Single resource
