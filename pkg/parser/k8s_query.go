@@ -195,14 +195,18 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 			// Iterate over the relationships in the create clause.
 			// Process Relationships
-			for _, rel := range c.Relationships {
+			for idx, rel := range c.Relationships {
 				// Determine which (if any) of the nodes in the relationship have already been fetched in a match clause, and which are new creations
 				var node *NodePattern
 				var foreignNode *NodePattern
 
 				// If both nodes exist in the match clause, error out
 				if resultMap[rel.LeftNode.ResourceProperties.Name] != nil && resultMap[rel.RightNode.ResourceProperties.Name] != nil {
-					return nil, fmt.Errorf("both nodes '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+					if (node) != nil {
+						return nil, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+					} else {
+						return nil, fmt.Errorf("can't match and create node in the same expression")
+					}
 				}
 
 				// TODO: create both nodes and determine the spec from the relationship instead of this:
@@ -295,86 +299,89 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					resourceTemplate = make(map[string]interface{})
 				}
 
-				foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
+				// loop over the resources array in the resultMap for the foreign node and create the resource
+				for _, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
+					var name string
+					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[idx]
 
-				fields := append([]string{criteriaField}, defaultPropFields...)
-				foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
+					fields := append([]string{criteriaField}, defaultPropFields...)
+					foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
 
-				for i, jsonpath := range fields {
-					var value interface{}
-					if foreignFields[i] != "" {
-						foreignPath := strings.Split(strings.TrimPrefix(foreignFields[i], "$."), ".")
+					for i, jsonpath := range fields {
+						var value interface{}
+						if foreignFields[i] != "" {
+							foreignPath := strings.Split(strings.TrimPrefix(foreignFields[i], "$."), ".")
 
-						// Drill down to create nested map structure
-						currentForeignPart := foreignSpec
-						for _, part := range foreignPath {
-							if currentForeignPart[part] == nil {
-								// no default in foreign node, assign the relationship default if exists
-								value = rule.MatchCriteria[0].DefaultProps[i-1].Default
-								break
+							// Drill down to create nested map structure
+							currentForeignPart := foreignSpec
+							for _, part := range foreignPath {
+								if currentForeignPart[part] == nil {
+									// no default in foreign node, assign the relationship default if exists
+									value = rule.MatchCriteria[0].DefaultProps[i-1].Default
+									break
+								}
+								// if this is the last part, assign the value
+								if part == foreignPath[len(foreignPath)-1] {
+									value = currentForeignPart[part]
+									break
+								}
+								// recurse into the path in the foreignSpec if not an array
+								if _, ok := currentForeignPart[part].([]interface{}); !ok {
+									currentForeignPart = currentForeignPart[part].(map[string]interface{})
+								} else if strings.HasSuffix(part, "[]") {
+									part = strings.TrimSuffix(part, "[]")
+									// create the first element in an array
+									currentForeignPart[part] = []interface{}{}
+									currentForeignPart = currentForeignPart[part].([]interface{})[idx].(map[string]interface{})
+								}
 							}
-							// if this is the last part, assign the value
-							if part == foreignPath[len(foreignPath)-1] {
-								value = currentForeignPart[part]
-								break
-							}
-							// recurse into the path in the foreignSpec if not an array
-							if _, ok := currentForeignPart[part].([]interface{}); !ok {
-								currentForeignPart = currentForeignPart[part].(map[string]interface{})
-							} else if strings.HasSuffix(part, "[]") {
-								part = strings.TrimSuffix(part, "[]")
-								// create the first element in an array
-								currentForeignPart[part] = []interface{}{}
-								currentForeignPart = currentForeignPart[part].([]interface{})[0].(map[string]interface{})
-							}
+						} else {
+							// no default in foreign node, assign the relationship default if exists
+							value = rule.MatchCriteria[0].DefaultProps[i-1].Default
 						}
-					} else {
-						// no default in foreign node, assign the relationship default if exists
-						value = rule.MatchCriteria[0].DefaultProps[i-1].Default
-					}
-					// assign the value of the right node's FieldB to the left node's FieldA
-					// iterate over fieldB after splitting it on dot (make sure to remove the '$.' if they exist in the jsonPath)
-					// create the nested structure in the spec if it doesn't exist
-					// assign the value to the last part of the jsonPath
+						// assign the value of the right node's FieldB to the left node's FieldA
+						// iterate over fieldB after splitting it on dot (make sure to remove the '$.' if they exist in the jsonPath)
+						// create the nested structure in the spec if it doesn't exist
+						// assign the value to the last part of the jsonPath
 
-					if value != nil && value != "" {
-						targetField := strings.TrimPrefix(jsonpath, "$.")
-						path := strings.Split(targetField, ".")
-						currentPart := resourceTemplate
-						for j, part := range path {
-							if j == len(path)-1 {
-								// Last part: assign the result
-								currentPart[part] = value
-							} else {
-								// Intermediate parts: create nested maps
-								if currentPart[part] == nil && currentPart[strings.TrimSuffix(part, "[]")] == nil {
-									// if part ends with '[]', create an array and recurse into the first element
-									if strings.HasSuffix(part, "[]") {
-										part = strings.TrimSuffix(part, "[]")
-										currentPart[part] = []interface{}{}
-										currentPart[part] = append(currentPart[part].([]interface{}), make(map[string]interface{}))
-										currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
-									} else {
-										currentPart[part] = make(map[string]interface{})
-										currentPart = currentPart[part].(map[string]interface{})
-									}
+						if value != nil && value != "" {
+							targetField := strings.TrimPrefix(jsonpath, "$.")
+							path := strings.Split(targetField, ".")
+							currentPart := resourceTemplate
+							for j, part := range path {
+								if j == len(path)-1 {
+									// Last part: assign the result
+									currentPart[part] = value
 								} else {
-									if strings.HasSuffix(part, "[]") {
-										part = strings.TrimSuffix(part, "[]")
-										// if the part is an array, recurse into the first element
-										currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
+									// Intermediate parts: create nested maps
+									if currentPart[part] == nil && currentPart[strings.TrimSuffix(part, "[]")] == nil {
+										// if part ends with '[]', create an array and recurse into the first element
+										if strings.HasSuffix(part, "[]") {
+											part = strings.TrimSuffix(part, "[]")
+											currentPart[part] = []interface{}{}
+											currentPart[part] = append(currentPart[part].([]interface{}), make(map[string]interface{}))
+											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+										} else {
+											currentPart[part] = make(map[string]interface{})
+											currentPart = currentPart[part].(map[string]interface{})
+										}
 									} else {
-										currentPart = currentPart[part].(map[string]interface{})
+										if strings.HasSuffix(part, "[]") {
+											part = strings.TrimSuffix(part, "[]")
+											// if the part is an array, recurse into the first element
+											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+										} else {
+											currentPart = currentPart[part].(map[string]interface{})
+										}
 									}
 								}
 							}
 						}
 					}
+
+					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
+					q.createK8sResource(node, resourceTemplate, name)
 				}
-
-				name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
-				q.createK8sResource(node, resourceTemplate, name)
-
 			}
 			// Iterate over the nodes in the create clause.
 			for _, node := range c.Nodes {
@@ -460,12 +467,12 @@ func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceN
 	// 2. The name of the kubernetes resource represented by the foreign node
 	// 3. The name of the node
 	name := ""
-	if resourceTemplate["name"] != nil {
+	if foreignName != "" {
+		name = foreignName
+	} else if resourceTemplate["name"] != nil {
 		name = resourceTemplate["name"].(string)
 	} else if resourceTemplate["metadata"] != nil && resourceTemplate["metadata"].(map[string]interface{})["name"] != nil {
 		name = resourceTemplate["metadata"].(map[string]interface{})["name"].(string)
-	} else if foreignName != "" {
-		name = resultMap[foreignName].([]map[string]interface{})[0]["metadata"].(map[string]interface{})["name"].(string)
 	} else {
 		name = resourceName
 	}
@@ -535,11 +542,10 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 		if err != nil {
 			return fmt.Errorf("error deleting resource >> %v", err)
 		}
-
-		// remove the resource from the result map
-		delete(resultMap, nodeId)
 	}
 
+	// remove the resource from the result map
+	delete(resultMap, nodeId)
 	return nil
 }
 
