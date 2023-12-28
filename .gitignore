@@ -26,3 +26,4 @@ dist/
 
 __debug*
 y.output
+.DS_Store
