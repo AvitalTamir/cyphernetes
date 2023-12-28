@@ -69,7 +69,7 @@ func getCurrentContext() (string, error) {
 type syntaxHighlighter struct{}
 
 var (
-	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|set|delete|create)\b`)
+	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|where|set|delete|create)\b`)
 	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
 	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)

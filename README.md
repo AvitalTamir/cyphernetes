@@ -24,7 +24,7 @@ The project it still at an early stage. All basic CRUD functionality is there,
 but much more testing and wiring between resource kinds is still left to do and the Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
 
-* WHERE and AS clauses
+* "AS" clauses (`RETURN x AS y`)
 * The graph model of relationships between common Kubernetes resources is in very early stages
 
 See the [project roadmap](https://github.com/AvitalTamir/cyphernetes/blob/main/ROADMAP.md) for more detailed information on what's still left to do.

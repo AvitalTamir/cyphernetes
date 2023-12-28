@@ -120,7 +120,46 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				} else if resultMap[node.ResourceProperties.Name] == nil {
 					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
 				}
+
+				// Finally, we'll iterate over the ExtraFilters and filter the resultMap
+				for _, filter := range c.ExtraFilters {
+					// The first part of the key is the node name
+					resultMapKey := strings.Split(filter.Key, ".")[0]
+					if resultMap[resultMapKey] == nil {
+						return nil, fmt.Errorf("node identifier %s not found in where clause", resultMapKey)
+					} else if resultMap[resultMapKey] == node.ResourceProperties.Name {
+						// The rest of the key is the JSONPath
+						path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
+						// Ensure the JSONPath starts with '$'
+						if !strings.HasPrefix(path, "$") {
+							path = "$." + path
+						}
+
+						// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
+						removedCount := 0
+						for j, resource := range resultMap[node.ResourceProperties.Name].([]map[string]interface{}) {
+							// Drill down to create nested map structure
+							result, err := jsonpath.JsonPathLookup(resource, path)
+							if err != nil {
+								logDebug("Path not found:", filter.Key)
+								// Remove the resource at index j from the slice
+								resultMap[node.ResourceProperties.Name] = append(resultMap[node.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[node.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
+								removedCount++
+							}
+							// convert the result and the value to strings and compare them
+							resultStr := fmt.Sprintf("%v", result)
+							valueStr := fmt.Sprintf("%v", filter.Value)
+
+							if resultStr != valueStr {
+								// remove the resource from the slice
+								resultMap[node.ResourceProperties.Name] = append(resultMap[node.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[node.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
+								removedCount++
+							}
+						}
+					}
+				}
 			}
+
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
 			// ...

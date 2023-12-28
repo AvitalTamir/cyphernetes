@@ -70,7 +70,7 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			// Handle other autocompletion cases (like keywords)
 
 			// Keywords
-			keywords := []string{"match", "return", "set", "delete", "create"} //, "as", "where"}
+			keywords := []string{"match", "where", "return", "set", "delete", "create"} //, "as"}
 
 			for _, k := range keywords {
 				if strings.HasPrefix(k, prefix) {
@@ -151,7 +151,7 @@ func getResourceKinds(identifier string) []string {
 
 func isJSONPathContext(line string, pos int, lastWord string) bool {
 	// Regular expression to find the position of "RETURN" and any JSONPaths after it
-	regex := regexp.MustCompile(`(?i)(return|set)(\s+.*)(,|$)`)
+	regex := regexp.MustCompile(`(?i)(return|set|where)(\s+.*)(,|$)`)
 	matches := regex.FindAllStringSubmatchIndex(line, -1)
 	for _, match := range matches {
 		wordRegex := regexp.MustCompile(`\w+\.|\$\.\w+\.|\$\.\w+\.(\w)|\w+\.(\w+)`)

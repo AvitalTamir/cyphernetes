@@ -24,6 +24,7 @@ type Lexer struct {
 	definingSet    bool
 	definingCreate bool
 	definingMatch  bool
+	definingWhere  bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -41,9 +42,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	}
 
 	// Check if we are capturing a JSONPATH
-	if l.buf.tok == RETURN || l.buf.tok == SET ||
+	if l.buf.tok == RETURN || l.buf.tok == SET || l.buf.tok == WHERE ||
 		l.buf.tok == LBRACE && l.definingMatch || (l.buf.tok == COMMA && l.definingProps) ||
-		l.buf.tok == COMMA && l.definingReturn || l.buf.tok == COMMA && l.definingSet {
+		l.buf.tok == COMMA && l.definingReturn || l.buf.tok == COMMA && l.definingSet || l.buf.tok == COMMA && l.definingWhere {
 		lval.strVal = ""
 		// Consume and ignore any whitespace
 		ch := l.s.Peek()
@@ -99,6 +100,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingSet = false
 			l.definingCreate = false
 			l.definingReturn = false
+			l.definingWhere = false
 			return int(MATCH)
 		} else if strings.ToUpper(lit) == "SET" {
 			l.buf.tok = SET // Indicate that we've read a SET.
@@ -106,6 +108,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingCreate = false
 			l.definingMatch = false
 			l.definingReturn = false
+			l.definingWhere = false
 			logDebug("Returning SET token")
 			return int(SET)
 		} else if strings.ToUpper(lit) == "DELETE" {
@@ -117,6 +120,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingSet = false
 			l.definingMatch = false
 			l.definingReturn = false
+			l.definingWhere = false
 			return int(CREATE)
 		} else if strings.ToUpper(lit) == "RETURN" {
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
@@ -124,8 +128,18 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingSet = false
 			l.definingCreate = false
 			l.definingMatch = false
+			l.definingWhere = false
 			logDebug("Returning RETURN token")
 			return int(RETURN)
+		} else if strings.ToUpper(lit) == "WHERE" {
+			logDebug("Returning WHERE token")
+			l.definingWhere = true
+			l.definingReturn = false
+			l.definingSet = false
+			l.definingCreate = false
+			l.definingMatch = false
+			l.buf.tok = WHERE // Indicate that we've read a WHERE.
+			return int(WHERE)
 		} else if strings.ToUpper(lit) == "TRUE" || strings.ToUpper(lit) == "FALSE" {
 			lval.strVal = l.s.TokenText()
 			logDebug("Returning BOOLEAN token with value:", lval.strVal)

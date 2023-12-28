@@ -49,7 +49,7 @@ func debugLog(v ...interface{}) {
 %token <strVal> BOOLEAN
 %token <strVal> STRING
 %token <strVal> JSONDATA
-%token LPAREN RPAREN COLON MATCH SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS
+%token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
@@ -107,7 +107,10 @@ Expression:
 
 MatchClause:
     MATCH NodeRelationshipList {
-        $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships}
+        $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships, ExtraFilters: nil}
+    }
+    | MATCH NodeRelationshipList WHERE KeyValuePairs {
+        $$ = &MatchClause{Nodes: $2.Nodes, Relationships: $2.Relationships, ExtraFilters: $4}
     }
 ;
 

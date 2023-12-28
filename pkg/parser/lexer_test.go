@@ -242,6 +242,41 @@ func TestLexer(t *testing.T) {
 				"",     // EOF
 			},
 		},
+		// TEST MATCH WHERE RETURN
+		{
+			name:  "MATCH WHERE RETURN",
+			input: "MATCH (k:Kind) WHERE k.name = \"test\" RETURN k.name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				EQUALS,
+				STRING,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",         // MATCH
+				"",         // LPAREN
+				"k",        // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // RPAREN
+				"",         // WHERE
+				"k.name",   // JSONPATH
+				"",         // EQUALS
+				"\"test\"", // STRING
+				"",         // RETURN
+				"k.name",   // JSONPATH
+				"",         // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {
