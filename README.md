@@ -21,7 +21,7 @@ https://github.com/AvitalTamir/cyphernetes/assets/83203533/22215470-6d84-452a-b3
 Kubernetes management often involves dealing with complex and verbose command-line instructions. Cyphernetes simplifies this complexity by introducing a declarative query language that can express these instructions in a more readable and concise form. By leveraging a query language similar to Cypher, users can efficiently perform CRUD operations on Kubernetes resources, visualize resource connections, and manage their Kubernetes clusters with greater ease and flexibility.
 
 The project it still at an early stage. All basic CRUD functionality is there,
-however much more of the testing and wiring between reaource kinds is still left to do and the Cypher-like grammar implementation is incomplete.
+but much more testing and wiring between resource kinds is still left to do and the Cypher-like grammar implementation is incomplete.
 A high-level list of what's still missing:
 
 * WHERE and AS clauses
