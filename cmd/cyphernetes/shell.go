@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
@@ -22,6 +23,7 @@ var ShellCmd = &cobra.Command{
 
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
+var disableColorJsonOutput bool = false
 
 func filterInput(r rune) (rune, bool) {
 	switch r {
@@ -180,21 +182,26 @@ func runShell(cmd *cobra.Command, args []string) {
 				printQueryExecutionTime = true
 			}
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
-		} else if input == "\\p" {
+		} else if input == "\\pc" {
 			// Print the cache
 			parser.PrintCache()
-		} else if input == "\\c" {
+		} else if input == "\\cc" {
 			// Clear the cache
 			parser.ClearCache()
 			fmt.Println("Cache cleared")
+		} else if input == "\\c" {
+			// Toggle colorized JSON output
+			disableColorJsonOutput = !disableColorJsonOutput
+			fmt.Printf("Colorized JSON output: %t\n", !disableColorJsonOutput)
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit               - Exit the shell")
 			fmt.Println("help               - Print this help message")
 			fmt.Println("\\d                 - Toggle debug mode")
 			fmt.Println("\\q                 - Toggle print query execution time")
-			fmt.Println("\\c                 - Clear the cache")
-			fmt.Println("\\p                 - Print the cache")
+			fmt.Println("\\c                 - Toggle colorized JSON output")
+			fmt.Println("\\cc                - Clear the cache")
+			fmt.Println("\\pc                - Print the cache")
 			fmt.Println("\\n <namespace>|all - Change the namespace context")
 		} else if input != "" {
 			// Process the input if not empty
@@ -202,6 +209,9 @@ func runShell(cmd *cobra.Command, args []string) {
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
+				if !disableColorJsonOutput {
+					result = colorizeJson(result)
+				}
 				fmt.Println(result)
 			}
 		}
@@ -243,6 +253,24 @@ func processQuery(query string) (string, error) {
 		return "", fmt.Errorf("error marshalling results >> %s", err)
 	}
 	return string(json), nil
+}
+
+func colorizeJson(jsonString string) string {
+	var obj interface{}
+	err := json.Unmarshal([]byte(jsonString), &obj)
+	if err != nil {
+		fmt.Println("Error unmarshalling json: ", err)
+		return jsonString
+	}
+
+	f := colorjson.NewFormatter()
+	f.Indent = 2
+	s, err := f.Marshal(obj)
+	if err != nil {
+		fmt.Println("Error marshalling json: ", err)
+		return jsonString
+	}
+	return string(s)
 }
 
 func init() {
