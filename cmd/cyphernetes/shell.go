@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/chzyer/readline"
@@ -20,6 +21,7 @@ var ShellCmd = &cobra.Command{
 }
 
 var completer = &CyphernetesCompleter{}
+var printQueryExecutionTime bool = true
 
 func filterInput(r rune) (rune, bool) {
 	switch r {
@@ -162,17 +164,43 @@ func runShell(cmd *cobra.Command, args []string) {
 				parser.Namespace = strings.ToLower(input)
 			}
 			rl.SetPrompt(shellPrompt())
+		} else if input == "\\d" {
+			// Toggle debug mode
+			if parser.LogLevel == "debug" {
+				parser.LogLevel = "info"
+			} else {
+				parser.LogLevel = "debug"
+			}
+			fmt.Printf("Debug mode: %s\n", parser.LogLevel)
+		} else if input == "\\q" {
+			// Toggle print query execution time
+			if printQueryExecutionTime {
+				printQueryExecutionTime = false
+			} else {
+				printQueryExecutionTime = true
+			}
+			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
+		} else if input == "\\p" {
+			// Print the cache
+			parser.PrintCache()
+		} else if input == "\\c" {
+			// Clear the cache
+			parser.ClearCache()
+			fmt.Println("Cache cleared")
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
-			fmt.Println("exit           - Exit the shell")
-			fmt.Println("help           - Print this help message")
-			fmt.Println("\\n <namespace> - Change the namespace")
-			fmt.Println("\\n all         - Query all namespaces")
+			fmt.Println("exit               - Exit the shell")
+			fmt.Println("help               - Print this help message")
+			fmt.Println("\\d                 - Toggle debug mode")
+			fmt.Println("\\q                 - Toggle print query execution time")
+			fmt.Println("\\c                 - Clear the cache")
+			fmt.Println("\\p                 - Print the cache")
+			fmt.Println("\\n <namespace>|all - Change the namespace context")
 		} else if input != "" {
 			// Process the input if not empty
 			result, err := processQuery(input)
 			if err != nil {
-				fmt.Printf("Error: %s\n", err)
+				fmt.Printf("Error >> %s\n", err)
 			} else {
 				fmt.Println(result)
 			}
@@ -186,26 +214,33 @@ func runShell(cmd *cobra.Command, args []string) {
 var executor = parser.GetQueryExecutorInstance()
 
 func processQuery(query string) (string, error) {
+	// take a measurement of the time it takes to execute the query
+	startTime := time.Now()
+
 	// Parse the query to get an AST.
 	ast, err := parser.ParseQuery(query)
+
+	// Measure the time it took to execute the query
+	execTime := time.Since(startTime)
+	if printQueryExecutionTime {
+		fmt.Printf("Query executed in %s\n\n", execTime)
+	}
+
 	if err != nil {
 		// Handle error.
-		fmt.Println("Error parsing query: ", err)
-		return "", err
+		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
 
 	results, err := executor.Execute(ast)
 	if err != nil {
 		// Handle error.
-		fmt.Println("Error executing query: ", err)
-		return "", err
+		return "", fmt.Errorf("error executing query >> %s", err)
 	}
 	// Print the results as pretty JSON.
 	json, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		// Handle error.
-		fmt.Println("Error marshalling results: ", err)
-		return "", err
+		return "", fmt.Errorf("error marshalling results >> %s", err)
 	}
 	return string(json), nil
 }

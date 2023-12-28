@@ -42,13 +42,11 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				}
 				leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
 				if err != nil {
-					fmt.Println("Error finding API resource: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error finding API resource >> %s", err)
 				}
 				rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
 				if err != nil {
-					fmt.Println("Error finding API resource: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error finding API resource >> %s", err)
 				}
 
 				for _, resourceRelationship := range relationshipRules {
@@ -65,8 +63,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				rule := findRuleByRelationshipType(relType)
 				if err != nil {
-					fmt.Println("Error determining relationship type: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error determining relationship type >> %s", err)
 				}
 
 				// Fetch and process related resources based on relationship type
@@ -116,7 +113,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
 				if resultCache[q.resourcePropertyName(node)] == nil {
-					getNodeResources(node, q)
+					err := getNodeResources(node, q)
+					if err != nil {
+						return nil, fmt.Errorf("error getting node resources >> %s", err)
+					}
 				} else if resultMap[node.ResourceProperties.Name] == nil {
 					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
 				}
@@ -148,15 +148,13 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				pathStr := "/" + strings.Join(path, "/")
 				patchJson, err := json.Marshal([]map[string]interface{}{{"op": "replace", "path": pathStr, "value": kvp.Value}})
 				if err != nil {
-					fmt.Println("Error marshalling patch to JSON: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error marshalling patch to JSON >> %s", err)
 				}
 
 				// Apply the patch to the resources
 				err = q.patchK8sResources(resultMapKey, patchJson)
 				if err != nil {
-					fmt.Println("Error patching resource: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error patching resource >> %s", err)
 				}
 
 				// Retrieve the slice of maps for the resultMapKey
@@ -228,13 +226,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				var relType RelationshipType
 				targetGVR, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
 				if err != nil {
-					fmt.Println("Error finding API resource: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error finding API resource >> %s", err)
+
 				}
 				foreignGVR, err := FindGVR(q.Clientset, foreignNode.ResourceProperties.Kind)
 				if err != nil {
-					fmt.Println("Error finding API resource: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error finding API resource >> %s", err)
 				}
 
 				for _, resourceRelationship := range relationshipRules {
@@ -251,8 +248,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				rule := findRuleByRelationshipType(relType)
 				if err != nil {
-					fmt.Println("Error determining relationship type: ", err)
-					return nil, err
+					return nil, fmt.Errorf("error determining relationship type >> %s", err)
 				}
 
 				// Now according to which is the node that needs to be created, we'll construct the spec from the node properties and from the relevant part of the spec that's defined in the relationship
@@ -414,8 +410,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 		case *ReturnClause:
 			resultMapJson, err := json.Marshal(resultMap)
 			if err != nil {
-				fmt.Println("Error marshalling results to JSON: ", err)
-				return nil, err
+				return nil, fmt.Errorf("error marshalling results to JSON >> %s", err)
 			}
 			var jsonData interface{}
 			json.Unmarshal(resultMapJson, &jsonData)
@@ -481,13 +476,11 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 	// Look up the resource kind and name in the cache
 	gvr, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
 	if err != nil {
-		fmt.Printf("Error finding API resource: %v\n", err)
-		return err
+		return fmt.Errorf("error finding API resource >> %v", err)
 	}
 	kind := q.getSingularNameForGVR(gvr)
 	if kind == "" {
-		fmt.Printf("Error finding singular name for resource: %v\n", err)
-		return err
+		return fmt.Errorf("error finding singular name for resource >> %v", err)
 	}
 
 	// Construct the resource from the spec
@@ -502,8 +495,7 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 	// Create the resource
 	_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Create(context.Background(), &unstructured.Unstructured{Object: resource}, metav1.CreateOptions{})
 	if err != nil {
-		fmt.Printf("Error creating resource: %v\n", err)
-		return err
+		return fmt.Errorf("error creating resource >> %v", err)
 	}
 
 	return nil
@@ -535,15 +527,13 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 		// Look up the resource kind and name in the cache
 		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
 		if err != nil {
-			fmt.Printf("Error finding API resource: %v\n", err)
-			return err
+			return fmt.Errorf("error finding API resource >> %v", err)
 		}
 		resourceName := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
 
 		err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
 		if err != nil {
-			fmt.Printf("Error deleting resource: %v\n", err)
-			return err
+			return fmt.Errorf("error deleting resource >> %v", err)
 		}
 
 		// remove the resource from the result map
@@ -560,15 +550,13 @@ func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) err
 		// Look up the resource kind and name in the cache
 		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
 		if err != nil {
-			fmt.Printf("Error finding API resource: %v\n", err)
-			return err
+			return fmt.Errorf("error finding API resource >> %v", err)
 		}
 		resourceName := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
 
 		_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Patch(context.Background(), resourceName, types.JSONPatchType, patch, metav1.PatchOptions{})
 		if err != nil {
-			fmt.Printf("Error patching resource: %v\n", err)
-			return err
+			return fmt.Errorf("error patching resource >> %v", err)
 		}
 
 		// refresh the resource in the cache
@@ -591,22 +579,26 @@ func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
 	var fieldSelector string
 	var labelSelector string
 	var hasNameSelector bool
+	var hasLabelSelector bool
+
 	if n.ResourceProperties.Properties != nil {
 		for _, prop := range n.ResourceProperties.Properties.PropertyList {
 			if prop.Key == "name" || prop.Key == "metadata.name" {
 				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
 				hasNameSelector = true
 			} else {
-				if hasNameSelector {
-					// both name and label selectors are specified, error out
-					return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
-				}
+				hasLabelSelector = true
 				labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
 			}
 		}
 		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
 		labelSelector = strings.TrimSuffix(labelSelector, ",")
 	}
+	if hasNameSelector && hasLabelSelector {
+		// both name and label selectors are specified, error out
+		return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
+	}
+
 	// Check if the resource has already been fetched
 	if resultCache[q.resourcePropertyName(n)] == nil {
 		// Get the list of resources of the specified kind.

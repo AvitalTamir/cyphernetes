@@ -3,6 +3,8 @@ package parser
 import (
 	"fmt"
 	"log"
+
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var Namespace string
@@ -138,5 +140,35 @@ func ParseQuery(query string) (*Expression, error) {
 func logDebug(v ...interface{}) {
 	if LogLevel == "debug" {
 		log.Println(v...)
+	}
+}
+
+func ClearCache() {
+	GvrCacheMutex.Lock()
+	GvrCache = make(map[string]schema.GroupVersionResource)
+	GvrCacheMutex.Unlock()
+
+	apiResourceListCache = nil
+
+	// Clear the resultCache
+	resultCache = make(map[string]interface{})
+}
+
+func PrintCache() {
+	fmt.Println("GVR Cache:")
+	for k, v := range GvrCache {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+	fmt.Println("API Resource List Cache:")
+	for _, v := range apiResourceListCache {
+		fmt.Printf("%s\n", v)
+	}
+	fmt.Println("Result Cache:")
+	for k, v := range resultCache {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+	fmt.Println("Result Map:")
+	for k, v := range resultMap {
+		fmt.Printf("%s: %s\n", k, v)
 	}
 }
