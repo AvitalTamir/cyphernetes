@@ -107,10 +107,10 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 
 ### Phase 9: WHERE Clause
 
-- [ ] Add support for `WHERE` clauses.
-- [ ] Update the lexer to recognize the `WHERE` keyword.
-- [ ] Extend the yacc grammar to parse `WHERE` clauses.
-- [ ] Write unit tests for `WHERE` clause parsing.
+- [x] Add support for `WHERE` clauses.
+- [x] Update the lexer to recognize the `WHERE` keyword.
+- [x] Extend the yacc grammar to parse `WHERE` clauses.
+- [x] Write unit tests for `WHERE` clause parsing.
 
 ### Phase 10: AS Clause
 

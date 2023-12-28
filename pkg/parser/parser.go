@@ -22,6 +22,7 @@ type Clause interface {
 type MatchClause struct {
 	Nodes         []*NodePattern
 	Relationships []*Relationship
+	ExtraFilters  []*KeyValuePair
 }
 
 type SetClause struct {

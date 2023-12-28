@@ -56,6 +56,7 @@ func TestParseQueryWithReturn(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"s.spec.ports", "d.metadata.name"},
@@ -94,6 +95,7 @@ func TestSingleNodePattern(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"n"},
@@ -138,6 +140,7 @@ func TestMultipleNodePatternsCommaSeparated(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"n", "m"},
@@ -198,6 +201,7 @@ func TestMultipleNodePatternsRelationship(t *testing.T) {
 						},
 					},
 				},
+				ExtraFilters: nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"n", "m"},
@@ -264,6 +268,7 @@ func TestComplexNodePatternsAndRelationships(t *testing.T) {
 						},
 					},
 				},
+				ExtraFilters: nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"a", "b", "c"},
@@ -345,6 +350,7 @@ func TestChainedRelationships(t *testing.T) {
 						},
 					},
 				},
+				ExtraFilters: nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"a", "b", "d"},
@@ -444,6 +450,7 @@ func TestChainedRelationshipsWithComma(t *testing.T) {
 						},
 					},
 				},
+				ExtraFilters: nil,
 			},
 			&ReturnClause{
 				JsonPaths: []string{"a", "b", "c", "d"},
@@ -483,6 +490,7 @@ func TestMatchSetExpression(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&SetClause{
 				KeyValuePairs: []*KeyValuePair{
@@ -526,6 +534,7 @@ func TestMatchDeleteExpression(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&DeleteClause{
 				NodeIds: []string{"n"},
@@ -566,6 +575,7 @@ func TestMatchCreateExpression(t *testing.T) {
 					},
 				},
 				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
 			},
 			&CreateClause{
 				Nodes: []*NodePattern{
@@ -609,6 +619,45 @@ func TestMatchCreateExpression(t *testing.T) {
 		t.Fatalf("ParseQuery() error = %v", err)
 	}
 
+	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}
+
+func TestMatchWhereReturn(t *testing.T) {
+	query := `MATCH (k:Kind) WHERE k.name = "test" RETURN k.name`
+	// Expected AST structure...
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "k",
+							Kind: "Kind",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:   "k.name",
+						Value: "test",
+					},
+				},
+			},
+			&ReturnClause{
+				JsonPaths: []string{"k.name"},
+			},
+		},
+	}
+
+	// Call the parser.
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
 	// Check if the resulting AST matches the expected structure.
 	if !reflect.DeepEqual(expr, expected) {
 		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
