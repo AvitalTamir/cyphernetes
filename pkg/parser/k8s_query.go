@@ -469,13 +469,18 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					pathStr = "$." + pathStr
 				}
 
-				// Create a map for the node's resources
-				results[nodeId] = []interface{}{}
+				// Create a map for the node's resources if it's empty
+				if results[nodeId] == nil {
+					results[nodeId] = []interface{}{}
+				}
 
 				// Iterate over the resources in the result map
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
-					// create a new empty slice in results[nodeId][idx]
-					results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
+					// if it doesn't exist, create a new empty slice in results[nodeId][idx]
+
+					if len(results[nodeId].([]interface{})) <= idx {
+						results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
+					}
 					currentMap := results[nodeId].([]interface{})[idx].(map[string]interface{})
 
 					// assign
