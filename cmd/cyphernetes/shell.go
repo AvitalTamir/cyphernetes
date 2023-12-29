@@ -189,17 +189,17 @@ func runShell(cmd *cobra.Command, args []string) {
 			// Clear the cache
 			parser.ClearCache()
 			fmt.Println("Cache cleared")
-		} else if input == "\\c" {
+		} else if input == "\\r" {
 			// Toggle colorized JSON output
 			disableColorJsonOutput = !disableColorJsonOutput
-			fmt.Printf("Colorized JSON output: %t\n", !disableColorJsonOutput)
+			fmt.Printf("Raw output mode: %t\n", disableColorJsonOutput)
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit               - Exit the shell")
 			fmt.Println("help               - Print this help message")
 			fmt.Println("\\d                 - Toggle debug mode")
 			fmt.Println("\\q                 - Toggle print query execution time")
-			fmt.Println("\\c                 - Toggle colorized JSON output")
+			fmt.Println("\\r                 - Toggle raw output (disable colorized JSON)")
 			fmt.Println("\\cc                - Clear the cache")
 			fmt.Println("\\pc                - Print the cache")
 			fmt.Println("\\n <namespace>|all - Change the namespace context")
@@ -212,7 +212,9 @@ func runShell(cmd *cobra.Command, args []string) {
 				if !disableColorJsonOutput {
 					result = colorizeJson(result)
 				}
-				fmt.Println(result)
+				if result != "{}" {
+					fmt.Println(result)
+				}
 			}
 		}
 		// Add input to history
@@ -230,12 +232,6 @@ func processQuery(query string) (string, error) {
 	// Parse the query to get an AST.
 	ast, err := parser.ParseQuery(query)
 
-	// Measure the time it took to execute the query
-	execTime := time.Since(startTime)
-	if printQueryExecutionTime {
-		fmt.Printf("Query executed in %s\n\n", execTime)
-	}
-
 	if err != nil {
 		// Handle error.
 		return "", fmt.Errorf("error parsing query >> %s", err)
@@ -246,6 +242,13 @@ func processQuery(query string) (string, error) {
 		// Handle error.
 		return "", fmt.Errorf("error executing query >> %s", err)
 	}
+
+	// Measure the time it took to execute the query
+	execTime := time.Since(startTime)
+	if printQueryExecutionTime {
+		fmt.Printf("Query executed in %s\n\n", execTime)
+	}
+
 	// Print the results as pretty JSON.
 	json, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
