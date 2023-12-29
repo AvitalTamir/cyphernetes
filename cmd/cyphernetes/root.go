@@ -31,15 +31,9 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cyphernetes.yaml)")
 
-	// Add a namespace flag
 	rootCmd.PersistentFlags().StringVarP(&parser.Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().StringVarP(&parser.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().BoolVarP(&parser.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
-	rootCmd.PersistentFlags().BoolVarP(&disableColorJsonOutput, "color-json", "c", false, "Disable colorized JSON output")
 }

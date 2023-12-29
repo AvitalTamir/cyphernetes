@@ -36,6 +36,7 @@ var queryCmd = &cobra.Command{
 			fmt.Println("Error executing query: ", err)
 			return
 		}
+
 		// Print the results as pretty JSON.
 		json, err := json.MarshalIndent(results, "", "  ")
 		if err != nil {
@@ -43,12 +44,18 @@ var queryCmd = &cobra.Command{
 			fmt.Println("Error marshalling results: ", err)
 			return
 		}
-		fmt.Println(string(json))
+		if !disableColorJsonOutput {
+			json = []byte(colorizeJson(string(json)))
+		}
+
+		if string(json) != "{}" {
+			fmt.Println(string(json))
+		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(queryCmd)
 
-	// No need to set up a flag here, as we're using arguments
+	queryCmd.PersistentFlags().BoolVarP(&disableColorJsonOutput, "raw-output", "r", false, "Disable colorized JSON output")
 }
