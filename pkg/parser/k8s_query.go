@@ -18,7 +18,7 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
-	k8sResources := make(map[string]interface{})
+	results := make(map[string]interface{})
 
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
@@ -70,7 +70,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				for _, node := range c.Nodes {
 					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
 						if resultMap[node.ResourceProperties.Name] == nil {
-							getNodeResources(node, q)
+							getNodeResources(node, q, c.ExtraFilters)
 						}
 
 					}
@@ -101,7 +101,8 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				}
 
 				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
-				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources
+				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+				resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 			}
 
 			// Iterate over the nodes in the match clause.
@@ -113,50 +114,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
 				if resultCache[q.resourcePropertyName(node)] == nil {
-					err := getNodeResources(node, q)
+					err := getNodeResources(node, q, c.ExtraFilters)
 					if err != nil {
 						return nil, fmt.Errorf("error getting node resources >> %s", err)
 					}
 				} else if resultMap[node.ResourceProperties.Name] == nil {
 					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
-				}
-
-				// Finally, we'll iterate over the ExtraFilters and filter the resultMap
-				for _, filter := range c.ExtraFilters {
-					// The first part of the key is the node name
-					resultMapKey := strings.Split(filter.Key, ".")[0]
-					if resultMap[resultMapKey] == nil {
-						return nil, fmt.Errorf("node identifier %s not found in where clause", resultMapKey)
-					} else if resultMap[resultMapKey] == node.ResourceProperties.Name {
-						// The rest of the key is the JSONPath
-						path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
-						// Ensure the JSONPath starts with '$'
-						if !strings.HasPrefix(path, "$") {
-							path = "$." + path
-						}
-
-						// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
-						removedCount := 0
-						for j, resource := range resultMap[node.ResourceProperties.Name].([]map[string]interface{}) {
-							// Drill down to create nested map structure
-							result, err := jsonpath.JsonPathLookup(resource, path)
-							if err != nil {
-								logDebug("Path not found:", filter.Key)
-								// Remove the resource at index j from the slice
-								resultMap[node.ResourceProperties.Name] = append(resultMap[node.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[node.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
-								removedCount++
-							}
-							// convert the result and the value to strings and compare them
-							resultStr := fmt.Sprintf("%v", result)
-							valueStr := fmt.Sprintf("%v", filter.Value)
-
-							if resultStr != valueStr {
-								// remove the resource from the slice
-								resultMap[node.ResourceProperties.Name] = append(resultMap[node.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[node.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
-								removedCount++
-							}
-						}
-					}
 				}
 			}
 
@@ -454,38 +417,53 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			}
 
 		case *ReturnClause:
-			resultMapJson, err := json.Marshal(resultMap)
-			if err != nil {
-				return nil, fmt.Errorf("error marshalling results to JSON >> %s", err)
-			}
-			var jsonData interface{}
-			json.Unmarshal(resultMapJson, &jsonData)
-
 			for _, jsonPath := range c.JsonPaths {
-				// Ensure the JSONPath starts with '$'
-				if !strings.HasPrefix(jsonPath, "$") {
-					jsonPath = "$." + jsonPath
+				// The first part of the key is the node name
+				nodeId := strings.Split(jsonPath, ".")[0]
+				if resultMap[nodeId] == nil {
+					return nil, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
+				// The rest of the key is the JSONPath
 				pathParts := strings.Split(jsonPath, ".")[1:]
+				pathStr := strings.Join(pathParts, ".")
+				// Ensure the JSONPath starts with '$'
+				if !strings.HasPrefix(pathStr, "$") {
+					pathStr = "$." + pathStr
+				}
 
-				// Drill down to create nested map structure
-				currentMap := k8sResources
-				for i, part := range pathParts {
-					if i == len(pathParts)-1 {
-						// Last part: assign the result
-						result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
-						if err != nil {
-							logDebug("Path not found:", jsonPath)
-							result = []interface{}{}
+				// Create a map for the node's resources if it's empty
+				if results[nodeId] == nil {
+					results[nodeId] = []interface{}{}
+				}
+
+				// Iterate over the resources in the result map
+				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
+					// if it doesn't exist, create a new empty slice in results[nodeId][idx]
+
+					if len(results[nodeId].([]interface{})) <= idx {
+						results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
+					}
+					currentMap := results[nodeId].([]interface{})[idx].(map[string]interface{})
+
+					// assign
+					// Drill down to create nested map structure
+					for i, part := range pathParts {
+						if i == len(pathParts)-1 {
+							// Last part: assign the result
+							result, err := jsonpath.JsonPathLookup(resource, pathStr)
+							if err != nil {
+								logDebug("Path not found:", jsonPath)
+								result = []interface{}{}
+							}
+							currentMap[part] = result
+						} else {
+							// Intermediate parts: create nested maps
+							if currentMap[part] == nil {
+								currentMap[part] = make(map[string]interface{})
+							}
+							currentMap = currentMap[part].(map[string]interface{})
 						}
-						currentMap[part] = result
-					} else {
-						// Intermediate parts: create nested maps
-						if currentMap[part] == nil {
-							currentMap[part] = make(map[string]interface{})
-						}
-						currentMap = currentMap[part].(map[string]interface{})
 					}
 				}
 			}
@@ -497,7 +475,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	// clear the result cache and result map
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
-	return k8sResources, nil
+	return results, nil
 }
 
 func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {
@@ -610,7 +588,7 @@ func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) err
 	return nil
 }
 
-func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
+func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
 	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
 		for i, prop := range n.ResourceProperties.Properties.PropertyList {
 			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
@@ -655,7 +633,47 @@ func getNodeResources(n *NodePattern, q *QueryExecutor) (err error) {
 	} else {
 		fmt.Println("Resource already fetched")
 	}
+
 	resultMap[n.ResourceProperties.Name] = resultCache[q.resourcePropertyName(n)]
+
+	// Apply extra filters
+	for _, filter := range extraFilters {
+		// The first part of the key is the node name
+		resultMapKey := strings.Split(filter.Key, ".")[0]
+		if resultMap[resultMapKey] == nil {
+			return fmt.Errorf("node identifier %s not found in where clause", resultMapKey)
+		} else if resultMapKey == n.ResourceProperties.Name {
+			// The rest of the key is the JSONPath
+			path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
+			// Ensure the JSONPath starts with '$'
+			if !strings.HasPrefix(path, "$") {
+				path = "$." + path
+			}
+
+			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
+			removedCount := 0
+			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+				// Drill down to create nested map structure
+				result, err := jsonpath.JsonPathLookup(resource, path)
+				if err != nil {
+					logDebug("Path not found:", filter.Key)
+					// Remove the resource at index j from the slice
+					resultMap[n.ResourceProperties.Name] = append(resultMap[n.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
+					removedCount++
+				}
+				// convert the result and the value to strings and compare them
+				resultStr := fmt.Sprintf("%v", result)
+				valueStr := fmt.Sprintf("%v", filter.Value)
+
+				if resultStr != valueStr {
+					// remove the resource from the slice
+					resultMap[n.ResourceProperties.Name] = append(resultMap[n.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
+					removedCount++
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
