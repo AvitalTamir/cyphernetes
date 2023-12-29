@@ -394,20 +394,34 @@ func matchOwnerReferences(ownerRefs []interface{}, name string) bool {
 	return false
 }
 
-func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule RelationshipRule, direction Direction) []map[string]interface{} {
-	var matchedResources []map[string]interface{}
+func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule RelationshipRule, direction Direction) map[string]interface{} {
+	var matchedResourcesA []map[string]interface{}
+	var matchedResourcesB []map[string]interface{}
+
 	for _, resourceA := range resourcesA {
 		for _, resourceB := range resourcesB {
 			if matchByCriteria(resourceA, resourceB, rule.MatchCriteria) {
 				if direction == Left {
-					matchedResources = append(matchedResources, resourceA)
+					matchedResourcesA = append(matchedResourcesA, resourceA)
+					matchedResourcesB = append(matchedResourcesB, resourceB)
 				} else if direction == Right {
-					matchedResources = append(matchedResources, resourceB)
+					matchedResourcesA = append(matchedResourcesA, resourceB)
+					matchedResourcesB = append(matchedResourcesB, resourceA)
 				} else {
 					return nil
 				}
 			}
 		}
 	}
+
+	// initialize matchedResources map
+	matchedResources := make(map[string]interface{})
+
+	// return the matched resources as a slice of maps that looks like this:
+	// matchedresources["right"] = matchedResourcesA
+	// matchedresources["left"] = matchedResourcesB
+	matchedResources["right"] = matchedResourcesA
+	matchedResources["left"] = matchedResourcesB
+
 	return matchedResources
 }

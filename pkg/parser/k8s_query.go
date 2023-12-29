@@ -101,7 +101,8 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				}
 
 				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
-				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources
+				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+				resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 			}
 
 			// Iterate over the nodes in the match clause.
