@@ -385,7 +385,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					}
 
 					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
-					q.createK8sResource(node, resourceTemplate, name)
+					err = q.createK8sResource(node, resourceTemplate, name)
+					if err != nil {
+						return nil, fmt.Errorf("error creating resource >> %s", err)
+					}
 				}
 			}
 			// Iterate over the nodes in the create clause.
@@ -415,7 +418,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
-					q.createK8sResource(node, resourceTemplate, name)
+					err = q.createK8sResource(node, resourceTemplate, name)
+					if err != nil {
+						return nil, fmt.Errorf("error creating resource >> %s", err)
+					}
 				}
 			}
 
@@ -522,8 +528,9 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 	// Create the resource
 	_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Create(context.Background(), &unstructured.Unstructured{Object: resource}, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating resource >> %v", err)
+		return err
 	}
+	fmt.Printf("Created '%s/%s'\n", gvr.Resource, name)
 
 	return nil
 }
@@ -562,6 +569,7 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 		if err != nil {
 			return fmt.Errorf("error deleting resource >> %v", err)
 		}
+		fmt.Printf("Deleted '%s/%s'\n", gvr.Resource, resourceName)
 	}
 
 	// remove the resource from the result map
@@ -591,6 +599,7 @@ func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) err
 		if err != nil {
 			return fmt.Errorf("error patching resource >> %v", err)
 		}
+		fmt.Printf("Patched %s/%s\n", gvr.Resource, resourceName)
 	}
 	return nil
 }
