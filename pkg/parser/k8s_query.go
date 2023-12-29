@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
@@ -126,7 +128,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
 			// ...
-			for idx, kvp := range c.KeyValuePairs {
+			for _, kvp := range c.KeyValuePairs {
 				resultMapKey := strings.Split(kvp.Key, ".")[0]
 				path := strings.Split(kvp.Key, ".")[1:]
 
@@ -161,15 +163,16 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				// Retrieve the slice of maps for the resultMapKey
 				if resources, ok := resultMap[resultMapKey].([]map[string]interface{}); ok {
-					// Check if the idx is within bounds
-					if idx >= 0 && idx < len(resources) {
-						entry := resources[idx]             // Get the specific map to patch
-						fullPath := strings.Join(path, ".") // Construct the full path
-						patchResultMap(entry, fullPath, kvp.Value)
-						resources[idx] = entry // Update the specific entry in the slice
-					} else {
-						fmt.Printf("Index out of range for key: %s, Index: %d, Length: %d\n", resultMapKey, idx, len(resources))
-						// Handle index out of range
+					for idx, resource := range resources {
+						// Check if the idx is within bounds
+						if idx >= 0 && idx < len(resources) {
+							fullPath := strings.Join(path, ".") // Construct the full path
+							patchResultMap(resource, fullPath, kvp.Value)
+							resources[idx] = resource // Update the specific entry in the slice
+						} else {
+							fmt.Printf("Index out of range for key: %s, Index: %d, Length: %d\n", resultMapKey, idx, len(resources))
+							// Handle index out of range
+						}
 					}
 				} else {
 					// Handle the case where the resultMap entry isn't a slice of maps
@@ -569,6 +572,13 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) error {
 	resources := resultMap[resultMapKey].([]map[string]interface{})
 
+	// in patch, replace regex \[\d+\] with \/$1\/
+	// this is to support patching arrays
+	patchStr := string(patch)
+	// now the regex replace
+	re := regexp.MustCompile(`\[(\d+)\]`)
+	patchStr = re.ReplaceAllString(patchStr, "/$1")
+
 	for i := range resources {
 		// Look up the resource kind and name in the cache
 		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
@@ -577,13 +587,10 @@ func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) err
 		}
 		resourceName := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
 
-		_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Patch(context.Background(), resourceName, types.JSONPatchType, patch, metav1.PatchOptions{})
+		_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Patch(context.Background(), resourceName, types.JSONPatchType, []byte(patchStr), metav1.PatchOptions{})
 		if err != nil {
 			return fmt.Errorf("error patching resource >> %v", err)
 		}
-
-		// refresh the resource in the cache
-
 	}
 	return nil
 }
@@ -742,7 +749,27 @@ func patchResultMap(result map[string]interface{}, fullPath string, newValue int
 	nextLevel := parts[0]
 	remainingPath := strings.Join(parts[1:], ".")
 
-	if nextMap, ok := result[nextLevel].(map[string]interface{}); ok {
+	// Check if the nextLevel contains the regex for an array index
+	re := regexp.MustCompile(`\[(\d+)\]`)
+	if re.MatchString(nextLevel) {
+		// If the next level is an array index, we want to recurse into the array
+		index := re.FindStringSubmatch(nextLevel)[1]
+		idx, err := strconv.Atoi(index)
+		if err != nil {
+			fmt.Println("Error converting index to int: ", err)
+			return
+		}
+		nextLevel = strings.TrimSuffix(nextLevel, "["+index+"]")
+		// If the next level is an array, continue patching
+		if nextArray, ok := result[nextLevel].([]interface{}); ok {
+			patchResultMap(nextArray[idx].(map[string]interface{}), remainingPath, newValue)
+		} else {
+			// If the next level is not an array, it needs to be created
+			newArray := make([]interface{}, 0)
+			result[nextLevel] = newArray
+			patchResultMap(newArray[idx].(map[string]interface{}), remainingPath, newValue)
+		}
+	} else if nextMap, ok := result[nextLevel].(map[string]interface{}); ok {
 		// If the next level is a map, continue patching
 		patchResultMap(nextMap, remainingPath, newValue)
 	} else {
