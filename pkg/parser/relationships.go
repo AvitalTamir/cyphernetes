@@ -283,11 +283,12 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 			// Specific logic for label matching
 			labels, ok := resourceA.(map[string]interface{})["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
 			if !ok {
-				continue
+				return false
 			}
 			selector, ok := resourceB.(map[string]interface{})["spec"].(map[string]interface{})["selector"].(map[string]interface{})
 			if !ok {
 				logDebug("No resources found for selector: ", selector)
+				return false
 			}
 			if !matchLabels(labels, selector) {
 				return false
@@ -369,7 +370,7 @@ func matchFields(fieldA, fieldB interface{}) bool {
 }
 
 func matchLabels(labels, selector map[string]interface{}) bool {
-	if len(selector) == 0 {
+	if len(selector) == 0 || len(labels) == 0 {
 		return false
 	}
 	// validate all labels in the selector exist on the labels and match
@@ -402,13 +403,21 @@ func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule
 		for _, resourceB := range resourcesB {
 			if matchByCriteria(resourceA, resourceB, rule.MatchCriteria) {
 				if direction == Left {
-					matchedResourcesA = append(matchedResourcesA, resourceA)
-					matchedResourcesB = append(matchedResourcesB, resourceB)
+					// if resourceA doesn't already exist in matchedResourcesA, add it
+					if !containsResource(matchedResourcesA, resourceA) {
+						matchedResourcesA = append(matchedResourcesA, resourceA)
+					}
+					// if resourceB doesn't already exist in matchedResourcesB, add it
+					if !containsResource(matchedResourcesB, resourceB) {
+						matchedResourcesB = append(matchedResourcesB, resourceB)
+					}
 				} else if direction == Right {
-					matchedResourcesA = append(matchedResourcesA, resourceB)
-					matchedResourcesB = append(matchedResourcesB, resourceA)
-				} else {
-					return nil
+					if !containsResource(matchedResourcesA, resourceB) {
+						matchedResourcesA = append(matchedResourcesA, resourceB)
+					}
+					if !containsResource(matchedResourcesB, resourceA) {
+						matchedResourcesB = append(matchedResourcesB, resourceA)
+					}
 				}
 			}
 		}
@@ -424,4 +433,13 @@ func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule
 	matchedResources["left"] = matchedResourcesB
 
 	return matchedResources
+}
+
+func containsResource(resources []map[string]interface{}, resource map[string]interface{}) bool {
+	for _, res := range resources {
+		if res["metadata"].(map[string]interface{})["name"] == resource["metadata"].(map[string]interface{})["name"] {
+			return true
+		}
+	}
+	return false
 }
