@@ -18,7 +18,7 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
-	k8sResources := make(map[string]interface{})
+	results := make(map[string]interface{})
 
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
@@ -454,38 +454,48 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			}
 
 		case *ReturnClause:
-			resultMapJson, err := json.Marshal(resultMap)
-			if err != nil {
-				return nil, fmt.Errorf("error marshalling results to JSON >> %s", err)
-			}
-			var jsonData interface{}
-			json.Unmarshal(resultMapJson, &jsonData)
-
 			for _, jsonPath := range c.JsonPaths {
-				// Ensure the JSONPath starts with '$'
-				if !strings.HasPrefix(jsonPath, "$") {
-					jsonPath = "$." + jsonPath
+				// The first part of the key is the node name
+				nodeId := strings.Split(jsonPath, ".")[0]
+				if resultMap[nodeId] == nil {
+					return nil, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
+				// The rest of the key is the JSONPath
 				pathParts := strings.Split(jsonPath, ".")[1:]
+				pathStr := strings.Join(pathParts, ".")
+				// Ensure the JSONPath starts with '$'
+				if !strings.HasPrefix(pathStr, "$") {
+					pathStr = "$." + pathStr
+				}
 
-				// Drill down to create nested map structure
-				currentMap := k8sResources
-				for i, part := range pathParts {
-					if i == len(pathParts)-1 {
-						// Last part: assign the result
-						result, err := jsonpath.JsonPathLookup(jsonData, jsonPath)
-						if err != nil {
-							logDebug("Path not found:", jsonPath)
-							result = []interface{}{}
+				// Create a map for the node's resources
+				results[nodeId] = []interface{}{}
+
+				// Iterate over the resources in the result map
+				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
+					// create a new empty slice in results[nodeId][idx]
+					results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
+					currentMap := results[nodeId].([]interface{})[idx].(map[string]interface{})
+
+					// assign
+					// Drill down to create nested map structure
+					for i, part := range pathParts {
+						if i == len(pathParts)-1 {
+							// Last part: assign the result
+							result, err := jsonpath.JsonPathLookup(resource, pathStr)
+							if err != nil {
+								logDebug("Path not found:", jsonPath)
+								result = []interface{}{}
+							}
+							currentMap[part] = result
+						} else {
+							// Intermediate parts: create nested maps
+							if currentMap[part] == nil {
+								currentMap[part] = make(map[string]interface{})
+							}
+							currentMap = currentMap[part].(map[string]interface{})
 						}
-						currentMap[part] = result
-					} else {
-						// Intermediate parts: create nested maps
-						if currentMap[part] == nil {
-							currentMap[part] = make(map[string]interface{})
-						}
-						currentMap = currentMap[part].(map[string]interface{})
 					}
 				}
 			}
@@ -497,7 +507,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 	// clear the result cache and result map
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
-	return k8sResources, nil
+	return results, nil
 }
 
 func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {
