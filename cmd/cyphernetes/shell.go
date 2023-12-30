@@ -215,6 +215,9 @@ func runShell(cmd *cobra.Command, args []string) {
 				if result != "{}" {
 					fmt.Println(result)
 				}
+				if printQueryExecutionTime {
+					fmt.Printf("\nQuery executed in %s\n\n", execTime)
+				}
 			}
 		}
 		// Add input to history
@@ -224,6 +227,7 @@ func runShell(cmd *cobra.Command, args []string) {
 
 // Execute the query against the Kubernetes API.
 var executor = parser.GetQueryExecutorInstance()
+var execTime time.Duration
 
 func processQuery(query string) (string, error) {
 	// take a measurement of the time it takes to execute the query
@@ -244,10 +248,7 @@ func processQuery(query string) (string, error) {
 	}
 
 	// Measure the time it took to execute the query
-	execTime := time.Since(startTime)
-	if printQueryExecutionTime {
-		fmt.Printf("Query executed in %s\n\n", execTime)
-	}
+	execTime = time.Since(startTime)
 
 	// Print the results as pretty JSON.
 	json, err := json.MarshalIndent(results, "", "  ")
