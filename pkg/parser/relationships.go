@@ -40,7 +40,7 @@ type ComparisonType string
 const (
 	ExactMatch    ComparisonType = "ExactMatch"
 	OwnerRefMatch ComparisonType = "OwnerRefMatch"
-	HasLabels     ComparisonType = "HasLabels"
+	ContainsAll   ComparisonType = "ContainsAll"
 )
 
 type MatchCriterion struct {
@@ -98,7 +98,7 @@ var relationshipRules = []RelationshipRule{
 			{
 				FieldA:         "metadata.labels",
 				FieldB:         "spec.selector",
-				ComparisonType: HasLabels,
+				ComparisonType: ContainsAll,
 				DefaultProps: []DefaultProp{
 					{
 						FieldA:  "",
@@ -182,7 +182,7 @@ var relationshipRules = []RelationshipRule{
 			{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
-				ComparisonType: HasLabels,
+				ComparisonType: ContainsAll,
 				DefaultProps: []DefaultProp{
 					{
 						FieldA:  "",
@@ -201,7 +201,7 @@ var relationshipRules = []RelationshipRule{
 			{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
-				ComparisonType: HasLabels,
+				ComparisonType: ContainsAll,
 				DefaultProps: []DefaultProp{
 					{
 						FieldA:  "",
@@ -220,7 +220,7 @@ var relationshipRules = []RelationshipRule{
 			{
 				FieldA:         "$.spec.template.metadata.labels",
 				FieldB:         "$.spec.selector",
-				ComparisonType: HasLabels,
+				ComparisonType: ContainsAll,
 				DefaultProps: []DefaultProp{
 					{
 						FieldA:  "",
@@ -246,7 +246,7 @@ var relationshipRules = []RelationshipRule{
 						Default: 80,
 					},
 				},
-				ComparisonType: HasLabels,
+				ComparisonType: ContainsAll,
 			},
 		},
 	},
@@ -279,25 +279,36 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 				return false
 			}
 			// Add more cases as needed
-		case HasLabels:
-			// Specific logic for label matching
-			labels, ok := resourceA.(map[string]interface{})["metadata"].(map[string]interface{})["labels"].(map[string]interface{})
-			if !ok {
+		case ContainsAll:
+			l, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+			if err != nil {
+				logDebug("Error extracting fieldA: ", err)
 				return false
 			}
-			selector, ok := resourceB.(map[string]interface{})["spec"].(map[string]interface{})["selector"].(map[string]interface{})
+			labels, ok := l.(map[string]interface{})
+			if !ok {
+				logDebug("No labels found for resource: ", resourceA)
+				return false
+			}
+
+			s, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+			if err != nil {
+				logDebug("Error extracting fieldB: ", err)
+				return false
+			}
+			selector, ok := s.(map[string]interface{})
 			if !ok {
 				logDebug("No resources found for selector: ", selector)
 				return false
 			}
-			if !matchLabels(labels, selector) {
+
+			if !matchContainsAll(labels, selector) {
 				return false
 			}
 		case ExactMatch:
-			// Specific logic for field matching
-			// use jsonpath to extract the fields
+			// Logic for exact field matching
 
-			// extract the fields
+			// Extract the fields
 			fieldsA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
 			if err != nil {
 				logDebug("Error extracting fieldA: ", err)
@@ -369,7 +380,7 @@ func matchFields(fieldA, fieldB interface{}) bool {
 	return false
 }
 
-func matchLabels(labels, selector map[string]interface{}) bool {
+func matchContainsAll(labels, selector map[string]interface{}) bool {
 	if len(selector) == 0 || len(labels) == 0 {
 		return false
 	}
