@@ -435,7 +435,15 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				// The rest of the key is the JSONPath
 				pathParts := strings.Split(jsonPath, ".")[1:]
-				pathStr := strings.Join(pathParts, ".")
+
+				var pathStr string
+				if len(pathParts) == 0 {
+					pathParts = append(pathParts, "$")
+					pathStr = "$"
+				} else {
+					pathStr = strings.Join(pathParts, ".")
+				}
+
 				// Ensure the JSONPath starts with '$'
 				if !strings.HasPrefix(pathStr, "$") {
 					pathStr = "$." + pathStr
