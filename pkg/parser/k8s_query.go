@@ -538,7 +538,7 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created '%s/%s'\n", gvr.Resource, name)
+	fmt.Printf("Created %s/%s\n", gvr.Resource, name)
 
 	return nil
 }
@@ -577,7 +577,7 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 		if err != nil {
 			return fmt.Errorf("error deleting resource >> %v", err)
 		}
-		fmt.Printf("Deleted '%s/%s'\n", gvr.Resource, resourceName)
+		fmt.Printf("Deleted %s/%s\n", gvr.Resource, resourceName)
 	}
 
 	// remove the resource from the result map
