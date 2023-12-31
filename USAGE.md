@@ -491,6 +491,9 @@ cyphernetes shell
 The shell supports syntax highlighting, autocompletion, and history.
 Use tab to autocomplete keywords, labels, and jsonPaths.
 
+By default the shell works in multiline mode, which means your query will be executed when you type a semicolon (`;`).
+You can toggle multiline mode by typing `\m` in the shell.
+
 At any time, you can type `exit` to exit the shell, or `help` to get a list of available commands.
 
 Available shell commands:
@@ -498,6 +501,7 @@ Available shell commands:
 * `help` - Display help and documentation.
 * `exit` - Exit the shell.
 * `\n <namespace>|all` - Set the namespace context for the shell to either `<namespace>` or all namespaces.
+* `\m` - Toggle multiline mode (execute query on ';').
 * `\d` - Print debug information.
 * `\q` - Toggle printing query execution time.
 * `\r` - Toggle raw output (disable colorized JSON).
@@ -511,4 +515,3 @@ The `query` command lets you run a single Cyphernetes query from the command lin
 ```bash
 cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
-
