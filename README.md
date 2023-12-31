@@ -18,7 +18,7 @@ The more complicated an operation is, the shorter it's Cyphernetes representatio
 ## Install
 
 ```bash
-go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
+go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes
 ```
 
 ## Usage

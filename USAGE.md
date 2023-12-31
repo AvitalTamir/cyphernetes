@@ -121,7 +121,7 @@ The payload will only include the fields requested in the `RETURN` clause. If on
 A node may contain an optional set of properties. Node properties let us query the resource by name or by any of it's labels.
 
 ```graphql
-MATCH (d:Deployment {name: "nginx-internal", app: "nginx"})
+MATCH (d:Deployment {name: "nginx-internal"})
 RETURN d.metadata.name,
        d.metadata.labels,
        d.spec.template.spec.containers[0].image
@@ -137,7 +137,7 @@ RETURN d.metadata.name,
         "labels": {
           "app": "nginx",
         },
-        "name": "nginx"
+        "name": "nginx-internal"
       },
       "spec": {
         "template": {
@@ -491,6 +491,9 @@ cyphernetes shell
 The shell supports syntax highlighting, autocompletion, and history.
 Use tab to autocomplete keywords, labels, and jsonPaths.
 
+By default the shell works in multiline mode, which means your query will be executed when you type a semicolon (`;`).
+You can toggle multiline mode by typing `\m` in the shell.
+
 At any time, you can type `exit` to exit the shell, or `help` to get a list of available commands.
 
 Available shell commands:
@@ -498,6 +501,7 @@ Available shell commands:
 * `help` - Display help and documentation.
 * `exit` - Exit the shell.
 * `\n <namespace>|all` - Set the namespace context for the shell to either `<namespace>` or all namespaces.
+* `\m` - Toggle multiline mode (execute query on ';').
 * `\d` - Print debug information.
 * `\q` - Toggle printing query execution time.
 * `\r` - Toggle raw output (disable colorized JSON).
@@ -511,4 +515,3 @@ The `query` command lets you run a single Cyphernetes query from the command lin
 ```bash
 cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
-

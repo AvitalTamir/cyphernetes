@@ -24,6 +24,7 @@ var ShellCmd = &cobra.Command{
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
 var disableColorJsonOutput bool = false
+var multiLineInput bool = true
 
 func filterInput(r rune) (rune, bool) {
 	switch r {
@@ -123,12 +124,13 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          shellPrompt(),
-		HistoryFile:     historyFile,
-		AutoComplete:    completer,
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-		Painter:         &syntaxHighlighter{},
+		Prompt:                 shellPrompt(),
+		HistoryFile:            historyFile,
+		AutoComplete:           completer,
+		InterruptPrompt:        "^C",
+		EOFPrompt:              "exit",
+		Painter:                &syntaxHighlighter{},
+		DisableAutoSaveHistory: true,
 
 		HistorySearchFold:   true,
 		FuncFilterInputRune: filterInput,
@@ -146,18 +148,39 @@ func runShell(cmd *cobra.Command, args []string) {
 	parser.FetchAndCacheGVRs(executor.Clientset)
 	initResourceSpecs()
 
+	var cmds []string
+	var input string
+
 	for {
 		line, err := rl.Readline()
 		if err != nil { // io.EOF, Ctrl-D
 			break
 		}
+		if multiLineInput {
+			line = strings.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			cmds = append(cmds, line)
+			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
+				rl.SetPrompt(">>> ")
+				continue
+			}
+			cmd := strings.Join(cmds, " ")
+			cmd = strings.TrimSuffix(cmd, ";")
+			cmds = cmds[:0]
+			rl.SetPrompt(shellPrompt())
+			rl.SaveHistory(cmd)
 
-		input := strings.TrimSpace(line)
+			input = strings.TrimSpace(cmd)
+		} else {
+			input = strings.TrimSpace(line)
+		}
+
 		if input == "exit" {
 			break
 		}
 
-		// if input starts with '\n '
 		if strings.HasPrefix(input, "\\n ") {
 			input = strings.TrimPrefix(input, "\\n ")
 			if strings.ToLower(input) == "all" {
@@ -193,16 +216,21 @@ func runShell(cmd *cobra.Command, args []string) {
 			// Toggle colorized JSON output
 			disableColorJsonOutput = !disableColorJsonOutput
 			fmt.Printf("Raw output mode: %t\n", disableColorJsonOutput)
+		} else if input == "\\m" {
+			// Toggle multi-line input mode
+			multiLineInput = !multiLineInput
+			fmt.Printf("Multi-line input mode: %t\n", multiLineInput)
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit               - Exit the shell")
 			fmt.Println("help               - Print this help message")
-			fmt.Println("\\d                 - Toggle debug mode")
+			fmt.Println("\\n <namespace>|all - Change the namespace context")
+			fmt.Println("\\m                 - Toggle multi-line input mode (execute query on ';')")
 			fmt.Println("\\q                 - Toggle print query execution time")
 			fmt.Println("\\r                 - Toggle raw output (disable colorized JSON)")
+			fmt.Println("\\d                 - Toggle debug mode")
 			fmt.Println("\\cc                - Clear the cache")
 			fmt.Println("\\pc                - Print the cache")
-			fmt.Println("\\n <namespace>|all - Change the namespace context")
 		} else if input != "" {
 			// Process the input if not empty
 			result, err := processQuery(input)
