@@ -121,7 +121,7 @@ The payload will only include the fields requested in the `RETURN` clause. If on
 A node may contain an optional set of properties. Node properties let us query the resource by name or by any of it's labels.
 
 ```graphql
-MATCH (d:Deployment {name: "nginx-internal", app: "nginx"})
+MATCH (d:Deployment {name: "nginx-internal"})
 RETURN d.metadata.name,
        d.metadata.labels,
        d.spec.template.spec.containers[0].image
@@ -137,7 +137,7 @@ RETURN d.metadata.name,
         "labels": {
           "app": "nginx",
         },
-        "name": "nginx"
+        "name": "nginx-internal"
       },
       "spec": {
         "template": {
