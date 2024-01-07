@@ -690,8 +690,6 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				if resultStr != valueStr {
 					// remove the resource from the slice
 					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
-				} else {
-					println("resource matches filter")
 				}
 			}
 
