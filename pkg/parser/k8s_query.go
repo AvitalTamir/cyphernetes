@@ -675,15 +675,13 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			}
 
 			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
-			removedCount := 0
 			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
 				// Drill down to create nested map structure
 				result, err := jsonpath.JsonPathLookup(resource, path)
 				if err != nil {
 					logDebug("Path not found:", filter.Key)
-					// Remove the resource at index j from the slice
-					resultMap[n.ResourceProperties.Name] = append(resultMap[n.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
-					removedCount++
+					// remove the resource from the slice
+					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
 				}
 				// convert the result and the value to strings and compare them
 				resultStr := fmt.Sprintf("%v", result)
@@ -691,10 +689,21 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 
 				if resultStr != valueStr {
 					// remove the resource from the slice
-					resultMap[n.ResourceProperties.Name] = append(resultMap[n.ResourceProperties.Name].([]map[string]interface{})[:j-removedCount], resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j-removedCount+1:]...)
-					removedCount++
+					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+				} else {
+					println("resource matches filter")
 				}
 			}
+
+			// remove nil values from the slice
+			var filtered []map[string]interface{}
+			for _, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+				if resource != nil {
+					filtered = append(filtered, resource)
+				}
+			}
+
+			resultMap[n.ResourceProperties.Name] = filtered
 		}
 	}
 
