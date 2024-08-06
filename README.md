@@ -4,26 +4,69 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/avitaltamir/cyphernetes.svg)](https://pkg.go.dev/github.com/avitaltamir/cyphernetes)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API.
+Cyphernetes turns this: 😣
+```bash
+# List all services exposing pods with the 'nginx' app label
+kubectl get pods -l app=nginx -o json | \
+jq -r '.items[].metadata.labels | to_entries[] | "\(.key)=\(.value)"' | \
+xargs -I {} kubectl get services -l {} -o json | \
+jq '.items[].metadata.name' | \
+xargs kubectl get services
+```
 
-Cyphernetes is designed to translate quickly and with little friction **from whiteboard to code**.
+Into this: 🤩 
+```graphql
+> MATCH (p:Pod {app: "nginx"})<-(s:Service)
+RETURN s
+```
 
-A mixture of ascii-art, SQL-esque keywords and jsonPaths, Cyphernetes lets us express Kubernetes CRUD operations in an efficeint, creative and fun way.
+## But how?
+
+Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API. A mixture of ascii-art, SQL-esque keywords and jsonPaths, Cyphernetes lets us express Kubernetes CRUD operations in an efficeint, creative and fun way:
+
+```graphql
+> MATCH (d:Deployment)
+  RETURN d.metadata.name AS name, 
+       d.spec.replicas AS desiredReplicas, 
+       d.status.availableReplicas AS runningReplicas
+
+{
+  "d": [
+    {
+      "desiredReplicas": 2,
+      "name": "coredns",
+      "runningReplicas": 2
+    }
+  ]
+}
+
+Query executed in 9.081292ms
+
+```
 
 Cyphernetes' superpower is that it understands the relationships between Kubernetes resource kinds.
-This feature lets us express highly complex operations in a natural way, and without having to worry about the underlying Kubernetes API.
+This feature lets us express highly complex operations in a natural way, and without having to worry about the underlying Kubernetes API:
 
-The more complicated an operation is, the shorter it's Cyphernetes representation would be compared to the equiavalent nested kubectl commands or API client code. Even highly complicated operations can usually be expressed in a single line of Cyphernetes.
+```graphql
+# similar to `kubectl expose`
+MATCH (d:Deployment {name: "nginx")
+CREATE (d)->(s:Service)
+```
 
-## Install
+Beyond the fun factor, Cyphernetes aims to be efficient in expressing complex operations.
+The more complicated an operation is, the shorter it's Cyphernetes representation would be compared to the equiavalent nested kubectl commands or API client code.
+
+For more usage examples, please see the [Usage Guide](https://github.com/AvitalTamir/cyphernetes/blob/main/USAGE.md).
+
+## Get Cyphernetes
+
+Build using go:
 
 ```bash
 go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
 ```
 
-## Usage
-
-Please see the [Usage Instructions](https://github.com/AvitalTamir/cyphernetes/blob/main/USAGE.md) to learn how to use Cyphernetes.
+Alternatively, grab a binary from the [Releases page](https://github.com/AvitalTamir/cyphernetes/releases).
 
 ## Development
 
