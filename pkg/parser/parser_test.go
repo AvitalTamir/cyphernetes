@@ -59,7 +59,10 @@ func TestParseQueryWithReturn(t *testing.T) {
 				ExtraFilters:  nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"s.spec.ports", "d.metadata.name"},
+				Items: []*ReturnItem{
+					{JsonPath: "s.spec.ports"},
+					{JsonPath: "d.metadata.name"},
+				},
 			},
 		},
 	}
@@ -71,6 +74,46 @@ func TestParseQueryWithReturn(t *testing.T) {
 	}
 
 	// Check if the resulting AST matches the expected structure.
+	if !reflect.DeepEqual(expr, expected) {
+		exprJson, _ := json.Marshal(expr)
+		expectedJson, _ := json.Marshal(expected)
+		fmt.Printf("expr: %+v\n", string(exprJson))
+		fmt.Printf("expected: %+v\n", string(expectedJson))
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}
+
+func TestParseQueryWithReturnAndAlias(t *testing.T) {
+	query := `MATCH (d:deploy) RETURN d.metadata.name AS deploymentName, d.spec.replicas AS replicaCount`
+
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name", Alias: "deploymentName"},
+					{JsonPath: "d.spec.replicas", Alias: "replicaCount"},
+				},
+			},
+		},
+	}
+
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
 	if !reflect.DeepEqual(expr, expected) {
 		exprJson, _ := json.Marshal(expr)
 		expectedJson, _ := json.Marshal(expected)
@@ -98,7 +141,9 @@ func TestSingleNodePattern(t *testing.T) {
 				ExtraFilters:  nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"n"},
+				Items: []*ReturnItem{
+					{JsonPath: "n"},
+				},
 			},
 		},
 	}
@@ -143,7 +188,10 @@ func TestMultipleNodePatternsCommaSeparated(t *testing.T) {
 				ExtraFilters:  nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"n", "m"},
+				Items: []*ReturnItem{
+					{JsonPath: "n"},
+					{JsonPath: "m"},
+				},
 			},
 		},
 	}
@@ -204,7 +252,10 @@ func TestMultipleNodePatternsRelationship(t *testing.T) {
 				ExtraFilters: nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"n", "m"},
+				Items: []*ReturnItem{
+					{JsonPath: "n"},
+					{JsonPath: "m"},
+				},
 			},
 		},
 	}
@@ -271,7 +322,11 @@ func TestComplexNodePatternsAndRelationships(t *testing.T) {
 				ExtraFilters: nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"a", "b", "c"},
+				Items: []*ReturnItem{
+					{JsonPath: "a"},
+					{JsonPath: "b"},
+					{JsonPath: "c"},
+				},
 			},
 		},
 	}
@@ -353,7 +408,11 @@ func TestChainedRelationships(t *testing.T) {
 				ExtraFilters: nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"a", "b", "d"},
+				Items: []*ReturnItem{
+					{JsonPath: "a"},
+					{JsonPath: "b"},
+					{JsonPath: "d"},
+				},
 			},
 		},
 	}
@@ -453,7 +512,12 @@ func TestChainedRelationshipsWithComma(t *testing.T) {
 				ExtraFilters: nil,
 			},
 			&ReturnClause{
-				JsonPaths: []string{"a", "b", "c", "d"},
+				Items: []*ReturnItem{
+					{JsonPath: "a"},
+					{JsonPath: "b"},
+					{JsonPath: "c"},
+					{JsonPath: "d"},
+				},
 			},
 		},
 	}
@@ -648,7 +712,9 @@ func TestMatchWhereReturn(t *testing.T) {
 				},
 			},
 			&ReturnClause{
-				JsonPaths: []string{"k.name"},
+				Items: []*ReturnItem{
+					{JsonPath: "k.name"},
+				},
 			},
 		},
 	}

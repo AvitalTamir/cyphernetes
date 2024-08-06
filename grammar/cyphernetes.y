@@ -22,7 +22,6 @@ func debugLog(v ...interface{}) {
 %union {
     strVal                 string
     jsonPath               string
-    jsonPathList           []string
     nodePattern            *NodePattern
     clause                 *Clause
     expression             *Expression
@@ -31,6 +30,8 @@ func debugLog(v ...interface{}) {
     deleteClause           *DeleteClause
     createClause           *CreateClause
     returnClause           *ReturnClause
+    returnItems            []*ReturnItem
+    returnItem             *ReturnItem
     properties             *Properties
     jsonPathValue          *Property
     jsonPathValueList      []*Property
@@ -49,7 +50,7 @@ func debugLog(v ...interface{}) {
 %token <strVal> BOOLEAN
 %token <strVal> STRING
 %token <strVal> JSONDATA
-%token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS
+%token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS AS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 
 %type<expression> Expression
@@ -68,13 +69,14 @@ func debugLog(v ...interface{}) {
 %type<strVal> STRING
 %type<strVal> INT
 %type<strVal> BOOLEAN
-%type<jsonPathList> JSONPathList
 %type<relationship> Relationship
 %type<resourceProperties> ResourceProperties
 %type<nodeRelationshipList> NodeRelationshipList
 %type<keyValuePairs> KeyValuePairs
 %type<keyValuePair> KeyValuePair
 %type<nodeIds> NodeIds
+%type<returnItems> ReturnItems
+%type<returnItem> ReturnItem
 
 %%
 
@@ -208,17 +210,29 @@ NodePattern:
 ;
 
 ReturnClause:
-    RETURN JSONPathList {
-        $$ = &ReturnClause{JsonPaths: $2}
+    RETURN ReturnItems {
+        $$ = &ReturnClause{Items: $2}
     }
 ;
 
-JSONPathList:
+ReturnItems:
     JSONPATH {
-        $$ = []string{$1}
+        $$ = []*ReturnItem{{JsonPath: $1}}
     }
-|   JSONPathList COMMA JSONPATH {
+|   ReturnItems COMMA JSONPATH {
+        $$ = append($1, &ReturnItem{JsonPath: $3})
+    }
+|   ReturnItem {
+        $$ = []*ReturnItem{$1}
+    }
+|   ReturnItems COMMA ReturnItem {
         $$ = append($1, $3)
+    }
+;
+
+ReturnItem:
+    JSONPATH AS IDENT {
+        $$ = &ReturnItem{JsonPath: $1, Alias: $3}
     }
 ;
 
