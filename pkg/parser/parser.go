@@ -109,26 +109,12 @@ func (d *DeleteClause) isClause() {}
 func (r *ReturnClause) isClause() {}
 func (c *CreateClause) isClause() {}
 
-// func (w *WhereClause) isClause() {}
-// func (a *AsClause) isClause() {}
-
 var result *Expression
 
 func ParseQuery(query string) (*Expression, error) {
 	lexer := NewLexer(query)
 	if yyParse(lexer) != 0 {
 		return nil, fmt.Errorf("parsing failed")
-	}
-
-	// Convert old ReturnClause format to new format if necessary
-	for i, clause := range result.Clauses {
-		if returnClause, ok := clause.(*ReturnClause); ok {
-			if returnClause.Items == nil {
-				// This is the old format, convert it
-				newItems := make([]*ReturnItem, 0)
-				result.Clauses[i] = &ReturnClause{Items: newItems}
-			}
-		}
 	}
 
 	return result, nil
