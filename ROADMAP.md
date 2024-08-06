@@ -36,7 +36,7 @@
 
 - [x] Add support for additional tokens (e.g., braces, commas, relationship types).
 - [x] Extend grammar rules to cover node properties and relationships.
-- [ ] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
+- [x] Implement parsing logic for `CREATE`, `SET`, and `DELETE` keywords.
 - [ ] Refine error handling for syntax and parsing errors.
 - [ ] Optimize lexer and parser for performance.
 
@@ -45,7 +45,7 @@
 - [x] Basic shell interface for inputting queries and displaying results.
 - [x] Syntax highlighting.
 - [x] Autocompletion.
-- [ ] Add help and documentation to the shell.
+- [x] Add help and documentation to the shell.
 - [ ] Test shell with various input scenarios.
 
 ## Cypher-Like Query Language Parser Roadmap
@@ -114,7 +114,7 @@ The goal of this roadmap is to incrementally develop a parser that can handle a 
 
 ### Phase 10: AS Clause
 
-- [ ] Add support for `AS` clauses.
-- [ ] Update the lexer to recognize the `AS` keyword.
-- [ ] Extend the yacc grammar to parse `AS` clauses.
-- [ ] Write unit tests for `AS` clause parsing.
+- [x] Add support for `AS` clauses.
+- [x] Update the lexer to recognize the `AS` keyword.
+- [x] Extend the yacc grammar to parse `AS` clauses.
+- [x] Write unit tests for `AS` clause parsing.

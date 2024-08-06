@@ -131,6 +131,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingWhere = false
 			logDebug("Returning RETURN token")
 			return int(RETURN)
+		} else if strings.ToUpper(lit) == "AS" {
+			logDebug("Returning AS token")
+			return int(AS)
 		} else if strings.ToUpper(lit) == "WHERE" {
 			logDebug("Returning WHERE token")
 			l.definingWhere = true

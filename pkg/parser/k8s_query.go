@@ -426,62 +426,36 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			}
 
 		case *ReturnClause:
-			for _, jsonPath := range c.JsonPaths {
-				// The first part of the key is the node name
-				nodeId := strings.Split(jsonPath, ".")[0]
+			for _, item := range c.Items {
+				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if resultMap[nodeId] == nil {
 					return nil, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
-				// The rest of the key is the JSONPath
-				pathParts := strings.Split(jsonPath, ".")[1:]
+				pathParts := strings.Split(item.JsonPath, ".")[1:]
+				pathStr := "$." + strings.Join(pathParts, ".")
 
-				var pathStr string
-				if len(pathParts) == 0 {
-					pathParts = append(pathParts, "$")
-					pathStr = "$"
-				} else {
-					pathStr = strings.Join(pathParts, ".")
-				}
-
-				// Ensure the JSONPath starts with '$'
-				if !strings.HasPrefix(pathStr, "$") {
-					pathStr = "$." + pathStr
-				}
-
-				// Create a map for the node's resources if it's empty
 				if results[nodeId] == nil {
 					results[nodeId] = []interface{}{}
 				}
 
-				// Iterate over the resources in the result map
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
-					// if it doesn't exist, create a new empty slice in results[nodeId][idx]
-
 					if len(results[nodeId].([]interface{})) <= idx {
 						results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
 					}
 					currentMap := results[nodeId].([]interface{})[idx].(map[string]interface{})
 
-					// assign
-					// Drill down to create nested map structure
-					for i, part := range pathParts {
-						if i == len(pathParts)-1 {
-							// Last part: assign the result
-							result, err := jsonpath.JsonPathLookup(resource, pathStr)
-							if err != nil {
-								logDebug("Path not found:", jsonPath)
-								result = []interface{}{}
-							}
-							currentMap[part] = result
-						} else {
-							// Intermediate parts: create nested maps
-							if currentMap[part] == nil {
-								currentMap[part] = make(map[string]interface{})
-							}
-							currentMap = currentMap[part].(map[string]interface{})
-						}
+					result, err := jsonpath.JsonPathLookup(resource, pathStr)
+					if err != nil {
+						logDebug("Path not found:", item.JsonPath)
+						result = nil
 					}
+
+					key := item.Alias
+					if key == "" {
+						key = pathParts[len(pathParts)-1]
+					}
+					currentMap[key] = result
 				}
 			}
 
