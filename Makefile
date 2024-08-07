@@ -1,6 +1,7 @@
 # Define the binary name
 BINARY_NAME=cyphernetes
-
+TARGET_KERNELS=darwin linux
+TARGET_ARCHS=amd64 arm64
 # Define the default make target
 all: bt
 
@@ -12,7 +13,20 @@ build: gen-parser
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/
-	mv cmd/cyphernetes/${BINARY_NAME} dist/
+	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes-darwin-arm64
+	@echo "🎉 Done!"
+
+build-all-platforms-and-archs:
+	@echo "👷 Building ${BINARY_NAME}..."
+	@for kernel in $(TARGET_KERNELS); do \
+		for arch in $(TARGET_ARCHS); do \
+			echo "Building for $$kernel/$$arch"; \
+			cd cmd/cyphernetes && GOOS=$$kernel GOARCH=$$arch go build -o ${BINARY_NAME} > /dev/null; \
+			mkdir -p ../../dist/; \
+			mv ${BINARY_NAME} ../../dist/cyphernetes-$$kernel-$$arch; \
+			cd ../..; \
+		done; \
+	done
 	@echo "🎉 Done!"
 
 # Define how to run tests
