@@ -49,7 +49,7 @@ This feature lets us express highly complex operations in a natural way, and wit
 
 ```graphql
 # similar to `kubectl expose`
-MATCH (d:Deployment {name: "nginx")
+MATCH (d:Deployment {name: "nginx"})
 CREATE (d)->(s:Service)
 ```
 
