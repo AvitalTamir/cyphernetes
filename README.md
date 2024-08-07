@@ -16,7 +16,7 @@ xargs kubectl get services
 
 Into this: 🤩 
 ```graphql
-> MATCH (p:Pod {app: "nginx"})<-(s:Service)
+MATCH (p:Pod {app: "nginx"})<-(s:Service)
 RETURN s
 ```
 
