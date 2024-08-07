@@ -5,9 +5,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -279,7 +282,7 @@ func runShell(cmd *cobra.Command, args []string) {
 		} else if input != "" {
 			// Process the input if not empty
 			result, graph, err := processQuery(input)
-			graph = sanitizeGraph(graph)
+			graph, err = sanitizeGraph(graph, result)
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
@@ -302,7 +305,7 @@ func runShell(cmd *cobra.Command, args []string) {
 	}
 }
 
-func sanitizeGraph(g parser.Graph) parser.Graph {
+func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
 	// create a unique map of nodes
 	nodeMap := make(map[string]parser.Node)
 	for _, node := range g.Nodes {
@@ -313,7 +316,21 @@ func sanitizeGraph(g parser.Graph) parser.Graph {
 	for _, node := range nodeMap {
 		g.Nodes = append(g.Nodes, node)
 	}
-	return g
+
+	// unmarshal the result into a map[string]interface{}
+	var resultMap map[string]interface{}
+	err := json.Unmarshal([]byte(result), &resultMap)
+	if err != nil {
+		return g, fmt.Errorf("error unmarshalling result: %w", err)
+	}
+
+	// now let's filter out only nodes that have data (in g.Data)
+	for _, node := range g.Nodes {
+		if resultMap[node.Id] == nil {
+			g.Nodes = append(g.Nodes, node)
+		}
+	}
+	return g, nil
 }
 
 func DrawGraphviz(graph parser.Graph) string {
@@ -365,7 +382,12 @@ func DrawGraphviz(graph parser.Graph) string {
 		fmt.Println("Error rendering graph:", err)
 	}
 
-	return buf.String()
+	ascii, err := dotToAscii(buf.String(), true)
+	if err != nil {
+		return fmt.Sprintf("Error converting graph to ASCII: %v", err)
+	}
+
+	return "\n" + ascii
 }
 
 func executeMacro(input string) (string, error) {
@@ -395,6 +417,14 @@ func executeMacro(input string) (string, error) {
 	}
 
 	execTime = time.Since(startTime)
+
+	graph, err = sanitizeGraph(graph, strings.Join(results, "\n"))
+	if err != nil {
+		return "", fmt.Errorf("error sanitizing graph: %w", err)
+	}
+	if !disableGraphOutput {
+		fmt.Println(DrawGraphviz(graph))
+	}
 	return strings.Join(results, "\n"), nil
 }
 
@@ -576,4 +606,33 @@ func init() {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
 	}
+}
+
+func dotToAscii(dot string, fancy bool) (string, error) {
+	url := "http://ascii.cyphernet.es/dot-to-ascii.php"
+	boxart := 0
+	if fancy {
+		boxart = 1
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	q := req.URL.Query()
+	q.Add("boxart", strconv.Itoa(boxart))
+	q.Add("src", dot)
+	req.URL.RawQuery = q.Encode()
+
+	response, err := http.Get(req.URL.String())
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
