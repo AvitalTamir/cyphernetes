@@ -1,0 +1,118 @@
+:po
+MATCH (pods:Pod)
+RETURN pods.metadata.name AS Name,
+       pods.status.phase AS Status,
+       pods.spec.nodeName AS Node,
+       pods.status.podIP AS IP,
+       pods.metadata.creationTimestamp AS Age;
+
+:deploy
+MATCH (deployments:Deployment)
+RETURN deployments.metadata.name AS Name,
+       deployments.status.replicas AS Ready,
+       deployments.spec.replicas AS DesiredReplicas,
+       deployments.status.updatedReplicas AS UpToDate,
+       deployments.status.availableReplicas AS Available,
+       deployments.metadata.creationTimestamp AS Age;
+
+:svc
+MATCH (services:Service)
+RETURN services.metadata.name AS Name,
+       services.spec.type AS Type,
+       services.spec.clusterIP AS ClusterIP,
+       services.spec.externalIPs AS ExternalIP,
+       services.spec.ports AS Ports,
+       services.metadata.creationTimestamp AS Age;
+
+:ns
+MATCH (namespaces:Namespace)
+RETURN namespaces.metadata.name AS Name,
+       namespaces.status.phase AS Status,
+       namespaces.metadata.creationTimestamp AS Age;
+
+:no
+MATCH (nodes:Node)
+RETURN nodes.metadata.name AS Name,
+       nodes.status.nodeInfo.osImage AS OS,
+       nodes.status.nodeInfo.kubeletVersion AS Version,
+       n.status.allocatable.cpu AS CPU,
+       nodes.status.allocatable.memory AS Memory,
+       nodes.spec.unschedulable AS Unschedulable;
+
+:pv
+MATCH (persistentVolumes:PersistentVolume)
+RETURN persistentVolumes.metadata.name AS Name,
+       persistentVolumes.spec.capacity.storage AS Capacity,
+       persistentVolumes.spec.accessModes AS AccessModes,
+       persistentVolumes.spec.storageClassName AS StorageClass,
+       persistentVolumes.status.phase AS Status;
+
+:pvc
+MATCH (persistentVolumeClaims:PersistentVolumeClaim)
+RETURN persistentVolumeClaims.metadata.name AS Name,
+       persistentVolumeClaims.spec.volumeName AS Volume,
+       persistentVolumeClaims.spec.resources.requests.storage AS Capacity,
+       persistentVolumeClaims.status.phase AS Status,
+       persistentVolumeClaims.metadata.creationTimestamp AS Age;
+
+:event
+MATCH (events:Event)
+WHERE events.type = "Warning"
+RETURN events.involvedObject.kind AS Resource,
+       events.involvedObject.name AS Name,
+       events.reason AS Reason,
+       events.message AS Message,
+       events.lastTimestamp AS LastSeen;
+
+:podmon
+MATCH (pods:Pod)
+RETURN pods.metadata.name AS Name,
+       pods.metadata.namespace AS Namespace,
+       pods.spec.containers[0].resources.requests.cpu AS RequestedCPU,
+       pods.spec.containers[0].resources.requests.memory AS RequestedMemory,
+       pods.status.containerStatuses[0].restartCount AS Restarts;
+
+:ing
+MATCH (ingresses:Ingress)
+RETURN ingresses.metadata.name AS Name,
+       ingresses.spec.rules[0].host AS Host,
+       ingresses.spec.rules[0].http.paths[0].path AS Path,
+       ingresses.spec.rules[0].http.paths[0].backend.serviceName AS Service,
+       ingresses.metadata.creationTimestamp AS Age;
+
+:cm
+MATCH (configMaps:ConfigMap)
+RETURN configMaps.metadata.name AS Name,
+       configMaps.metadata.namespace AS Namespace,
+       configMaps.metadata.creationTimestamp AS Age;
+
+:secret
+MATCH (secrets:Secret)
+RETURN secrets.metadata.name AS Name,
+       secrets.metadata.namespace AS Namespace,
+       secrets.type AS Type,
+       secrets.metadata.creationTimestamp AS Age;
+
+:job
+MATCH (jobs:Job)
+RETURN jobs.metadata.name AS Name,
+       jobs.status.succeeded AS Succeeded,
+       jobs.status.failed AS Failed,
+       jobs.spec.completions AS Completions,
+       jobs.status.startTime AS StartTime,
+       jobs.status.completionTime AS CompletionTime;
+
+:cronjob
+MATCH (cronJobs:CronJob)
+RETURN cronJobs.metadata.name AS Name,
+       cronJobs.spec.schedule AS Schedule,
+       cronJobs.spec.suspend AS Suspended,
+       cronJobs.status.lastScheduleTime AS LastSchedule,
+       cronJobs.metadata.creationTimestamp AS Age;
+
+:expose d
+MATCH (deployment:Deployment {name: "$d"})
+CREATE (deployment)->(service:Service);
+MATCH (service:Service {name: "$d"})
+RETURN services.metadata.name AS Name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP;
+

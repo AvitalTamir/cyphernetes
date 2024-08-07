@@ -476,6 +476,53 @@ DELETE s, i
 
 ----
 
+## Macros
+
+Cyphernetes comes with a set of default macros that can be used to query the Kubernetes API.
+
+There are many built-in macros for performing common tasks such as listing pods, services, deployments, etc. as well as for performing common tasks such as exposing a deployment as a service.
+
+You can list available macros by running `\lm` in the shell.
+
+### Using a Macro
+
+You can use a macro by running `:<macro-name>` in the shell:
+
+```graphql
+> :po
+
+{
+  "pods": [
+    {
+      "Age": "2024-08-06T21:29:05Z",
+      "IP": "10.244.0.5",
+      "Name": "nginx-bf5d5cf98-m69mz",
+      "Node": "kind-control-plane",
+      "Status": "Running"
+    }
+  ]
+}
+
+Macro executed in 14.971875ms
+```
+
+### Creating a Macro
+
+User macros are defined in the `~/.cyphernetes/macros` file.
+Macros are defined using the following syntax:
+
+```
+:macro <name> [<args>]
+MATCH (p:Pods) RETURN p.metadata.name;
+
+# Multi-line queries are supported
+:macro my-macro
+MATCH (p:Pods)
+RETURN p.metadata.name;
+```
+
+----
+
 ## The Cyphernetes CLI
 
 ### Shell
@@ -507,6 +554,7 @@ Available shell commands:
 * `\r` - Toggle raw output (disable colorized JSON).
 * `\cc` - Clear the cache.
 * `\pc` - Print the cache.
+* `\lm` - List available macros.
 
 ### Query
 
