@@ -1,9 +1,11 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -15,6 +17,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+//go:embed default_macros.txt
+var defaultMacros string
+
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Launch an interactive shell",
@@ -25,6 +30,7 @@ var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
 var disableColorJsonOutput bool = false
 var multiLineInput bool = true
+var macroManager = NewMacroManager()
 
 func filterInput(r rune) (rune, bool) {
 	switch r {
@@ -122,7 +128,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 }
 
 func runShell(cmd *cobra.Command, args []string) {
-	historyFile := os.Getenv("HOME") + "/.cyphernetes_history"
+	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:                 shellPrompt(),
 		HistoryFile:            historyFile,
@@ -155,6 +161,24 @@ func runShell(cmd *cobra.Command, args []string) {
 		line, err := rl.Readline()
 		if err != nil { // io.EOF, Ctrl-D
 			break
+		}
+
+		if strings.HasPrefix(line, ":") {
+			// Execute macro immediately
+			result, err := executeMacro(line)
+			if err != nil {
+				fmt.Printf("Error >> %s\n", err)
+			} else {
+				if !disableColorJsonOutput {
+					result = colorizeJson(result)
+				}
+				fmt.Println(result)
+				if printQueryExecutionTime {
+					fmt.Printf("\nMacro executed in %s\n\n", execTime)
+				}
+			}
+			rl.SaveHistory(line)
+			continue
 		}
 		if multiLineInput {
 			line = strings.TrimSpace(line)
@@ -212,6 +236,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			// Clear the cache
 			parser.ClearCache()
 			fmt.Println("Cache cleared")
+		} else if input == "\\lm" {
+			fmt.Println("Registered macros:")
+			for name, macro := range macroManager.Macros {
+				fmt.Printf("%s: %v\n", name, macro.Args)
+			}
 		} else if input == "\\r" {
 			// Toggle colorized JSON output
 			disableColorJsonOutput = !disableColorJsonOutput
@@ -231,6 +260,8 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println("\\d                 - Toggle debug mode")
 			fmt.Println("\\cc                - Clear the cache")
 			fmt.Println("\\pc                - Print the cache")
+			fmt.Println("\\lm                - List all registered macros")
+			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
 			// Process the input if not empty
 			result, err := processQuery(input)
@@ -253,35 +284,95 @@ func runShell(cmd *cobra.Command, args []string) {
 	}
 }
 
+func executeMacro(input string) (string, error) {
+	startTime := time.Now()
+
+	macroName := strings.TrimPrefix(input, ":")
+	parts := strings.Fields(macroName)
+	macroName = parts[0]
+	args := parts[1:]
+
+	statements, err := macroManager.ExecuteMacro(macroName, args)
+	if err != nil {
+		return "", err
+	}
+
+	var results []string
+	for i, stmt := range statements {
+		result, err := processQuery(stmt)
+		if err != nil {
+			return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
+		}
+		if result != "{}" {
+			results = append(results, result)
+		}
+	}
+
+	execTime = time.Since(startTime)
+	return strings.Join(results, "\n"), nil
+}
+
 // Execute the query against the Kubernetes API.
 var executor = parser.GetQueryExecutorInstance()
 var execTime time.Duration
 
 func processQuery(query string) (string, error) {
-	// take a measurement of the time it takes to execute the query
 	startTime := time.Now()
 
-	// Parse the query to get an AST.
-	ast, err := parser.ParseQuery(query)
+	query = strings.TrimSuffix(query, ";")
 
+	var result string
+	var err error
+
+	if strings.HasPrefix(query, ":") {
+		macroName := strings.TrimPrefix(query, ":")
+		parts := strings.Fields(macroName)
+		macroName = parts[0]
+		args := parts[1:]
+
+		statements, err := macroManager.ExecuteMacro(macroName, args)
+		if err != nil {
+			return "", err
+		}
+
+		var results []string
+		for i, stmt := range statements {
+			result, err := executeStatement(stmt)
+			if err != nil {
+				return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
+			}
+			if result != "{}" {
+				results = append(results, result)
+			}
+		}
+
+		result = strings.Join(results, "\n")
+	} else {
+		result, err = executeStatement(query)
+	}
+
+	execTime = time.Since(startTime)
+	return result, err
+}
+
+func executeStatement(query string) (string, error) {
+	ast, err := parser.ParseQuery(query)
 	if err != nil {
-		// Handle error.
 		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
 
 	results, err := executor.Execute(ast)
 	if err != nil {
-		// Handle error.
 		return "", fmt.Errorf("error executing query >> %s", err)
 	}
 
-	// Measure the time it took to execute the query
-	execTime = time.Since(startTime)
+	// Check if results is nil or empty
+	if results == nil || (reflect.ValueOf(results).Kind() == reflect.Map && len(results.(map[string]interface{})) == 0) {
+		return "{}", nil
+	}
 
-	// Print the results as pretty JSON.
 	json, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
-		// Handle error.
 		return "", fmt.Errorf("error marshalling results >> %s", err)
 	}
 	return string(json), nil
@@ -308,5 +399,21 @@ func colorizeJson(jsonString string) string {
 func init() {
 	rootCmd.AddCommand(ShellCmd)
 
-	// Here you can define flags and configuration settings for the 'shell' subcommand if needed
+	// Create the .cyphernetes directory if it doesn't exist
+	if _, err := os.Stat(os.Getenv("HOME") + "/.cyphernetes"); os.IsNotExist(err) {
+		os.MkdirAll(os.Getenv("HOME")+"/.cyphernetes", os.ModePerm)
+	}
+
+	// Load default macros from the embedded content
+	if err := macroManager.LoadMacrosFromString("default_macros.txt", defaultMacros); err != nil {
+		fmt.Printf("Error loading default macros: %v\n", err)
+	}
+
+	// Load user macros
+	userMacrosFile := os.Getenv("HOME") + "/.cyphernetes/macros"
+	if _, err := os.Stat(userMacrosFile); err == nil {
+		if err := macroManager.LoadMacrosFromFile(userMacrosFile); err != nil {
+			fmt.Printf("Error loading user macros: %v\n", err)
+		}
+	}
 }

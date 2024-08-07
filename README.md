@@ -27,8 +27,8 @@ Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for work
 ```graphql
 > MATCH (d:Deployment)
   RETURN d.metadata.name AS name, 
-       d.spec.replicas AS desiredReplicas, 
-       d.status.availableReplicas AS runningReplicas
+         d.spec.replicas AS desiredReplicas, 
+         d.status.availableReplicas AS runningReplicas;
 
 {
   "d": [
@@ -41,7 +41,6 @@ Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for work
 }
 
 Query executed in 9.081292ms
-
 ```
 
 Cyphernetes' superpower is that it understands the relationships between Kubernetes resource kinds.
@@ -49,8 +48,47 @@ This feature lets us express highly complex operations in a natural way, and wit
 
 ```graphql
 # similar to `kubectl expose`
-MATCH (d:Deployment {name: "nginx"})
-CREATE (d)->(s:Service)
+> MATCH (d:Deployment {name: "nginx"})
+  CREATE (d)->(s:Service);
+
+Created services/nginx
+
+Query executed in 30.692208ms
+```
+
+It has macros! User-extensible & batteries included.
+```graphql
+> :expose nginx
+
+Created services/nginx
+{
+  "services": [
+    {
+      "ClusterIP": "10.96.86.234",
+      "Name": "nginx",
+      "Type": "ClusterIP"
+    }
+  ]
+}
+
+Macro executed in 31.570292ms
+```
+```graphql
+> :po
+
+{
+  "pods": [
+    {
+      "Age": "2024-08-06T21:29:05Z",
+      "IP": "10.244.0.5",
+      "Name": "nginx-bf5d5cf98-m69mz",
+      "Node": "kind-control-plane",
+      "Status": "Running"
+    }
+  ]
+}
+
+Macro executed in 14.971875ms
 ```
 
 Beyond the fun factor, Cyphernetes aims to be efficient in expressing complex operations.
