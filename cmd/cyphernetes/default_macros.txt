@@ -123,3 +123,18 @@ MATCH (services:Service {name: "$deploymentName"})
 CREATE (services)->(i:ingress {"spec":{"rules": [{"host": "$hostname"}]}});
 MATCH (deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress)
 RETURN services.metadata.name AS Name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP, ingresses.spec.rules[0].host AS Host, ingresses.spec.rules[0].http.paths[0].path AS Path, ingresses.spec.rules[0].http.paths[0].backend.service.name AS Service;
+
+:public_deploy deploymentName    # Examine a deployment and its services and ingress
+MATCH (pods:Pod)->(replicaSets:ReplicaSet)->(deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress) 
+RETURN pods.metadata.name AS Name,
+       deployments.metadata.name AS Deployment,
+       services.metadata.name AS Service,
+       services.spec.type AS Type,
+       services.spec.clusterIP AS ClusterIP,
+       ingresses.metadata.name AS Ingress,
+       ingresses.spec.rules[0].host AS Host,
+       ingresses.spec.rules[0].http.paths[0].path AS Path,
+       ingresses.spec.rules[0].http.paths[0].backend.service.name AS IngressBackend;
+
+:create_deploy deploymentName image # Create a deployment
+CREATE (deployment:Deployment {"metadata": {"name": "$deploymentName", "labels": {"app": "$deploymentName"}}, "spec": {"strategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 1, "maxSurge": 1}}, "selector": {"matchLabels": {"app": "$deploymentName"}}, "template": {"metadata": {"labels": {"app": "$deploymentName"}}, "spec": {"containers": [{"name": "$deploymentName", "image": "$image"}]}}}});
