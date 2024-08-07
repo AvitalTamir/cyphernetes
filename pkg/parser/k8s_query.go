@@ -178,6 +178,22 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 						rightNodeId := fmt.Sprintf("%s/%s", rightNodeResource["kind"].(string), rightNodeResource["metadata"].(map[string]interface{})["name"].(string))
 						for _, leftNodeResource := range leftNodeResources {
 							leftNodeId := fmt.Sprintf("%s/%s", leftNodeResource["kind"].(string), leftNodeResource["metadata"].(map[string]interface{})["name"].(string))
+
+							// apply the relationship rule to the two nodes
+							// asign into resourceA and resourceB the right and left node resources by the rule kinds
+							var resourceA []map[string]interface{}
+							var resourceB []map[string]interface{}
+							if rightKind.Resource == rule.KindA {
+								resourceA = []map[string]interface{}{rightNodeResource}
+								resourceB = []map[string]interface{}{leftNodeResource}
+							} else if leftKind.Resource == rule.KindA {
+								resourceA = []map[string]interface{}{leftNodeResource}
+								resourceB = []map[string]interface{}{rightNodeResource}
+							}
+							matchedResources := applyRelationshipRule(resourceA, resourceB, rule, filteredDirection)
+							if len(matchedResources["right"].([]map[string]interface{})) == 0 || len(matchedResources["left"].([]map[string]interface{})) == 0 {
+								continue
+							}
 							results.Graph.Edges = append(results.Graph.Edges, Edge{
 								From: rightNodeId,
 								To:   leftNodeId,
