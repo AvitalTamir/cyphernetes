@@ -16,14 +16,15 @@ xargs kubectl get services
 
 Into this: 🤩 
 ```graphql
-MATCH (p:Pod {app: "nginx"})<-(s:Service)
+MATCH (p:Pod {app: "nginx"})->(s:Service)
 RETURN s
 ```
 
 ## But how?
 
-Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API. A mixture of ascii-art, SQL-esque keywords and jsonPaths, Cyphernetes lets us express Kubernetes CRUD operations in an efficeint, creative and fun way:
+Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API. A mixture of ascii-art, SQL-esque keywords and jsonPaths, Cyphernetes lets us express Kubernetes CRUD operations in an efficeint, creative and fun way.
 
+### Examples
 ```graphql
 > MATCH (d:Deployment)
   RETURN d.metadata.name AS name, 
@@ -56,7 +57,8 @@ Created services/nginx
 Query executed in 30.692208ms
 ```
 
-It has macros! User-extensible & batteries included.
+### It has macros too
+Macros are minimalistic, user-extensible & batteries included stored procedures.
 ```graphql
 > :expose nginx
 
