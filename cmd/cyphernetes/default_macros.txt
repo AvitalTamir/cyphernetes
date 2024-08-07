@@ -116,3 +116,10 @@ CREATE (deployment)->(service:Service);
 MATCH (services:Service {name: "$deploymentName"})
 RETURN services.metadata.name AS Name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP;
 
+:expose_public deploymentName hostname # Expose a deployment as a service and ingress
+MATCH (deployment:Deployment {name: "$deploymentName"})
+CREATE (deployment)->(service:Service);
+MATCH (services:Service {name: "$deploymentName"})
+CREATE (services)->(i:ingress {"spec":{"rules": [{"host": "$hostname"}]}});
+MATCH (deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress)
+RETURN services.metadata.name AS Name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP, ingresses.spec.rules[0].host AS Host, ingresses.spec.rules[0].http.paths[0].path AS Path, ingresses.spec.rules[0].http.paths[0].backend.service.name AS Service;

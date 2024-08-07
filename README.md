@@ -60,43 +60,37 @@ Query executed in 30.692208ms
 ### It has macros too
 Macros are minimalistic, user-extensible & batteries included stored procedures.
 ```graphql
-> :expose nginx
-
+> :expose_public nginx www.cyphernetes.com
 Created services/nginx
+Created ingresses/nginx
 {
+  "ingresses": [
+    {
+      "Host": "www.cyphernetes.com",
+      "Path": "/",
+      "Service": "nginx"
+    }
+  ],
   "services": [
     {
-      "ClusterIP": "10.96.86.234",
+      "ClusterIP": "10.96.136.90",
       "Name": "nginx",
       "Type": "ClusterIP"
     }
   ]
 }
 
-Macro executed in 31.570292ms
+Macro executed in 47.406833ms
 ```
-```graphql
-> :po
-
-{
-  "pods": [
-    {
-      "Age": "2024-08-06T21:29:05Z",
-      "IP": "10.244.0.5",
-      "Name": "nginx-bf5d5cf98-m69mz",
-      "Node": "kind-control-plane",
-      "Status": "Running"
-    }
-  ]
-}
-
-Macro executed in 14.971875ms
-```
-
-Beyond the fun factor, Cyphernetes aims to be efficient in expressing complex operations.
-The more complicated an operation is, the shorter it's Cyphernetes representation would be compared to the equiavalent nested kubectl commands or API client code.
 
 For more usage examples, please see the [Usage Guide](https://github.com/AvitalTamir/cyphernetes/blob/main/USAGE.md).
+
+## But why?
+
+Beyond the fact that writing Cypher is a delight, Cyphernetes aims to be efficient in expressing complex operations.
+The more complicated an operation is, the shorter it's Cyphernetes representation would be compared to the equiavalent nested kubectl commands or API client code.
+
+Macros take Cyphernetes from being a complimentary tool reserved for heavy tasks only to an every-day productivity tool that can replace common kubectl usage.
 
 ## Get Cyphernetes
 
