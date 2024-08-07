@@ -22,7 +22,6 @@ dist/
 
 # IDE files
 .idea/
-.vscode/
 
 __debug*
 y.output

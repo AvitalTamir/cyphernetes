@@ -16,16 +16,45 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+type Node struct {
+	Id   string
+	Kind string
+	Name string
+}
+
+type Edge struct {
+	From string
+	To   string
+	Type string
+}
+
+type Graph struct {
+	Nodes []Node
+	Edges []Edge
+}
+
+type QueryResult struct {
+	Data  map[string]interface{}
+	Graph Graph
+}
+
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
-func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
-	results := make(map[string]interface{})
-
+func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
+	results := &QueryResult{
+		Data: make(map[string]interface{}),
+		Graph: Graph{
+			Nodes: []Node{},
+			Edges: []Edge{},
+		},
+	}
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
+			// fmt.Println("Debug: Processing MATCH clause")
+
 			// we'll begin by fetching our relationships which mean fetching all kubernetes resources selectable by relationships in our clause
 			// we'll build a map of the resources we find, keyed by the name of the resource
 			// After finishing with relationships, we'll move on to nodes and add them to the map
@@ -36,19 +65,21 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			// Iterate over the relationships in the match clause.
 			// Process Relationships
 			for _, rel := range c.Relationships {
+				// fmt.Printf("Debug: Processing relationship: %+v\n", rel)
+
 				// Determine relationship type and fetch related resources
 				var relType RelationshipType
 				if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
 					// error out
-					return nil, fmt.Errorf("must specify kind for all nodes in match clause")
+					return *results, fmt.Errorf("must specify kind for all nodes in match clause")
 				}
 				leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
 				if err != nil {
-					return nil, fmt.Errorf("error finding API resource >> %s", err)
+					return *results, fmt.Errorf("error finding API resource >> %s", err)
 				}
 				rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
 				if err != nil {
-					return nil, fmt.Errorf("error finding API resource >> %s", err)
+					return *results, fmt.Errorf("error finding API resource >> %s", err)
 				}
 
 				for _, resourceRelationship := range relationshipRules {
@@ -60,21 +91,24 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				if relType == "" {
 					// no relationship type found, error out
-					return nil, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
+					return *results, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
 				}
 
 				rule := findRuleByRelationshipType(relType)
 				if err != nil {
-					return nil, fmt.Errorf("error determining relationship type >> %s", err)
+					return *results, fmt.Errorf("error determining relationship type >> %s", err)
 				}
 
-				// Fetch and process related resources based on relationship type
+				// Fetch and process related resources
 				for _, node := range c.Nodes {
 					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
-						if resultMap[node.ResourceProperties.Name] == nil {
-							getNodeResources(node, q, c.ExtraFilters)
+						if results.Data[node.ResourceProperties.Name] == nil {
+							resources := getNodeResources(node, q, c.ExtraFilters)
+							if err != nil {
+								return *results, err
+							}
+							results.Data[node.ResourceProperties.Name] = resources
 						}
-
 					}
 				}
 				var resourcesAInterface interface{}
@@ -91,7 +125,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					filteredDirection = Right
 				} else {
 					// error out
-					return nil, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
+					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
 				}
 				// Apply relationship rules to filter resources
 				resourcesA, okA := resourcesAInterface.([]map[string]interface{})
@@ -105,20 +139,74 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
 				resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-			}
+				// fmt.Printf("Debug: Matched resources: %+v\n", matchedResources)
 
+				if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
+					for idx, rightResource := range rightResources {
+						if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
+							if name, ok := metadata["name"].(string); ok {
+								results.Graph.Nodes = append(results.Graph.Nodes, Node{
+									Id:   rel.RightNode.ResourceProperties.Name,
+									Kind: resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
+									Name: name,
+								})
+							}
+						}
+					}
+				}
+
+				if leftResources, ok := matchedResources["left"].([]map[string]interface{}); ok && len(leftResources) > 0 {
+					for idx, leftResource := range leftResources {
+						if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
+							if name, ok := metadata["name"].(string); ok {
+								results.Graph.Nodes = append(results.Graph.Nodes, Node{
+									Id:   rel.LeftNode.ResourceProperties.Name,
+									Kind: resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
+									Name: name,
+								})
+							}
+						}
+					}
+				}
+
+				// Only add edge if both nodes exist
+				if len(matchedResources["right"].([]map[string]interface{})) > 0 && len(matchedResources["left"].([]map[string]interface{})) > 0 {
+					rightNodeResources := resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})
+					leftNodeResources := resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})
+
+					for _, rightNodeResource := range rightNodeResources {
+						rightNodeId := fmt.Sprintf("%s/%s", rightNodeResource["kind"].(string), rightNodeResource["metadata"].(map[string]interface{})["name"].(string))
+						for _, leftNodeResource := range leftNodeResources {
+							leftNodeId := fmt.Sprintf("%s/%s", leftNodeResource["kind"].(string), leftNodeResource["metadata"].(map[string]interface{})["name"].(string))
+							results.Graph.Edges = append(results.Graph.Edges, Edge{
+								From: rightNodeId,
+								To:   leftNodeId,
+								Type: string(relType),
+							})
+						}
+					}
+				}
+			}
 			// Iterate over the nodes in the match clause.
 			for _, node := range c.Nodes {
 				if node.ResourceProperties.Kind == "" {
 					// error out
-					return nil, fmt.Errorf("must specify kind for all nodes in match clause")
+					return *results, fmt.Errorf("must specify kind for all nodes in match clause")
 				}
 				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 				// check if the node has already been fetched
 				if resultCache[q.resourcePropertyName(node)] == nil {
 					err := getNodeResources(node, q, c.ExtraFilters)
 					if err != nil {
-						return nil, fmt.Errorf("error getting node resources >> %s", err)
+						return *results, fmt.Errorf("error getting node resources >> %s", err)
+					}
+					resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
+					for _, resource := range resources {
+						results.Graph.Nodes = append(results.Graph.Nodes, Node{
+							Id:   node.ResourceProperties.Name,
+							Kind: resource["kind"].(string),
+							Name: resource["metadata"].(map[string]interface{})["name"].(string),
+						})
 					}
 				} else if resultMap[node.ResourceProperties.Name] == nil {
 					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
@@ -152,13 +240,13 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				pathStr := "/" + strings.Join(path, "/")
 				patchJson, err := json.Marshal([]map[string]interface{}{{"op": "replace", "path": pathStr, "value": kvp.Value}})
 				if err != nil {
-					return nil, fmt.Errorf("error marshalling patch to JSON >> %s", err)
+					return *results, fmt.Errorf("error marshalling patch to JSON >> %s", err)
 				}
 
 				// Apply the patch to the resources
 				err = q.patchK8sResources(resultMapKey, patchJson)
 				if err != nil {
-					return nil, fmt.Errorf("error patching resource >> %s", err)
+					return *results, fmt.Errorf("error patching resource >> %s", err)
 				}
 
 				// Retrieve the slice of maps for the resultMapKey
@@ -187,7 +275,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			for _, nodeId := range c.NodeIds {
 				// make sure the identifier is a key in the result map
 				if resultMap[nodeId] == nil {
-					return nil, fmt.Errorf("node identifier %s not found in result map", nodeId)
+					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
 				q.deleteK8sResources(nodeId)
 			}
@@ -208,16 +296,16 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				// If both nodes exist in the match clause, error out
 				if resultMap[rel.LeftNode.ResourceProperties.Name] != nil && resultMap[rel.RightNode.ResourceProperties.Name] != nil {
 					if (node) != nil {
-						return nil, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+						return *results, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
 					} else {
-						return nil, fmt.Errorf("can't match and create node in the same expression")
+						return *results, fmt.Errorf("can't match and create node in the same expression")
 					}
 				}
 
 				// TODO: create both nodes and determine the spec from the relationship instead of this:
 				// If neither node exists in the match clause, error out
 				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil && resultMap[rel.RightNode.ResourceProperties.Name] == nil {
-					return nil, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+					return *results, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
 				}
 
 				// find out whice node exists in the match clause, then use it to construct the spec according to the relationship
@@ -235,12 +323,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				var relType RelationshipType
 				targetGVR, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
 				if err != nil {
-					return nil, fmt.Errorf("error finding API resource >> %s", err)
+					return *results, fmt.Errorf("error finding API resource >> %s", err)
 
 				}
 				foreignGVR, err := FindGVR(q.Clientset, foreignNode.ResourceProperties.Kind)
 				if err != nil {
-					return nil, fmt.Errorf("error finding API resource >> %s", err)
+					return *results, fmt.Errorf("error finding API resource >> %s", err)
 				}
 
 				for _, resourceRelationship := range relationshipRules {
@@ -252,12 +340,12 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 				if relType == "" {
 					// no relationship type found, error out
-					return nil, fmt.Errorf("relationship type not found between %s and %s", targetGVR.Resource, foreignGVR.Resource)
+					return *results, fmt.Errorf("relationship type not found between %s and %s", targetGVR.Resource, foreignGVR.Resource)
 				}
 
 				rule := findRuleByRelationshipType(relType)
 				if err != nil {
-					return nil, fmt.Errorf("error determining relationship type >> %s", err)
+					return *results, fmt.Errorf("error determining relationship type >> %s", err)
 				}
 
 				// Now according to which is the node that needs to be created, we'll construct the spec from the node properties and from the relevant part of the spec that's defined in the relationship
@@ -290,7 +378,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					}
 				} else {
 					// error out
-					return nil, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
+					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
 				}
 
 				var resourceTemplate map[string]interface{}
@@ -298,7 +386,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					err = json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
 					if err != nil {
 						fmt.Println("Error unmarshalling node JsonData: ", err)
-						return nil, err
+						return *results, err
 					}
 				} else {
 					resourceTemplate = make(map[string]interface{})
@@ -387,7 +475,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
 					err = q.createK8sResource(node, resourceTemplate, name)
 					if err != nil {
-						return nil, fmt.Errorf("error creating resource >> %s", err)
+						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
 				}
 			}
@@ -405,7 +493,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				if !ignoreNode {
 					// check if the node has already been fetched, if so, error out
 					if resultMap[node.ResourceProperties.Name] != nil {
-						return nil, fmt.Errorf("can't create: node '%s' already exists in match clause", node.ResourceProperties.Name)
+						return *results, fmt.Errorf("can't create: node '%s' already exists in match clause", node.ResourceProperties.Name)
 					}
 
 					// unmarsall the node JsonData into a map
@@ -413,14 +501,14 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					err := json.Unmarshal([]byte(node.ResourceProperties.JsonData), &resourceTemplate)
 					if err != nil {
 						fmt.Println("Error unmarshalling node JsonData: ", err)
-						return nil, err
+						return *results, err
 					}
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
 					err = q.createK8sResource(node, resourceTemplate, name)
 					if err != nil {
-						return nil, fmt.Errorf("error creating resource >> %s", err)
+						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
 				}
 			}
@@ -429,7 +517,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if resultMap[nodeId] == nil {
-					return nil, fmt.Errorf("node identifier %s not found in return clause", nodeId)
+					return *results, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
 				pathParts := strings.Split(item.JsonPath, ".")[1:]
@@ -439,15 +527,15 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 					pathStr = "$"
 				}
 
-				if results[nodeId] == nil {
-					results[nodeId] = []interface{}{}
+				if results.Data[nodeId] == nil {
+					results.Data[nodeId] = []interface{}{}
 				}
 
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
-					if len(results[nodeId].([]interface{})) <= idx {
-						results[nodeId] = append(results[nodeId].([]interface{}), make(map[string]interface{}))
+					if len(results.Data[nodeId].([]interface{})) <= idx {
+						results.Data[nodeId] = append(results.Data[nodeId].([]interface{}), make(map[string]interface{}))
 					}
-					currentMap := results[nodeId].([]interface{})[idx].(map[string]interface{})
+					currentMap := results.Data[nodeId].([]interface{})[idx].(map[string]interface{})
 
 					result, err := jsonpath.JsonPathLookup(resource, pathStr)
 					if err != nil {
@@ -468,14 +556,90 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 			}
 
 		default:
-			return nil, fmt.Errorf("unknown clause type: %T", c)
+			return *results, fmt.Errorf("unknown clause type: %T", c)
 		}
 	}
+	// build the graph
+	q.buildGraph(results)
+
 	// clear the result cache and result map
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
-	return results, nil
+	return *results, nil
 }
+
+func (q *QueryExecutor) buildGraph(result *QueryResult) {
+	// fmt.Println("Debug: Building graph")
+	// fmt.Printf("Debug: result.Data: %+v\n", result.Data)
+	// fmt.Printf("Debug: Initial result.Graph.Edges: %+v\n", result.Graph.Edges)
+
+	nodeMap := make(map[string]bool)
+	edgeMap := make(map[string]bool)
+
+	// Process nodes (this part remains the same)
+	for key, resources := range result.Data {
+		resourcesSlice, ok := resources.([]interface{})
+		if !ok || len(resourcesSlice) == 0 {
+			continue
+		}
+		for _, resource := range resourcesSlice {
+			resourceMap, ok := resource.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			metadata, ok := resourceMap["metadata"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, ok := metadata["name"].(string)
+			if !ok {
+				continue
+			}
+			kind, ok := resourceMap["kind"].(string)
+			if !ok {
+				continue
+			}
+			node := Node{
+				Id:   key,
+				Kind: kind,
+				Name: name,
+			}
+
+			if !nodeMap[node.Id] {
+				result.Graph.Nodes = append(result.Graph.Nodes, node)
+				nodeMap[node.Id] = true
+			}
+		}
+	}
+
+	// Process edges
+	newEdges := []Edge{}
+	for _, edge := range result.Graph.Edges {
+		edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
+		reverseEdgeKey := fmt.Sprintf("%s-%s-%s", edge.To, edge.From, edge.Type)
+
+		if !edgeMap[edgeKey] && !edgeMap[reverseEdgeKey] {
+			newEdges = append(newEdges, edge)
+			edgeMap[edgeKey] = true
+			edgeMap[reverseEdgeKey] = true
+		}
+	}
+
+	result.Graph.Edges = newEdges
+
+	// fmt.Printf("Debug: Final result.Graph.Nodes: %+v\n", result.Graph.Nodes)
+	// fmt.Printf("Debug: Final result.Graph.Edges: %+v\n", result.Graph.Edges)
+
+}
+
+// func findNodeByName(nodes []Node, name string) *Node {
+// 	for _, node := range nodes {
+// 		if node.Name == name {
+// 			return &node
+// 		}
+// 	}
+// 	return nil
+// }
 
 func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {
 	// We'll use these in order of preference:
@@ -636,8 +800,6 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			fmt.Println("Error marshalling results to JSON: ", err)
 			return err
 		}
-	} else {
-		fmt.Println("Resource already fetched")
 	}
 
 	resultMap[n.ResourceProperties.Name] = resultCache[q.resourcePropertyName(n)]
