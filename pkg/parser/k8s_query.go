@@ -435,6 +435,10 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 				pathParts := strings.Split(item.JsonPath, ".")[1:]
 				pathStr := "$." + strings.Join(pathParts, ".")
 
+				if pathStr == "$." {
+					pathStr = "$"
+				}
+
 				if results[nodeId] == nil {
 					results[nodeId] = []interface{}{}
 				}
@@ -453,7 +457,11 @@ func (q *QueryExecutor) Execute(ast *Expression) (interface{}, error) {
 
 					key := item.Alias
 					if key == "" {
-						key = pathParts[len(pathParts)-1]
+						if len(pathParts) > 1 {
+							key = pathParts[len(pathParts)-1]
+						} else {
+							key = nodeId
+						}
 					}
 					currentMap[key] = result
 				}

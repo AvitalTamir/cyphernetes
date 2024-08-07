@@ -11,9 +11,10 @@ import (
 )
 
 type Macro struct {
-	Name       string
-	Args       []string
-	Statements []string
+	Name        string
+	Args        []string
+	Statements  []string
+	Description string
 }
 
 type MacroManager struct {
@@ -173,12 +174,22 @@ func (mm *MacroManager) loadMacros(source string, reader io.Reader) error {
 			name := parts[0]
 			args := parts[1:]
 
+			// Parse description if present
+			description := ""
+			for i, part := range parts {
+				if strings.HasPrefix(part, "#") {
+					description = strings.TrimSpace(strings.Join(parts[i:], " ")[1:])
+					args = parts[1:i]
+					break
+				}
+			}
+
 			// Validate macro name
 			if !isValidMacroName(name) {
 				return fmt.Errorf("invalid macro name '%s' at line %d", name, lineNumber)
 			}
 
-			currentMacro = &Macro{Name: name, Args: args}
+			currentMacro = &Macro{Name: name, Args: args, Description: description}
 		} else if currentMacro == nil {
 			return fmt.Errorf("statement found outside of macro definition at line %d", lineNumber)
 		} else {

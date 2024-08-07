@@ -1,4 +1,4 @@
-:po
+:po # List pods
 MATCH (pods:Pod)
 RETURN pods.metadata.name AS Name,
        pods.status.phase AS Status,
@@ -6,7 +6,7 @@ RETURN pods.metadata.name AS Name,
        pods.status.podIP AS IP,
        pods.metadata.creationTimestamp AS Age;
 
-:deploy
+:deploy # List deployments
 MATCH (deployments:Deployment)
 RETURN deployments.metadata.name AS Name,
        deployments.status.replicas AS Ready,
@@ -15,7 +15,7 @@ RETURN deployments.metadata.name AS Name,
        deployments.status.availableReplicas AS Available,
        deployments.metadata.creationTimestamp AS Age;
 
-:svc
+:svc # List services
 MATCH (services:Service)
 RETURN services.metadata.name AS Name,
        services.spec.type AS Type,
@@ -24,13 +24,13 @@ RETURN services.metadata.name AS Name,
        services.spec.ports AS Ports,
        services.metadata.creationTimestamp AS Age;
 
-:ns
+:ns # List namespaces
 MATCH (namespaces:Namespace)
 RETURN namespaces.metadata.name AS Name,
        namespaces.status.phase AS Status,
        namespaces.metadata.creationTimestamp AS Age;
 
-:no
+:no # List nodes
 MATCH (nodes:Node)
 RETURN nodes.metadata.name AS Name,
        nodes.status.nodeInfo.osImage AS OS,
@@ -39,7 +39,7 @@ RETURN nodes.metadata.name AS Name,
        nodes.status.allocatable.memory AS Memory,
        nodes.spec.unschedulable AS Unschedulable;
 
-:pv
+:pv # List persistent volumes
 MATCH (persistentVolumes:PersistentVolume)
 RETURN persistentVolumes.metadata.name AS Name,
        persistentVolumes.spec.capacity.storage AS Capacity,
@@ -47,7 +47,7 @@ RETURN persistentVolumes.metadata.name AS Name,
        persistentVolumes.spec.storageClassName AS StorageClass,
        persistentVolumes.status.phase AS Status;
 
-:pvc
+:pvc # List persistent volume claims
 MATCH (persistentVolumeClaims:PersistentVolumeClaim)
 RETURN persistentVolumeClaims.metadata.name AS Name,
        persistentVolumeClaims.spec.volumeName AS Volume,
@@ -55,7 +55,7 @@ RETURN persistentVolumeClaims.metadata.name AS Name,
        persistentVolumeClaims.status.phase AS Status,
        persistentVolumeClaims.metadata.creationTimestamp AS Age;
 
-:event
+:event # List warning events
 MATCH (events:Event)
 WHERE events.type = "Warning"
 RETURN events.involvedObject.kind AS Resource,
@@ -64,7 +64,7 @@ RETURN events.involvedObject.kind AS Resource,
        events.message AS Message,
        events.lastTimestamp AS LastSeen;
 
-:podmon
+:podmon # Monitor pod resources
 MATCH (pods:Pod)
 RETURN pods.metadata.name AS Name,
        pods.metadata.namespace AS Namespace,
@@ -72,7 +72,7 @@ RETURN pods.metadata.name AS Name,
        pods.spec.containers[0].resources.requests.memory AS RequestedMemory,
        pods.status.containerStatuses[0].restartCount AS Restarts;
 
-:ing
+:ing # List ingresses
 MATCH (ingresses:Ingress)
 RETURN ingresses.metadata.name AS Name,
        ingresses.spec.rules[0].host AS Host,
@@ -80,20 +80,20 @@ RETURN ingresses.metadata.name AS Name,
        ingresses.spec.rules[0].http.paths[0].backend.serviceName AS Service,
        ingresses.metadata.creationTimestamp AS Age;
 
-:cm
+:cm # List config maps
 MATCH (configMaps:ConfigMap)
 RETURN configMaps.metadata.name AS Name,
        configMaps.metadata.namespace AS Namespace,
        configMaps.metadata.creationTimestamp AS Age;
 
-:secret
+:secret # List secrets
 MATCH (secrets:Secret)
 RETURN secrets.metadata.name AS Name,
        secrets.metadata.namespace AS Namespace,
        secrets.type AS Type,
        secrets.metadata.creationTimestamp AS Age;
 
-:job
+:job # List jobs
 MATCH (jobs:Job)
 RETURN jobs.metadata.name AS Name,
        jobs.status.succeeded AS Succeeded,
@@ -102,7 +102,7 @@ RETURN jobs.metadata.name AS Name,
        jobs.status.startTime AS StartTime,
        jobs.status.completionTime AS CompletionTime;
 
-:cronjob
+:cronjob # List cron jobs
 MATCH (cronJobs:CronJob)
 RETURN cronJobs.metadata.name AS Name,
        cronJobs.spec.schedule AS Schedule,
@@ -110,9 +110,9 @@ RETURN cronJobs.metadata.name AS Name,
        cronJobs.status.lastScheduleTime AS LastSchedule,
        cronJobs.metadata.creationTimestamp AS Age;
 
-:expose d
-MATCH (deployment:Deployment {name: "$d"})
+:expose deploymentName # Expose a deployment as a service
+MATCH (deployment:Deployment {name: "$deploymentName"})
 CREATE (deployment)->(service:Service);
-MATCH (service:Service {name: "$d"})
+MATCH (services:Service {name: "$deploymentName"})
 RETURN services.metadata.name AS Name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP;
 

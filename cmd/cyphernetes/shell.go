@@ -239,7 +239,12 @@ func runShell(cmd *cobra.Command, args []string) {
 		} else if input == "\\lm" {
 			fmt.Println("Registered macros:")
 			for name, macro := range macroManager.Macros {
-				fmt.Printf("%s: %v\n", name, macro.Args)
+				description := macro.Description
+				if description == "" {
+					description = "No description provided"
+				}
+				// print a line that looks like this but make it colorful so that the command, args and description have distinct colors: (":%s %v - %s\n", name, macro.Args, description)
+				fmt.Printf("\033[33m:%s\033[0m \033[36m%v\033[0m - \033[35m%s\033[0m\n", name, macro.Args, description)
 			}
 		} else if input == "\\r" {
 			// Toggle colorized JSON output
@@ -369,6 +374,14 @@ func executeStatement(query string) (string, error) {
 	// Check if results is nil or empty
 	if results == nil || (reflect.ValueOf(results).Kind() == reflect.Map && len(results.(map[string]interface{})) == 0) {
 		return "{}", nil
+	}
+
+	// Check if the result is a single top-level object
+	if singleObject, ok := results.(map[string]interface{}); ok && len(singleObject) == 1 {
+		for _, v := range singleObject {
+			results = v
+			break
+		}
 	}
 
 	json, err := json.MarshalIndent(results, "", "  ")
