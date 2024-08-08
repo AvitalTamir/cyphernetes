@@ -38,7 +38,7 @@ var queryCmd = &cobra.Command{
 		}
 
 		// Print the results as pretty JSON.
-		json, err := json.MarshalIndent(results, "", "  ")
+		json, err := json.MarshalIndent(results.Data, "", "  ")
 		if err != nil {
 			// Handle error.
 			fmt.Println("Error marshalling results: ", err)

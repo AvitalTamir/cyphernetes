@@ -1,18 +1,25 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/chzyer/readline"
+	"github.com/goccy/go-graphviz"
+	"github.com/goccy/go-graphviz/cgraph"
 	cobra "github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -29,6 +36,7 @@ var ShellCmd = &cobra.Command{
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
 var disableColorJsonOutput bool = false
+var disableGraphOutput bool = false
 var multiLineInput bool = true
 var macroManager = NewMacroManager()
 
@@ -254,11 +262,16 @@ func runShell(cmd *cobra.Command, args []string) {
 			// Toggle multi-line input mode
 			multiLineInput = !multiLineInput
 			fmt.Printf("Multi-line input mode: %t\n", multiLineInput)
+		} else if input == "\\g" {
+			// Toggle graph output
+			disableGraphOutput = !disableGraphOutput
+			fmt.Printf("Disable graph output: %t\n", disableGraphOutput)
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit               - Exit the shell")
 			fmt.Println("help               - Print this help message")
 			fmt.Println("\\n <namespace>|all - Change the namespace context")
+			fmt.Println("\\g                 - Toggle graph output")
 			fmt.Println("\\m                 - Toggle multi-line input mode (execute query on ';')")
 			fmt.Println("\\q                 - Toggle print query execution time")
 			fmt.Println("\\r                 - Toggle raw output (disable colorized JSON)")
@@ -269,10 +282,14 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
 			// Process the input if not empty
-			result, err := processQuery(input)
+			result, graph, err := processQuery(input)
+			graph, err = sanitizeGraph(graph, result)
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
+				if !disableGraphOutput {
+					fmt.Println(DrawGraphviz(graph))
+				}
 				if !disableColorJsonOutput {
 					result = colorizeJson(result)
 				}
@@ -289,6 +306,111 @@ func runShell(cmd *cobra.Command, args []string) {
 	}
 }
 
+func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
+	// create a unique map of nodes
+	nodeMap := make(map[string]parser.Node)
+	for _, node := range g.Nodes {
+		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		nodeMap[nodeId] = node
+	}
+	g.Nodes = make([]parser.Node, 0, len(nodeMap))
+	for _, node := range nodeMap {
+		g.Nodes = append(g.Nodes, node)
+	}
+
+	// unmarshal the result into a map[string]interface{}
+	var resultMap map[string]interface{}
+	err := json.Unmarshal([]byte(result), &resultMap)
+	if err != nil {
+		return g, fmt.Errorf("error unmarshalling result: %w", err)
+	}
+
+	// now let's filter out nodes that have no data (in g.Data)
+	var filteredNodes []parser.Node
+	for _, node := range g.Nodes {
+		if resultMap[node.Id] != nil {
+			for _, resultMapNode := range resultMap[node.Id].([]interface{}) {
+				if resultMapNode.(map[string]interface{})["name"] == node.Name {
+					filteredNodes = append(filteredNodes, node)
+				}
+			}
+		}
+	}
+	g.Nodes = filteredNodes
+
+	filteredNodeIds := []string{}
+	for _, node := range filteredNodes {
+		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		filteredNodeIds = append(filteredNodeIds, nodeId)
+	}
+	// now let's filter out edges that point to nodes that don't exist
+	var filteredEdges []parser.Edge
+	for _, edge := range g.Edges {
+		if slices.Contains(filteredNodeIds, edge.From) && slices.Contains(filteredNodeIds, edge.To) {
+			filteredEdges = append(filteredEdges, edge)
+		}
+	}
+	g.Edges = filteredEdges
+	return g, nil
+}
+
+func DrawGraphviz(graph parser.Graph) string {
+	g := graphviz.New()
+	gv, err := g.Graph()
+	if err != nil {
+		return fmt.Sprintf("Error creating graph: %v", err)
+	}
+	defer func() {
+		if err := gv.Close(); err != nil {
+			fmt.Printf("Error closing graph: %v\n", err)
+		}
+		g.Close()
+	}()
+
+	// Create a map to store nodes
+	nodes := make(map[string]*cgraph.Node)
+
+	// Create nodes
+	for _, node := range graph.Nodes {
+		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		n, err := gv.CreateNode(nodeId)
+		if err != nil {
+			return fmt.Sprintf("Error creating node: %v", err)
+		}
+		n.SetLabel(fmt.Sprintf("%s: %s", node.Kind, node.Name))
+		nodes[nodeId] = n
+	}
+
+	// Create edges
+	for _, edge := range graph.Edges {
+		fromNode, ok := nodes[edge.From]
+		if !ok {
+			return fmt.Sprintf("Error: node %s not found", edge.From)
+		}
+		toNode, ok := nodes[edge.To]
+		if !ok {
+			return fmt.Sprintf("Error: node %s not found", edge.To)
+		}
+		e, err := gv.CreateEdge(edge.Type, fromNode, toNode)
+		if err != nil {
+			return fmt.Sprintf("Error creating edge: %v", err)
+		}
+		e.SetLabel(edge.Type)
+	}
+
+	var buf bytes.Buffer
+	if err := g.Render(gv, graphviz.Format("dot"), &buf); err != nil {
+		fmt.Println("Error rendering graph:", err)
+	}
+
+	ascii, err := dotToAscii(buf.String(), true)
+	if err != nil {
+		return fmt.Sprintf("Error converting graph to ASCII: %v", err)
+	}
+
+	return "\n" + ascii
+}
+
 func executeMacro(input string) (string, error) {
 	startTime := time.Now()
 
@@ -303,30 +425,49 @@ func executeMacro(input string) (string, error) {
 	}
 
 	var results []string
+	var graph parser.Graph
 	for i, stmt := range statements {
-		result, err := processQuery(stmt)
+		result, graphInternal, err := processQuery(stmt)
 		if err != nil {
 			return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
 		}
 		if result != "{}" {
 			results = append(results, result)
+			graph = mergeGraphs(graph, graphInternal)
 		}
 	}
 
 	execTime = time.Since(startTime)
+
+	graph, err = sanitizeGraph(graph, strings.Join(results, "\n"))
+	if err != nil {
+		return "", fmt.Errorf("error sanitizing graph: %w", err)
+	}
+	if !disableGraphOutput {
+		fmt.Println(DrawGraphviz(graph))
+	}
 	return strings.Join(results, "\n"), nil
+}
+
+func mergeGraphs(graph parser.Graph, newGraph parser.Graph) parser.Graph {
+	// merge the nodes
+	graph.Nodes = append(graph.Nodes, newGraph.Nodes...)
+	// merge the edges
+	graph.Edges = append(graph.Edges, newGraph.Edges...)
+	return graph
 }
 
 // Execute the query against the Kubernetes API.
 var executor = parser.GetQueryExecutorInstance()
 var execTime time.Duration
 
-func processQuery(query string) (string, error) {
+func processQuery(query string) (string, parser.Graph, error) {
 	startTime := time.Now()
 
 	query = strings.TrimSuffix(query, ";")
 
 	var result string
+	var graph parser.Graph
 	var err error
 
 	if strings.HasPrefix(query, ":") {
@@ -337,27 +478,92 @@ func processQuery(query string) (string, error) {
 
 		statements, err := macroManager.ExecuteMacro(macroName, args)
 		if err != nil {
-			return "", err
+			return "", parser.Graph{}, err
 		}
 
 		var results []string
+		var graphInternal parser.Graph
 		for i, stmt := range statements {
 			result, err := executeStatement(stmt)
 			if err != nil {
-				return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
+				return "", parser.Graph{}, fmt.Errorf("error executing statement %d: %w", i+1, err)
 			}
-			if result != "{}" {
-				results = append(results, result)
+
+			// unmarshal the result into a map[string]interface{}
+			var resultMap map[string]interface{}
+			err = json.Unmarshal([]byte(result), &resultMap)
+			if err != nil {
+				return "", parser.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
+			}
+
+			buildDataAndGraph(resultMap, &result, &graphInternal)
+
+			// add the result to the graph
+			graph = mergeGraphs(graph, graphInternal)
+
+			// check if the result has a key called "Data"
+			if resultMap["Data"] != nil {
+				results = append(results, resultMap["Data"].(string))
 			}
 		}
 
 		result = strings.Join(results, "\n")
 	} else {
-		result, err = executeStatement(query)
+		res, err := executeStatement(query)
+		if err != nil {
+			return "", parser.Graph{}, err
+		}
+		var resultMap map[string]interface{}
+		err = json.Unmarshal([]byte(res), &resultMap)
+		if err != nil {
+			return "", parser.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
+		}
+
+		buildDataAndGraph(resultMap, &result, &graph)
 	}
 
 	execTime = time.Since(startTime)
-	return result, err
+	return result, graph, err
+}
+
+func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *parser.Graph) error {
+	// check if interface is nil
+	if graphInternal, ok := resultMap["Graph"]; ok {
+		// check that graphInternal has "Nodes" and "Edges"
+		if nodes, ok := graphInternal.(map[string]interface{})["Nodes"]; ok {
+			nodeIds := nodes.([]interface{})
+			for _, nodeId := range nodeIds {
+				graph.Nodes = append(graph.Nodes, parser.Node{
+					Id:   nodeId.(map[string]interface{})["Id"].(string),
+					Name: nodeId.(map[string]interface{})["Name"].(string),
+					Kind: nodeId.(map[string]interface{})["Kind"].(string),
+				})
+			}
+		}
+		if edges, ok := graphInternal.(map[string]interface{})["Edges"]; ok {
+			for _, edge := range edges.([]interface{}) {
+				// check LeftNode and RightNode are not nil
+				if edge.(map[string]interface{})["From"] != nil && edge.(map[string]interface{})["To"] != nil && edge.(map[string]interface{})["Type"] != nil {
+					graph.Edges = append(graph.Edges, parser.Edge{
+						From: edge.(map[string]interface{})["From"].(string),
+						To:   edge.(map[string]interface{})["To"].(string),
+						Type: edge.(map[string]interface{})["Type"].(string),
+					})
+				}
+			}
+		}
+	}
+
+	if data, ok := resultMap["Data"]; ok {
+		resultBytes, err := json.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("error marshalling data: %w", err)
+		}
+		*result = string(resultBytes)
+	} else {
+		*result = "{}"
+	}
+	return nil
 }
 
 func executeStatement(query string) (string, error) {
@@ -372,16 +578,8 @@ func executeStatement(query string) (string, error) {
 	}
 
 	// Check if results is nil or empty
-	if results == nil || (reflect.ValueOf(results).Kind() == reflect.Map && len(results.(map[string]interface{})) == 0) {
+	if results.Data == nil || (reflect.ValueOf(results.Data).Kind() == reflect.Map && len(results.Data) == 0) {
 		return "{}", nil
-	}
-
-	// Check if the result is a single top-level object
-	if singleObject, ok := results.(map[string]interface{}); ok && len(singleObject) == 1 {
-		for _, v := range singleObject {
-			results = v
-			break
-		}
 	}
 
 	json, err := json.MarshalIndent(results, "", "  ")
@@ -429,4 +627,33 @@ func init() {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
 	}
+}
+
+func dotToAscii(dot string, fancy bool) (string, error) {
+	url := "https://ascii.cyphernet.es/dot-to-ascii.php"
+	boxart := 0
+	if fancy {
+		boxart = 1
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	q := req.URL.Query()
+	q.Add("boxart", strconv.Itoa(boxart))
+	q.Add("src", dot)
+	req.URL.RawQuery = q.Encode()
+
+	response, err := http.Get(req.URL.String())
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }

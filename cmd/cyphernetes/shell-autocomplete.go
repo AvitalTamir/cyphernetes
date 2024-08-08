@@ -66,6 +66,17 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			} else {
 				fmt.Println("Error fetching resource tree structure: ", err)
 			}
+		} else if isMacroContext(lineStr) {
+			// Offer each macro as a suggestion
+			macros := getMacros()
+			for _, macro := range macros {
+				macro = ":" + macro
+				if strings.HasPrefix(macro, prefix) {
+					// Append only the part of the macro that comes after the prefix
+					suggestion := macro[len(prefix):]
+					suggestions = append(suggestions, []rune(suggestion))
+				}
+			}
 		} else {
 			// Handle other autocompletion cases (like keywords)
 
@@ -87,6 +98,20 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 	// The length returned should be the length of the last word.
 	return suggestions, len(lastWord)
+}
+
+func isMacroContext(line string) bool {
+	// line starts with a colon and is followed by a word
+	regex := regexp.MustCompile(`^:\w+$`)
+	return regex.MatchString(line)
+}
+
+func getMacros() []string {
+	macros := []string{}
+	for _, macro := range macroManager.Macros {
+		macros = append(macros, macro.Name)
+	}
+	return macros
 }
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
