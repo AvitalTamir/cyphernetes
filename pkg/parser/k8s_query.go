@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,20 +82,6 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 					return *results, err
 				}
 			}
-		// case *MatchClause:
-		// 	// fmt.Println("Debug: Processing MATCH clause")
-
-		// 	// we'll begin by fetching our relationships which mean fetching all kubernetes resources selectable by relationships in our clause
-		// 	// we'll build a map of the resources we find, keyed by the name of the resource
-		// 	// After finishing with relationships, we'll move on to nodes and add them to the map
-		// 	// throughout the process we'll an intermediary struct between kubernetes and the map as cache, it will hold the complete structs from k8s to avoid fetching the same resource twice
-		// 	// when iterating over nodes, no node will be refetched that has already been fetched in the relationship phase,
-		// 	// important: during the relationships phase, before fetching a resource from kubernetes note that our relationships hold only ResourceProperties.Name and ResourceProperties.Kind, so must refer to the matching node in our nodes to get the full selector
-
-		// 	// Iterate over the relationships in the match clause.
-		// 	// Process Relationships
-		// 	for _, rel := range c.Relationships {
-		// 	// Iterate over the nodes in the match clause.
 
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
@@ -397,6 +384,32 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 			}
 
 		case *ReturnClause:
+			nodeIds := []string{}
+			for _, item := range c.Items {
+				// generate a unique list of nodeIds
+				nodeId := strings.Split(item.JsonPath, ".")[0]
+				if !slices.Contains(nodeIds, nodeId) {
+					nodeIds = append(nodeIds, nodeId)
+				}
+			}
+
+			// for each nodeId, verify c.Items contains nodeId.metadata.name
+			for _, nodeId := range nodeIds {
+				metadataNamePath := strings.Join([]string{nodeId, "metadata.name"}, ".")
+				// Check if metadataNamePath already exists in c.Items
+				exists := false
+				for _, item := range c.Items {
+					if item.JsonPath == metadataNamePath {
+						exists = true
+						break
+					}
+				}
+				// If it doesn't exist, add it
+				if !exists {
+					c.Items = append(c.Items, &ReturnItem{JsonPath: metadataNamePath})
+				}
+			}
+
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if resultMap[nodeId] == nil {
@@ -704,20 +717,7 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	}
 
 	result.Graph.Edges = newEdges
-
-	// fmt.Printf("Debug: Final result.Graph.Nodes: %+v\n", result.Graph.Nodes)
-	// fmt.Printf("Debug: Final result.Graph.Edges: %+v\n", result.Graph.Edges)
-
 }
-
-// func findNodeByName(nodes []Node, name string) *Node {
-// 	for _, node := range nodes {
-// 		if node.Name == name {
-// 			return &node
-// 		}
-// 	}
-// 	return nil
-// }
 
 func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {
 	// We'll use these in order of preference:
