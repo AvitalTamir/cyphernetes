@@ -18,9 +18,10 @@ import (
 )
 
 type Node struct {
-	Id   string
-	Kind string
-	Name string
+	Id        string
+	Kind      string
+	Name      string
+	Namespace string
 }
 
 type Edge struct {
@@ -213,7 +214,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 					return *results, fmt.Errorf("relationship type not found between %s and %s", targetGVR.Resource, foreignGVR.Resource)
 				}
 
-				rule := findRuleByRelationshipType(relType)
+				rule, err := findRuleByRelationshipType(relType)
 				if err != nil {
 					return *results, fmt.Errorf("error determining relationship type >> %s", err)
 				}
@@ -482,21 +483,25 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
 
-	for _, resourceRelationship := range relationshipRules {
-		if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
-			(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
-			relType = resourceRelationship.Relationship
+	if rightKind.Resource == "namespaces" || leftKind.Resource == "namespaces" {
+		relType = NamespaceHasResource
+	}
+
+	if relType == "" {
+		for _, resourceRelationship := range relationshipRules {
+			if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
+				(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
+				relType = resourceRelationship.Relationship
+			}
 		}
 	}
-	if relType == "REPLICASET_OWN_POD" {
-		relType = "REPLICASET_OWN_POD"
-	}
+
 	if relType == "" {
 		// no relationship type found, error out
 		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
 	}
 
-	rule := findRuleByRelationshipType(relType)
+	rule, err := findRuleByRelationshipType(relType)
 	if err != nil {
 		return false, fmt.Errorf("error determining relationship type >> %s", err)
 	}
@@ -505,11 +510,10 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
 			if results.Data[node.ResourceProperties.Name] == nil {
-				resources := getNodeResources(node, q, c.ExtraFilters)
+				err := getNodeResources(node, q, c.ExtraFilters)
 				if err != nil {
 					return false, err
 				}
-				results.Data[node.ResourceProperties.Name] = resources
 			}
 		}
 	}
@@ -560,11 +564,15 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		for idx, rightResource := range rightResources {
 			if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
 				if name, ok := metadata["name"].(string); ok {
-					results.Graph.Nodes = append(results.Graph.Nodes, Node{
+					node := Node{
 						Id:   rel.RightNode.ResourceProperties.Name,
 						Kind: resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
 						Name: name,
-					})
+					}
+					if node.Kind != "Namespace" {
+						node.Namespace = getNamespaceName(metadata)
+					}
+					results.Graph.Nodes = append(results.Graph.Nodes, node)
 				}
 			}
 		}
@@ -574,11 +582,15 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		for idx, leftResource := range leftResources {
 			if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
 				if name, ok := metadata["name"].(string); ok {
-					results.Graph.Nodes = append(results.Graph.Nodes, Node{
+					node := Node{
 						Id:   rel.LeftNode.ResourceProperties.Name,
 						Kind: resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
 						Name: name,
-					})
+					}
+					if node.Kind != "Namespace" {
+						node.Namespace = getNamespaceName(metadata)
+					}
+					results.Graph.Nodes = append(results.Graph.Nodes, node)
 				}
 			}
 		}
@@ -646,11 +658,19 @@ func (q *QueryExecutor) processNode(node *NodePattern, c *MatchClause, results *
 			}
 			resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
 			for _, resource := range resources {
-				results.Graph.Nodes = append(results.Graph.Nodes, Node{
+				metadata, ok := resource["metadata"].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				node := Node{
 					Id:   node.ResourceProperties.Name,
 					Kind: resource["kind"].(string),
-					Name: resource["metadata"].(map[string]interface{})["name"].(string),
-				})
+					Name: metadata["name"].(string),
+				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
 			}
 		} else if resultMap[node.ResourceProperties.Name] == nil {
 			resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
@@ -695,6 +715,9 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 				Kind: kind,
 				Name: name,
 			}
+			if node.Kind != "Namespace" {
+				node.Namespace = getNamespaceName(metadata)
+			}
 
 			if !nodeMap[node.Id] {
 				result.Graph.Nodes = append(result.Graph.Nodes, node)
@@ -717,6 +740,14 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	}
 
 	result.Graph.Edges = newEdges
+}
+
+func getNamespaceName(metadata map[string]interface{}) string {
+	namespace, ok := metadata["namespace"].(string)
+	if !ok {
+		namespace = "default"
+	}
+	return namespace
 }
 
 func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceName string, foreignName string) string {

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
@@ -33,6 +34,9 @@ const (
 	Mount RelationshipType = "MOUNT"
 	// ingresses to services
 	Route RelationshipType = "ROUTE"
+
+	// special relationships
+	NamespaceHasResource RelationshipType = "NAMESPACE_HAS_RESOURCE"
 )
 
 type ComparisonType string
@@ -250,16 +254,28 @@ var relationshipRules = []RelationshipRule{
 			},
 		},
 	},
+	{
+		KindA:        "namespaces",
+		KindB:        "*",
+		Relationship: NamespaceHasResource,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.metadata.name",
+				FieldB:         "$.metadata.namespace",
+				ComparisonType: ExactMatch,
+			},
+		},
+	},
 	// Add more rules here...
 }
 
-func findRuleByRelationshipType(relationshipType RelationshipType) RelationshipRule {
+func findRuleByRelationshipType(relationshipType RelationshipType) (RelationshipRule, error) {
 	for _, rule := range relationshipRules {
 		if rule.Relationship == relationshipType {
-			return rule
+			return rule, nil
 		}
 	}
-	return RelationshipRule{}
+	return RelationshipRule{}, fmt.Errorf("rule not found for relationship type: %s", relationshipType)
 }
 
 func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion) bool {
