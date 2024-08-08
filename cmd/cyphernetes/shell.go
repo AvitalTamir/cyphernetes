@@ -630,7 +630,7 @@ func init() {
 }
 
 func dotToAscii(dot string, fancy bool) (string, error) {
-	url := "http://ascii.cyphernet.es/dot-to-ascii.php"
+	url := "https://ascii.cyphernet.es/dot-to-ascii.php"
 	boxart := 0
 	if fancy {
 		boxart = 1
