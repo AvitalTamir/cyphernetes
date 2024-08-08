@@ -53,181 +53,48 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
-			// fmt.Println("Debug: Processing MATCH clause")
+			var filteringOccurred bool
+			filteredResults := make(map[string][]map[string]interface{})
 
-			// we'll begin by fetching our relationships which mean fetching all kubernetes resources selectable by relationships in our clause
-			// we'll build a map of the resources we find, keyed by the name of the resource
-			// After finishing with relationships, we'll move on to nodes and add them to the map
-			// throughout the process we'll an intermediary struct between kubernetes and the map as cache, it will hold the complete structs from k8s to avoid fetching the same resource twice
-			// when iterating over nodes, no node will be refetched that has already been fetched in the relationship phase,
-			// important: during the relationships phase, before fetching a resource from kubernetes note that our relationships hold only ResourceProperties.Name and ResourceProperties.Kind, so must refer to the matching node in our nodes to get the full selector
-
-			// Iterate over the relationships in the match clause.
-			// Process Relationships
-			for _, rel := range c.Relationships {
-				// fmt.Printf("Debug: Processing relationship: %+v\n", rel)
-
-				// Determine relationship type and fetch related resources
-				var relType RelationshipType
-				if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-					// error out
-					return *results, fmt.Errorf("must specify kind for all nodes in match clause")
-				}
-				leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
-				if err != nil {
-					return *results, fmt.Errorf("error finding API resource >> %s", err)
-				}
-				rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
-				if err != nil {
-					return *results, fmt.Errorf("error finding API resource >> %s", err)
-				}
-
-				for _, resourceRelationship := range relationshipRules {
-					if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
-						(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
-						relType = resourceRelationship.Relationship
-					}
-				}
-
-				if relType == "" {
-					// no relationship type found, error out
-					return *results, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
-				}
-
-				rule := findRuleByRelationshipType(relType)
-				if err != nil {
-					return *results, fmt.Errorf("error determining relationship type >> %s", err)
-				}
-
-				// Fetch and process related resources
-				for _, node := range c.Nodes {
-					if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
-						if results.Data[node.ResourceProperties.Name] == nil {
-							resources := getNodeResources(node, q, c.ExtraFilters)
-							if err != nil {
-								return *results, err
-							}
-							results.Data[node.ResourceProperties.Name] = resources
-						}
-					}
-				}
-				var resourcesAInterface interface{}
-				var resourcesBInterface interface{}
-				var filteredDirection Direction
-
-				if rule.KindA == rightKind.Resource {
-					resourcesAInterface = resultMap[rel.RightNode.ResourceProperties.Name]
-					resourcesBInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
-					filteredDirection = Left
-				} else if rule.KindA == leftKind.Resource {
-					resourcesAInterface = resultMap[rel.LeftNode.ResourceProperties.Name]
-					resourcesBInterface = resultMap[rel.RightNode.ResourceProperties.Name]
-					filteredDirection = Right
-				} else {
-					// error out
-					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
-				}
-				// Apply relationship rules to filter resources
-				resourcesA, okA := resourcesAInterface.([]map[string]interface{})
-				resourcesB, okB := resourcesBInterface.([]map[string]interface{})
-
-				if !okA || !okB {
-					fmt.Println("Type assertion failed for resources")
-					continue
-				}
-
-				matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
-				resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-				resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-				// fmt.Printf("Debug: Matched resources: %+v\n", matchedResources)
-
-				if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
-					for idx, rightResource := range rightResources {
-						if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
-							if name, ok := metadata["name"].(string); ok {
-								results.Graph.Nodes = append(results.Graph.Nodes, Node{
-									Id:   rel.RightNode.ResourceProperties.Name,
-									Kind: resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
-									Name: name,
-								})
-							}
-						}
-					}
-				}
-
-				if leftResources, ok := matchedResources["left"].([]map[string]interface{}); ok && len(leftResources) > 0 {
-					for idx, leftResource := range leftResources {
-						if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
-							if name, ok := metadata["name"].(string); ok {
-								results.Graph.Nodes = append(results.Graph.Nodes, Node{
-									Id:   rel.LeftNode.ResourceProperties.Name,
-									Kind: resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
-									Name: name,
-								})
-							}
-						}
-					}
-				}
-
-				// Only add edge if both nodes exist
-				if len(matchedResources["right"].([]map[string]interface{})) > 0 && len(matchedResources["left"].([]map[string]interface{})) > 0 {
-					rightNodeResources := resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})
-					leftNodeResources := resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})
-
-					for _, rightNodeResource := range rightNodeResources {
-						rightNodeId := fmt.Sprintf("%s/%s", rightNodeResource["kind"].(string), rightNodeResource["metadata"].(map[string]interface{})["name"].(string))
-						for _, leftNodeResource := range leftNodeResources {
-							leftNodeId := fmt.Sprintf("%s/%s", leftNodeResource["kind"].(string), leftNodeResource["metadata"].(map[string]interface{})["name"].(string))
-
-							// apply the relationship rule to the two nodes
-							// asign into resourceA and resourceB the right and left node resources by the rule kinds
-							var resourceA []map[string]interface{}
-							var resourceB []map[string]interface{}
-							if rightKind.Resource == rule.KindA {
-								resourceA = []map[string]interface{}{rightNodeResource}
-								resourceB = []map[string]interface{}{leftNodeResource}
-							} else if leftKind.Resource == rule.KindA {
-								resourceA = []map[string]interface{}{leftNodeResource}
-								resourceB = []map[string]interface{}{rightNodeResource}
-							}
-							matchedResources := applyRelationshipRule(resourceA, resourceB, rule, filteredDirection)
-							if len(matchedResources["right"].([]map[string]interface{})) == 0 || len(matchedResources["left"].([]map[string]interface{})) == 0 {
-								continue
-							}
-							results.Graph.Edges = append(results.Graph.Edges, Edge{
-								From: rightNodeId,
-								To:   leftNodeId,
-								Type: string(relType),
-							})
-						}
-					}
-				}
-			}
-			// Iterate over the nodes in the match clause.
-			for _, node := range c.Nodes {
-				if node.ResourceProperties.Kind == "" {
-					// error out
-					return *results, fmt.Errorf("must specify kind for all nodes in match clause")
-				}
-				debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
-				// check if the node has already been fetched
-				if resultCache[q.resourcePropertyName(node)] == nil {
-					err := getNodeResources(node, q, c.ExtraFilters)
+			for i := 0; i < len(c.Relationships)*2; i++ {
+				filteringOccurred = false
+				for _, rel := range c.Relationships {
+					filtered, err := q.processRelationship(rel, c, results, filteredResults)
 					if err != nil {
-						return *results, fmt.Errorf("error getting node resources >> %s", err)
+						return *results, err
 					}
-					resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
-					for _, resource := range resources {
-						results.Graph.Nodes = append(results.Graph.Nodes, Node{
-							Id:   node.ResourceProperties.Name,
-							Kind: resource["kind"].(string),
-							Name: resource["metadata"].(map[string]interface{})["name"].(string),
-						})
-					}
-				} else if resultMap[node.ResourceProperties.Name] == nil {
-					resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
+					filteringOccurred = filteringOccurred || filtered
+				}
+				if !filteringOccurred {
+					break
+				}
+				// Update resultMap with filtered results for the next pass
+				for k, v := range filteredResults {
+					resultMap[k] = v
 				}
 			}
+
+			// Process nodes
+			for _, node := range c.Nodes {
+				err := q.processNode(node, c, results)
+				if err != nil {
+					return *results, err
+				}
+			}
+		// case *MatchClause:
+		// 	// fmt.Println("Debug: Processing MATCH clause")
+
+		// 	// we'll begin by fetching our relationships which mean fetching all kubernetes resources selectable by relationships in our clause
+		// 	// we'll build a map of the resources we find, keyed by the name of the resource
+		// 	// After finishing with relationships, we'll move on to nodes and add them to the map
+		// 	// throughout the process we'll an intermediary struct between kubernetes and the map as cache, it will hold the complete structs from k8s to avoid fetching the same resource twice
+		// 	// when iterating over nodes, no node will be refetched that has already been fetched in the relationship phase,
+		// 	// important: during the relationships phase, before fetching a resource from kubernetes note that our relationships hold only ResourceProperties.Name and ResourceProperties.Kind, so must refer to the matching node in our nodes to get the full selector
+
+		// 	// Iterate over the relationships in the match clause.
+		// 	// Process Relationships
+		// 	for _, rel := range c.Relationships {
+		// 	// Iterate over the nodes in the match clause.
 
 		case *SetClause:
 			// Execute a Kubernetes update operation based on the SetClause.
@@ -582,6 +449,201 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
 	return *results, nil
+}
+
+func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
+	// fmt.Printf("Debug: Processing relationship: %+v\n", rel)
+
+	// Determine relationship type and fetch related resources
+	var relType RelationshipType
+	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
+		// error out
+		return false, fmt.Errorf("must specify kind for all nodes in match clause")
+	}
+	leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
+	if err != nil {
+		return false, fmt.Errorf("error finding API resource >> %s", err)
+	}
+	rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
+	if err != nil {
+		return false, fmt.Errorf("error finding API resource >> %s", err)
+	}
+
+	for _, resourceRelationship := range relationshipRules {
+		if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
+			(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
+			relType = resourceRelationship.Relationship
+		}
+	}
+	if relType == "REPLICASET_OWN_POD" {
+		relType = "REPLICASET_OWN_POD"
+	}
+	if relType == "" {
+		// no relationship type found, error out
+		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
+	}
+
+	rule := findRuleByRelationshipType(relType)
+	if err != nil {
+		return false, fmt.Errorf("error determining relationship type >> %s", err)
+	}
+
+	// Fetch and process related resources
+	for _, node := range c.Nodes {
+		if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
+			if results.Data[node.ResourceProperties.Name] == nil {
+				resources := getNodeResources(node, q, c.ExtraFilters)
+				if err != nil {
+					return false, err
+				}
+				results.Data[node.ResourceProperties.Name] = resources
+			}
+		}
+	}
+
+	var resourcesA, resourcesB []map[string]interface{}
+	var filteredDirection Direction
+
+	if rule.KindA == rightKind.Resource {
+		resourcesA = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
+		resourcesB = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
+		filteredDirection = Left
+	} else if rule.KindA == leftKind.Resource {
+		resourcesA = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
+		resourcesB = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
+		filteredDirection = Right
+	} else {
+		return false, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
+	}
+
+	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
+
+	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
+	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
+
+	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
+	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
+
+	// if resultMap[rel.RightNode.ResourceProperties.Name] already contains items, we need to check which has a smaller number of items, and use the smaller of the two lists
+	// this is to ensure that we don't end up with unflitered items which should have been filtered out in the relationship rule application
+	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
+			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+		}
+	} else {
+		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+	}
+	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
+			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+		}
+	} else {
+		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+	}
+
+	// fmt.Printf("Debug: Matched resources: %+v\n", matchedResources)
+
+	if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
+		for idx, rightResource := range rightResources {
+			if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
+				if name, ok := metadata["name"].(string); ok {
+					results.Graph.Nodes = append(results.Graph.Nodes, Node{
+						Id:   rel.RightNode.ResourceProperties.Name,
+						Kind: resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
+						Name: name,
+					})
+				}
+			}
+		}
+	}
+
+	if leftResources, ok := matchedResources["left"].([]map[string]interface{}); ok && len(leftResources) > 0 {
+		for idx, leftResource := range leftResources {
+			if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
+				if name, ok := metadata["name"].(string); ok {
+					results.Graph.Nodes = append(results.Graph.Nodes, Node{
+						Id:   rel.LeftNode.ResourceProperties.Name,
+						Kind: resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
+						Name: name,
+					})
+				}
+			}
+		}
+	}
+
+	// Only add edge if both nodes exist
+	if len(matchedResources["right"].([]map[string]interface{})) > 0 && len(matchedResources["left"].([]map[string]interface{})) > 0 {
+		rightNodeResources := resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})
+		leftNodeResources := resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})
+
+		for _, rightNodeResource := range rightNodeResources {
+			rightNodeId := fmt.Sprintf("%s/%s", rightNodeResource["kind"].(string), rightNodeResource["metadata"].(map[string]interface{})["name"].(string))
+			for _, leftNodeResource := range leftNodeResources {
+				leftNodeId := fmt.Sprintf("%s/%s", leftNodeResource["kind"].(string), leftNodeResource["metadata"].(map[string]interface{})["name"].(string))
+
+				// apply the relationship rule to the two nodes
+				// asign into resourceA and resourceB the right and left node resources by the rule kinds
+				var resourceA []map[string]interface{}
+				var resourceB []map[string]interface{}
+				if rightKind.Resource == rule.KindA {
+					resourceA = []map[string]interface{}{rightNodeResource}
+					resourceB = []map[string]interface{}{leftNodeResource}
+				} else if leftKind.Resource == rule.KindA {
+					resourceA = []map[string]interface{}{leftNodeResource}
+					resourceB = []map[string]interface{}{rightNodeResource}
+				}
+				matchedResources := applyRelationshipRule(resourceA, resourceB, rule, filteredDirection)
+				if len(matchedResources["right"].([]map[string]interface{})) == 0 || len(matchedResources["left"].([]map[string]interface{})) == 0 {
+					continue
+				}
+				results.Graph.Edges = append(results.Graph.Edges, Edge{
+					From: rightNodeId,
+					To:   leftNodeId,
+					Type: string(relType),
+				})
+			}
+		}
+	}
+
+	return filteredA || filteredB, nil
+}
+
+func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, key string) []map[string]interface{} {
+	if filtered, ok := filteredResults[key]; ok {
+		return filtered
+	}
+	if resources, ok := resultMap[key].([]map[string]interface{}); ok {
+		return resources
+	}
+	return nil
+}
+
+func (q *QueryExecutor) processNode(node *NodePattern, c *MatchClause, results *QueryResult) error {
+	for _, node := range c.Nodes {
+		if node.ResourceProperties.Kind == "" {
+			// error out
+			return fmt.Errorf("must specify kind for all nodes in match clause")
+		}
+		debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
+		// check if the node has already been fetched
+		if resultCache[q.resourcePropertyName(node)] == nil {
+			err := getNodeResources(node, q, c.ExtraFilters)
+			if err != nil {
+				return fmt.Errorf("error getting node resources >> %s", err)
+			}
+			resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
+			for _, resource := range resources {
+				results.Graph.Nodes = append(results.Graph.Nodes, Node{
+					Id:   node.ResourceProperties.Name,
+					Kind: resource["kind"].(string),
+					Name: resource["metadata"].(map[string]interface{})["name"].(string),
+				})
+			}
+		} else if resultMap[node.ResourceProperties.Name] == nil {
+			resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
+		}
+	}
+	return nil
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {

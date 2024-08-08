@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -324,12 +325,32 @@ func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
 		return g, fmt.Errorf("error unmarshalling result: %w", err)
 	}
 
-	// now let's filter out only nodes that have data (in g.Data)
+	// now let's filter out nodes that have no data (in g.Data)
+	var filteredNodes []parser.Node
 	for _, node := range g.Nodes {
-		if resultMap[node.Id] == nil {
-			g.Nodes = append(g.Nodes, node)
+		if resultMap[node.Id] != nil {
+			for _, resultMapNode := range resultMap[node.Id].([]interface{}) {
+				if resultMapNode.(map[string]interface{})["name"] == node.Name {
+					filteredNodes = append(filteredNodes, node)
+				}
+			}
 		}
 	}
+	g.Nodes = filteredNodes
+
+	filteredNodeIds := []string{}
+	for _, node := range filteredNodes {
+		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		filteredNodeIds = append(filteredNodeIds, nodeId)
+	}
+	// now let's filter out edges that point to nodes that don't exist
+	var filteredEdges []parser.Edge
+	for _, edge := range g.Edges {
+		if slices.Contains(filteredNodeIds, edge.From) && slices.Contains(filteredNodeIds, edge.To) {
+			filteredEdges = append(filteredEdges, edge)
+		}
+	}
+	g.Edges = filteredEdges
 	return g, nil
 }
 
