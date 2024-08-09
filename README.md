@@ -11,9 +11,10 @@ Cyphernetes turns this: 😣
 # finally for each Ingress change it's ingress class to 'inactive':
 
 kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
-[.metadata.namespace, .metadata.name] | @tsv' | \
-while read -r ns dep; do kubectl get services -n "$ns" -o json | \
-jq -r --arg dep "$dep" '.items[] | select(.spec.selector.app == $dep) | .metadata.name' | \
+[.metadata.namespace, .metadata.name, (.spec.selector | to_entries | map("\(.key)=\(.value)") | \
+join(","))] | @tsv' | while read -r ns dep selector; do kubectl get services -n "$ns" -o json | \
+jq -r --arg selector "$selector" '.items[] | select((.spec.selector | to_entries | \
+map("\(.key)=\(.value)") | join(",")) == $selector) | .metadata.name' | \
 while read -r svc; do kubectl get ingresses -n "$ns" -o json | jq -r --arg svc "$svc" '.items[] | \
 select(.spec.rules[].http.paths[].backend.service.name == $svc) | .metadata.name' | \
 xargs -I {} kubectl patch ingress {} -n "$ns" --type=json -p \
