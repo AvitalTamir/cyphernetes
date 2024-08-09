@@ -77,6 +77,7 @@ Many useful macros are included - and it's easy to define your own.
 # Cyphernetes can optionally draw a graph of affected nodes!
 
 > :expose_public nginx foo.com
+Created services/nginx
 Created ingresses/nginx
 
 ┌─────────────────┐
