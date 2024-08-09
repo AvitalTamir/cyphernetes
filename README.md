@@ -6,30 +6,39 @@
 
 Cyphernetes turns this: 😣
 ```bash
-# List all services exposing pods with the 'nginx' app label
-kubectl get pods -l app=nginx -o json | \
-jq -r '.items[].metadata.labels | to_entries[] | "\(.key)=\(.value)"' | \
-xargs -I {} kubectl get services -l {} -o json | \
-jq '.items[].metadata.name' | \
-xargs kubectl get services
+# Select Deployments in all Namespaces which are scaled to zero,
+# find all Ingresses routing into these deployments -
+# finally for each Ingress change it's ingress class to 'inactive':
+
+kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
+[.metadata.namespace, .metadata.name] | @tsv' | \
+while read -r ns dep; do kubectl get services -n "$ns" -o json | \
+jq -r --arg dep "$dep" '.items[] | select(.spec.selector.app == $dep) | .metadata.name' | \
+while read -r svc; do kubectl get ingresses -n "$ns" -o json | jq -r --arg svc "$svc" '.items[] | \
+select(.spec.rules[].http.paths[].backend.service.name == $svc) | .metadata.name' | \
+xargs -I {} kubectl patch ingress {} -n "$ns" --type=json -p \
+'[{"op": "replace", "path": "/spec/ingressClassName", "value": "inactive"}]'; done; done
 ```
 
 Into this: 🤩 
 ```graphql
-MATCH (p:Pod {app: "nginx"})->(s:Service)
-RETURN s
+# Do the same thing!
+
+MATCH (d:Deployment)->(s:Service)->(i:Ingress)
+WHERE d.spec.replicas=0
+SET i.spec.ingressClassName="inactive";
 ```
 
-## But how?
+## How?
 
-Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API. A mixture of ascii-art, SQL-esque keywords and jsonPaths, Cyphernetes lets us express Kubernetes CRUD operations in an efficeint, creative and fun way.
+Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API.
+It is a mixture of ascii-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
 
 ### Examples
 ```graphql
-> MATCH (d:Deployment)
-  RETURN d.metadata.name AS name, 
-         d.spec.replicas AS desiredReplicas, 
-         d.status.availableReplicas AS runningReplicas;
+MATCH (d:Deployment)
+RETURN d.spec.replicas AS desiredReplicas, 
+       d.status.availableReplicas AS runningReplicas;
 
 {
   "d": [
@@ -44,11 +53,12 @@ Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for work
 Query executed in 9.081292ms
 ```
 
-Cyphernetes' superpower is that it understands the relationships between Kubernetes resource kinds.
-This feature lets us express highly complex operations in a natural way, and without having to worry about the underlying Kubernetes API:
+Cyphernetes' superpower is understanding the relationships between Kubernetes resource kinds.
+This feature is expressed using the arrows (`->`) you see in the example queries.
+Relationships let us express connected operations in a natural way, and without having to worry about the underlying Kubernetes API:
 
 ```graphql
-# similar to `kubectl expose`
+# This is similar to `kubectl expose`
 > MATCH (d:Deployment {name: "nginx"})
   CREATE (d)->(s:Service);
 
@@ -59,42 +69,52 @@ Query executed in 30.692208ms
 
 ### It has macros too
 Macros are minimalistic, user-extensible & batteries included stored procedures.
+They turn the Cyphernetes shell into a true kubectl alternative.
+Many useful macros are included - and it's easy to define your own.
+
 ```graphql
-> :expose_public nginx www.cyphernetes.com
-Created services/nginx
+# This macro creates a service and public ingress for a deployment.
+# Cyphernetes can optionally draw a graph of affected nodes!
+
+> :expose_public nginx foo.com
 Created ingresses/nginx
+
+┌─────────────────┐
+│ *Ingress* nginx │
+└─────────────────┘
+  │
+  │ :ROUTE
+  ▼
+┌─────────────────┐
+│ *Service* nginx │
+└─────────────────┘
+
 {
   "ingresses": [
     {
-      "Host": "www.cyphernetes.com",
+      "Host": "foo.com",
       "Path": "/",
-      "Service": "nginx"
+      "Service": "nginx",
+      "name": "nginx"
     }
   ],
   "services": [
     {
-      "ClusterIP": "10.96.136.90",
-      "Name": "nginx",
-      "Type": "ClusterIP"
+      "ClusterIP": "10.96.164.152",
+      "Type": "ClusterIP",
+      "name": "nginx"
     }
   ]
 }
 
-Macro executed in 47.406833ms
+Macro executed in 50.305083ms
 ```
 
 For more usage examples, please see the [Usage Guide](https://github.com/AvitalTamir/cyphernetes/blob/main/USAGE.md).
 
-## But why?
-
-Beyond the fact that writing Cypher is a delight, Cyphernetes aims to be efficient in expressing complex operations.
-The more complicated an operation is, the shorter it's Cyphernetes representation would be compared to the equiavalent nested kubectl commands or API client code.
-
-Macros take Cyphernetes from being a complimentary tool reserved for heavy tasks only to an every-day productivity tool that can replace common kubectl usage.
-
 ## Get Cyphernetes
 
-Build using go:
+Using go:
 
 ```bash
 go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
