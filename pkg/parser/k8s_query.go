@@ -427,6 +427,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 				if results.Data[nodeId] == nil {
 					results.Data[nodeId] = []interface{}{}
 				}
+				var aggregateResult interface{}
 
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
 					if len(results.Data[nodeId].([]interface{})) <= idx {
@@ -440,15 +441,44 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 						result = nil
 					}
 
-					key := item.Alias
-					if key == "" {
-						if len(pathParts) > 1 {
-							key = pathParts[len(pathParts)-1]
-						} else {
-							key = nodeId
+					switch strings.ToUpper(item.Aggregate) {
+					case "COUNT":
+						if aggregateResult == nil {
+							aggregateResult = 0
+						}
+						aggregateResult = aggregateResult.(int) + 1
+					case "SUM":
+						if aggregateResult == nil {
+							aggregateResult = 0.0
+						}
+						switch v := result.(type) {
+						case int64:
+							aggregateResult = aggregateResult.(float64) + float64(v)
+						case float64:
+							aggregateResult = aggregateResult.(float64) + v
+						default:
+							return *results, fmt.Errorf("sum aggregation not supported for type %T", v)
 						}
 					}
-					currentMap[key] = result
+
+					if item.Aggregate == "" {
+						key := item.Alias
+						if key == "" {
+							if len(pathParts) > 0 {
+								key = pathParts[len(pathParts)-1]
+							} else {
+								key = nodeId
+							}
+						}
+						currentMap[key] = result
+					}
+				}
+				if item.Aggregate != "" {
+					key := nodeId + "." + item.Alias
+					if key == "" {
+						key = nodeId + "." + item.Aggregate
+					}
+					results.Data[key] = aggregateResult
 				}
 			}
 
