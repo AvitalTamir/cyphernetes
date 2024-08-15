@@ -476,6 +476,26 @@ DELETE s, i
 
 ----
 
+## Aggregations
+
+Cyphernetes supports aggregations in the `RETURN` clause.
+Currently, only the `COUNT` and `SUM` functions are supported.
+
+```graphql
+MATCH (d:Deployment)->(rs:ReplicaSet)->(p:Pod)
+RETURN COUNT{p} AS TotalPods,
+       SUM{d.spec.replicas} AS TotalReplicas
+
+{
+  ...
+  "aggregate": {
+    "TotalPods": 10,
+    "TotalReplicas": 20
+  },
+  ...
+}
+```
+
 ## Macros
 
 Cyphernetes comes with a set of default macros that can be used to query the Kubernetes API.
