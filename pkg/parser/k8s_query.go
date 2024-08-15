@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -448,16 +449,31 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 						}
 						aggregateResult = aggregateResult.(int) + 1
 					case "SUM":
-						if aggregateResult == nil {
-							aggregateResult = 0.0
-						}
-						switch v := result.(type) {
-						case int64:
-							aggregateResult = aggregateResult.(float64) + float64(v)
-						case float64:
-							aggregateResult = aggregateResult.(float64) + v
-						default:
-							return *results, fmt.Errorf("sum aggregation not supported for type %T", v)
+						if result != nil {
+							if aggregateResult == nil {
+								aggregateResult = reflect.ValueOf(result).Interface()
+							} else {
+								v1 := reflect.ValueOf(aggregateResult)
+								v2 := reflect.ValueOf(result)
+								v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
+								if v1.Kind() == reflect.Ptr {
+									v1 = v1.Elem()
+								}
+								if v2.Kind() == reflect.Ptr {
+									v2 = v2.Elem()
+								}
+								switch v1.Kind() {
+								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+									aggregateResult = v1.Int() + v2.Int()
+								case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+									aggregateResult = v1.Uint() + v2.Uint()
+								case reflect.Float32, reflect.Float64:
+									aggregateResult = v1.Float() + v2.Float()
+								default:
+									// Handle unsupported types or error out
+									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+								}
+							}
 						}
 					}
 
@@ -474,11 +490,19 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 					}
 				}
 				if item.Aggregate != "" {
-					key := nodeId + "." + item.Alias
+					key := item.Alias
 					if key == "" {
-						key = nodeId + "." + item.Aggregate
+						key = strings.ToLower(item.Aggregate) + ":" + strings.Replace(pathStr, "$.", "", 1)
 					}
-					results.Data[key] = aggregateResult
+					if results.Data["aggregate"] == nil {
+						results.Data["aggregate"] = make(map[string]interface{})
+					}
+					aggregateMap := results.Data["aggregate"].(map[string]interface{})
+					if aggregateMap[nodeId] == nil {
+						aggregateMap[nodeId] = make(map[string]interface{})
+					}
+					aggregateNodeIdMap := aggregateMap[nodeId].(map[string]interface{})
+					aggregateNodeIdMap[key] = aggregateResult
 				}
 			}
 

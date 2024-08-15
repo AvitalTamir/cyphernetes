@@ -729,3 +729,91 @@ func TestMatchWhereReturn(t *testing.T) {
 		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
 	}
 }
+
+func TestMatchWhereReturnAs(t *testing.T) {
+	query := `MATCH (k:Kind) WHERE k.name = "test" RETURN k.name AS kindName`
+	// Expected AST structure
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "k",
+							Kind: "Kind",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:   "k.name",
+						Value: "test",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "k.name", Alias: "kindName"},
+				},
+			},
+		},
+	}
+
+	// Call the parser
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	// Check if the resulting AST matches the expected structure
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}
+
+func TestMatchReturnSumAsCountAs(t *testing.T) {
+	query := `MATCH (k:Kind) RETURN SUM{k.age} AS totalAge, COUNT{k.name} AS kindCount`
+	// Expected AST structure
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "k",
+							Kind: "Kind",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{
+						Aggregate: "SUM",
+						JsonPath:  "k.age",
+						Alias:     "totalAge",
+					},
+					{
+						Aggregate: "COUNT",
+						JsonPath:  "k.name",
+						Alias:     "kindCount",
+					},
+				},
+			},
+		},
+	}
+
+	// Call the parser
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	// Check if the resulting AST matches the expected structure
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}

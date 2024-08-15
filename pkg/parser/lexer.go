@@ -19,14 +19,14 @@ type Lexer struct {
 		tok Token
 		lit string
 	}
-	definingProps      bool
-	definingReturn     bool
-	definingSet        bool
-	definingCreate     bool
-	definingMatch      bool
-	definingWhere      bool
-	definingAggregate  bool
-	firstReturnDefined bool
+	definingProps     bool
+	definingReturn    bool
+	definingSet       bool
+	definingCreate    bool
+	definingMatch     bool
+	definingWhere     bool
+	definingAggregate bool
+	insideReturnItem  bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -49,7 +49,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		return 0
 	}
 
-	if (l.definingReturn && !l.firstReturnDefined) && !l.definingAggregate {
+	if (l.definingReturn && !l.insideReturnItem) && !l.definingAggregate {
 		ch := l.s.Peek()
 		consumeWhitespace(l, &ch)
 		tok := l.s.Scan()
@@ -78,7 +78,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	if l.buf.tok == RETURN || l.buf.tok == SET || l.buf.tok == WHERE || (l.buf.tok == LBRACE && l.definingAggregate) ||
 		(l.buf.tok == LBRACE && l.definingMatch) || (l.buf.tok == COMMA && l.definingProps) ||
 		(l.buf.tok == COMMA && l.definingReturn) || (l.buf.tok == COMMA && l.definingSet) || (l.buf.tok == COMMA && l.definingWhere) {
-		if !l.definingReturn || l.firstReturnDefined || l.definingAggregate {
+		if !l.definingReturn || l.insideReturnItem || l.definingAggregate {
 			lval.strVal = ""
 		}
 
@@ -93,7 +93,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			ch = l.s.Peek()
 		}
 		if l.definingReturn {
-			l.firstReturnDefined = true
+			l.insideReturnItem = true
 		}
 		l.buf.tok = ILLEGAL // Indicate that we've read a JSONPATH.
 		logDebug("Returning JSONPATH token with value:", lval.strVal)
@@ -229,6 +229,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	case ',':
 		logDebug("Returning COMMA token")
 		l.buf.tok = COMMA // Indicate that we've read a COMMA.
+		if l.definingReturn {
+			l.insideReturnItem = false
+			l.definingAggregate = false
+		}
 		return int(COMMA)
 	case '-':
 		ch := l.s.Peek()

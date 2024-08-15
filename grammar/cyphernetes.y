@@ -217,22 +217,19 @@ ReturnClause:
 ;
 
 ReturnItems:
-    JSONPATH {
-        $$ = []*ReturnItem{{JsonPath: $1}}
-    }
-|   ReturnItems COMMA JSONPATH {
-        $$ = append($1, &ReturnItem{JsonPath: $3})
-    }
-|   ReturnItem {
+    ReturnItem {
         $$ = []*ReturnItem{$1}
     }
-|   ReturnItems COMMA ReturnItem {
+    | ReturnItems COMMA ReturnItem {
         $$ = append($1, $3)
     }
 ;
 
 ReturnItem:
-    JSONPATH AS IDENT {
+    JSONPATH {
+        $$ = &ReturnItem{JsonPath: $1}
+    }
+    | JSONPATH AS IDENT {
         $$ = &ReturnItem{JsonPath: $1, Alias: $3}
     }
     | COUNT LBRACE JSONPATH RBRACE {

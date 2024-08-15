@@ -277,6 +277,100 @@ func TestLexer(t *testing.T) {
 				"",         // EOF
 			},
 		},
+		{
+			name:  "MATCH RETURN with COUNT",
+			input: "MATCH (k:Kind) RETURN COUNT{k.name} AS name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				COUNT,
+				LBRACE,
+				JSONPATH,
+				RBRACE,
+				AS,
+				IDENT,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",       // MATCH
+				"",       // LPAREN
+				"k",      // IDENT
+				"",       // COLON
+				"Kind",   // IDENT
+				"",       // RPAREN
+				"",       // RETURN
+				"",       // COUNT
+				"",       // LBRACE
+				"k.name", // JSONPATH
+				"",       // RBRACE
+				"",       // AS
+				"name",   // IDENT
+				"",       // EOF
+			},
+		},
+		{
+			name:  "MATCH RETURN with COUNT, SUM and JSONPATH",
+			input: "MATCH (k:Kind) RETURN k.test, COUNT{k.name} AS name, SUM{k.age} AS age, k.name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				COMMA,
+				COUNT,
+				LBRACE,
+				JSONPATH,
+				RBRACE,
+				AS,
+				IDENT,
+				COMMA,
+				SUM,
+				LBRACE,
+				JSONPATH,
+				RBRACE,
+				AS,
+				IDENT,
+				COMMA,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",       // MATCH
+				"",       // LPAREN
+				"k",      // IDENT
+				"",       // COLON
+				"Kind",   // IDENT
+				"",       // RPAREN
+				"",       // RETURN
+				"k.test", // IDENT
+				"",       // COMMA
+				"",       // COUNT
+				"",       // LBRACE
+				"k.name", // JSONPATH
+				"",       // RBRACE
+				"",       // AS
+				"name",   // IDENT
+				"",       // COMMA
+				"",       // SUM
+				"",       // LBRACE
+				"k.age",  // JSONPATH
+				"",       // RBRACE
+				"",       // AS
+				"age",    // IDENT
+				"",       // COMMA
+				"k.name", // JSONPATH
+				"",       // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {
