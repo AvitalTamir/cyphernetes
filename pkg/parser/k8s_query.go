@@ -490,19 +490,16 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 					}
 				}
 				if item.Aggregate != "" {
-					key := item.Alias
-					if key == "" {
-						key = strings.ToLower(item.Aggregate) + ":" + strings.Replace(pathStr, "$.", "", 1)
-					}
 					if results.Data["aggregate"] == nil {
 						results.Data["aggregate"] = make(map[string]interface{})
 					}
 					aggregateMap := results.Data["aggregate"].(map[string]interface{})
-					if aggregateMap[nodeId] == nil {
-						aggregateMap[nodeId] = make(map[string]interface{})
+
+					key := item.Alias
+					if key == "" {
+						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
 					}
-					aggregateNodeIdMap := aggregateMap[nodeId].(map[string]interface{})
-					aggregateNodeIdMap[key] = aggregateResult
+					aggregateMap[key] = aggregateResult
 				}
 			}
 
@@ -972,7 +969,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		// The first part of the key is the node name
 		resultMapKey := strings.Split(filter.Key, ".")[0]
 		if resultMap[resultMapKey] == nil {
-			return fmt.Errorf("node identifier %s not found in where clause", resultMapKey)
+			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
 		} else if resultMapKey == n.ResourceProperties.Name {
 			// The rest of the key is the JSONPath
 			path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
