@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -427,6 +428,7 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 				if results.Data[nodeId] == nil {
 					results.Data[nodeId] = []interface{}{}
 				}
+				var aggregateResult interface{}
 
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
 					if len(results.Data[nodeId].([]interface{})) <= idx {
@@ -440,15 +442,64 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 						result = nil
 					}
 
-					key := item.Alias
-					if key == "" {
-						if len(pathParts) > 1 {
-							key = pathParts[len(pathParts)-1]
-						} else {
-							key = nodeId
+					switch strings.ToUpper(item.Aggregate) {
+					case "COUNT":
+						if aggregateResult == nil {
+							aggregateResult = 0
+						}
+						aggregateResult = aggregateResult.(int) + 1
+					case "SUM":
+						if result != nil {
+							if aggregateResult == nil {
+								aggregateResult = reflect.ValueOf(result).Interface()
+							} else {
+								v1 := reflect.ValueOf(aggregateResult)
+								v2 := reflect.ValueOf(result)
+								v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
+								if v1.Kind() == reflect.Ptr {
+									v1 = v1.Elem()
+								}
+								if v2.Kind() == reflect.Ptr {
+									v2 = v2.Elem()
+								}
+								switch v1.Kind() {
+								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+									aggregateResult = v1.Int() + v2.Int()
+								case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+									aggregateResult = v1.Uint() + v2.Uint()
+								case reflect.Float32, reflect.Float64:
+									aggregateResult = v1.Float() + v2.Float()
+								default:
+									// Handle unsupported types or error out
+									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+								}
+							}
 						}
 					}
-					currentMap[key] = result
+
+					if item.Aggregate == "" {
+						key := item.Alias
+						if key == "" {
+							if len(pathParts) > 0 {
+								key = pathParts[len(pathParts)-1]
+							} else {
+								key = nodeId
+							}
+						}
+						currentMap[key] = result
+					}
+				}
+				if item.Aggregate != "" {
+					if results.Data["aggregate"] == nil {
+						results.Data["aggregate"] = make(map[string]interface{})
+					}
+					aggregateMap := results.Data["aggregate"].(map[string]interface{})
+
+					key := item.Alias
+					if key == "" {
+						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
+					}
+					aggregateMap[key] = aggregateResult
 				}
 			}
 
@@ -918,7 +969,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		// The first part of the key is the node name
 		resultMapKey := strings.Split(filter.Key, ".")[0]
 		if resultMap[resultMapKey] == nil {
-			return fmt.Errorf("node identifier %s not found in where clause", resultMapKey)
+			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
 		} else if resultMapKey == n.ResourceProperties.Name {
 			// The rest of the key is the JSONPath
 			path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")

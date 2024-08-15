@@ -19,12 +19,14 @@ type Lexer struct {
 		tok Token
 		lit string
 	}
-	definingProps  bool
-	definingReturn bool
-	definingSet    bool
-	definingCreate bool
-	definingMatch  bool
-	definingWhere  bool
+	definingProps     bool
+	definingReturn    bool
+	definingSet       bool
+	definingCreate    bool
+	definingMatch     bool
+	definingWhere     bool
+	definingAggregate bool
+	insideReturnItem  bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -32,6 +34,12 @@ func NewLexer(input string) *Lexer {
 	s.Init(strings.NewReader(input))
 	s.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
 	return &Lexer{s: s}
+}
+func consumeWhitespace(l *Lexer, ch *rune) {
+	for *ch == ' ' || *ch == '\t' || *ch == '\n' || *ch == '\r' {
+		l.s.Next() // Consume the whitespace
+		*ch = l.s.Peek()
+	}
 }
 
 func (l *Lexer) Lex(lval *yySymType) int {
@@ -41,17 +49,42 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		return 0
 	}
 
+	if (l.definingReturn && !l.insideReturnItem) && !l.definingAggregate {
+		ch := l.s.Peek()
+		consumeWhitespace(l, &ch)
+		tok := l.s.Scan()
+		if tok == scanner.Ident {
+			lit := l.s.TokenText()
+			if strings.ToUpper(lit) == "COUNT" {
+				l.definingAggregate = true
+				l.buf.tok = COUNT
+				logDebug("Returning COUNT token")
+				return int(COUNT)
+			} else if strings.ToUpper(lit) == "SUM" {
+				l.definingAggregate = true
+				l.buf.tok = SUM
+				logDebug("Returning SUM token")
+				return int(SUM)
+			} else if strings.ToUpper(lit) == "AS" {
+				logDebug("Returning AS token")
+				return int(AS)
+			} else {
+				lval.strVal = lit
+			}
+		}
+	}
+
 	// Check if we are capturing a JSONPATH
-	if l.buf.tok == RETURN || l.buf.tok == SET || l.buf.tok == WHERE ||
-		l.buf.tok == LBRACE && l.definingMatch || (l.buf.tok == COMMA && l.definingProps) ||
-		l.buf.tok == COMMA && l.definingReturn || l.buf.tok == COMMA && l.definingSet || l.buf.tok == COMMA && l.definingWhere {
-		lval.strVal = ""
+	if l.buf.tok == RETURN || l.buf.tok == SET || l.buf.tok == WHERE || (l.buf.tok == LBRACE && l.definingAggregate) ||
+		(l.buf.tok == LBRACE && l.definingMatch) || (l.buf.tok == COMMA && l.definingProps) ||
+		(l.buf.tok == COMMA && l.definingReturn) || (l.buf.tok == COMMA && l.definingSet) || (l.buf.tok == COMMA && l.definingWhere) {
+		if !l.definingReturn || l.insideReturnItem || l.definingAggregate {
+			lval.strVal = ""
+		}
+
 		// Consume and ignore any whitespace
 		ch := l.s.Peek()
-		for ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
-			l.s.Next() // Consume the whitespace
-			ch = l.s.Peek()
-		}
+		consumeWhitespace(l, &ch)
 
 		// Capture the JSONPATH
 		for isValidJsonPathChar(ch) {
@@ -59,7 +92,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			lval.strVal += string(ch)
 			ch = l.s.Peek()
 		}
-
+		if l.definingReturn {
+			l.insideReturnItem = true
+		}
 		l.buf.tok = ILLEGAL // Indicate that we've read a JSONPATH.
 		logDebug("Returning JSONPATH token with value:", lval.strVal)
 		return int(JSONPATH)
@@ -79,7 +114,6 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			ch = l.s.Peek()
 		}
 
-		l.buf.tok = ILLEGAL // Indicate that we've read a JSONDATA.
 		l.definingCreate = false
 		logDebug("Returning JSONDATA token with value:", lval.strVal)
 		return int(JSONDATA)
@@ -93,7 +127,8 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	switch tok {
 	case scanner.Ident:
 		lit := l.s.TokenText()
-		if strings.ToUpper(lit) == "MATCH" {
+		switch strings.ToUpper(lit) {
+		case "MATCH":
 			logDebug("Returning MATCH token")
 			l.buf.tok = MATCH // Indicate that we've read a MATCH.
 			l.definingMatch = true
@@ -102,7 +137,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingReturn = false
 			l.definingWhere = false
 			return int(MATCH)
-		} else if strings.ToUpper(lit) == "SET" {
+		case "SET":
 			l.buf.tok = SET // Indicate that we've read a SET.
 			l.definingSet = true
 			l.definingCreate = false
@@ -111,10 +146,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingWhere = false
 			logDebug("Returning SET token")
 			return int(SET)
-		} else if strings.ToUpper(lit) == "DELETE" {
+		case "DELETE":
 			logDebug("Returning SET token")
 			return int(DELETE)
-		} else if strings.ToUpper(lit) == "CREATE" {
+		case "CREATE":
 			logDebug("Returning CREATE token")
 			l.definingCreate = true
 			l.definingSet = false
@@ -122,7 +157,7 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingReturn = false
 			l.definingWhere = false
 			return int(CREATE)
-		} else if strings.ToUpper(lit) == "RETURN" {
+		case "RETURN":
 			l.buf.tok = RETURN // Indicate that we've read a RETURN.
 			l.definingReturn = true
 			l.definingSet = false
@@ -131,10 +166,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingWhere = false
 			logDebug("Returning RETURN token")
 			return int(RETURN)
-		} else if strings.ToUpper(lit) == "AS" {
+		case "AS":
 			logDebug("Returning AS token")
 			return int(AS)
-		} else if strings.ToUpper(lit) == "WHERE" {
+		case "WHERE":
 			logDebug("Returning WHERE token")
 			l.definingWhere = true
 			l.definingReturn = false
@@ -143,11 +178,11 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingMatch = false
 			l.buf.tok = WHERE // Indicate that we've read a WHERE.
 			return int(WHERE)
-		} else if strings.ToUpper(lit) == "TRUE" || strings.ToUpper(lit) == "FALSE" {
+		case "TRUE", "FALSE":
 			lval.strVal = l.s.TokenText()
 			logDebug("Returning BOOLEAN token with value:", lval.strVal)
 			return int(BOOLEAN)
-		} else {
+		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)
 			return int(IDENT)
@@ -194,6 +229,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	case ',':
 		logDebug("Returning COMMA token")
 		l.buf.tok = COMMA // Indicate that we've read a COMMA.
+		if l.definingReturn {
+			l.insideReturnItem = false
+			l.definingAggregate = false
+		}
 		return int(COMMA)
 	case '-':
 		ch := l.s.Peek()

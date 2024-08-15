@@ -69,8 +69,9 @@ type ReturnClause struct {
 }
 
 type ReturnItem struct {
-	JsonPath string
-	Alias    string
+	JsonPath  string
+	Alias     string
+	Aggregate string
 }
 
 type NodePattern struct {

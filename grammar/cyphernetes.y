@@ -52,6 +52,7 @@ func debugLog(v ...interface{}) {
 %token <strVal> JSONDATA
 %token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS AS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
+%token COUNT SUM
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -216,23 +217,32 @@ ReturnClause:
 ;
 
 ReturnItems:
-    JSONPATH {
-        $$ = []*ReturnItem{{JsonPath: $1}}
-    }
-|   ReturnItems COMMA JSONPATH {
-        $$ = append($1, &ReturnItem{JsonPath: $3})
-    }
-|   ReturnItem {
+    ReturnItem {
         $$ = []*ReturnItem{$1}
     }
-|   ReturnItems COMMA ReturnItem {
+    | ReturnItems COMMA ReturnItem {
         $$ = append($1, $3)
     }
 ;
 
 ReturnItem:
-    JSONPATH AS IDENT {
+    JSONPATH {
+        $$ = &ReturnItem{JsonPath: $1}
+    }
+    | JSONPATH AS IDENT {
         $$ = &ReturnItem{JsonPath: $1, Alias: $3}
+    }
+    | COUNT LBRACE JSONPATH RBRACE {
+        $$ = &ReturnItem{Aggregate: "COUNT", JsonPath: $3}
+    }
+    | SUM LBRACE JSONPATH RBRACE {
+        $$ = &ReturnItem{Aggregate: "SUM", JsonPath: $3}
+    }
+    | COUNT LBRACE JSONPATH RBRACE AS IDENT {
+        $$ = &ReturnItem{Aggregate: "COUNT", JsonPath: $3, Alias: $6}
+    }
+    | SUM LBRACE JSONPATH RBRACE AS IDENT {
+        $$ = &ReturnItem{Aggregate: "SUM", JsonPath: $3, Alias: $6}
     }
 ;
 
