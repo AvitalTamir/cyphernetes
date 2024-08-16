@@ -1,18 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"slices"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/goccy/go-graphviz"
-	"github.com/goccy/go-graphviz/cgraph"
 )
 
 func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
@@ -63,75 +61,52 @@ func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
 	return g, nil
 }
 
-func DrawGraphviz(graph parser.Graph, result string) string {
-	g := graphviz.New()
-	gv, err := g.Graph()
+func drawGraph(graph parser.Graph, result string) (string, error) {
+	graph, err := sanitizeGraph(graph, result)
 	if err != nil {
-		return fmt.Sprintf("Error creating graph: %v", err)
-	}
-	defer func() {
-		if err := gv.Close(); err != nil {
-			fmt.Printf("Error closing graph: %v\n", err)
-		}
-		g.Close()
-	}()
-
-	// Create a map to store nodes
-	nodes := make(map[string]*cgraph.Node)
-
-	// Create nodes
-	for _, node := range graph.Nodes {
-		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
-		n, err := gv.CreateNode(nodeId)
-		if err != nil {
-			return fmt.Sprintf("Error creating node: %v", err)
-		}
-		n.SetLabel(fmt.Sprintf("*%s* %s", node.Kind, node.Name))
-		nodes[nodeId] = n
+		return "", fmt.Errorf("error sanitizing graph: %w", err)
 	}
 
-	// Create edges
+	var graphString strings.Builder
+	graphString.WriteString("graph {\n")
+	if graphLayoutLR {
+		graphString.WriteString("\trankdir = LR;\n\n")
+	}
+
 	for _, edge := range graph.Edges {
-		fromNode, ok := nodes[edge.From]
-		if !ok {
-			return fmt.Sprintf("Error: node %s not found", edge.From)
-		}
-		toNode, ok := nodes[edge.To]
-		if !ok {
-			return fmt.Sprintf("Error: node %s not found", edge.To)
-		}
-		e, err := gv.CreateEdge(edge.Type, fromNode, toNode)
-		if err != nil {
-			return fmt.Sprintf("Error creating edge: %v", err)
-		}
-		e.SetLabel(":" + edge.Type)
+		graphString.WriteString(fmt.Sprintf("\"*%s* %s\" -> \"*%s* %s\" [label=\":%s\"];\n",
+			getKindFromNodeId(edge.From),
+			getNameFromNodeId(edge.From),
+			getKindFromNodeId(edge.To),
+			getNameFromNodeId(edge.To),
+			edge.Type))
 	}
 
-	// Iterate over nodes of kind "Namespace" and iterate over all nodes to check if their ".metadata.namespace" matches this namespace
-	// if it does, add an edge from the namespace to the node
+	// iterate over graph.Nodes and find nodes which are not in the graphString
 	for _, node := range graph.Nodes {
-		if node.Kind == "Namespace" {
-			for _, node2 := range graph.Nodes {
-				if node.Namespace != "" && node.Namespace == node2.Namespace {
-					nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
-					node2Id := fmt.Sprintf("%s/%s", node2.Kind, node2.Name)
-					gv.CreateEdge(string(parser.NamespaceHasResource), nodes[nodeId], nodes[node2Id])
-				}
-			}
+		if !strings.Contains(graphString.String(), fmt.Sprintf("\"%s %s\"", node.Kind, node.Name)) {
+			graphString.WriteString(fmt.Sprintf("\"*%s* %s\";\n", node.Kind, node.Name))
 		}
 	}
 
-	var buf bytes.Buffer
-	if err := g.Render(gv, graphviz.Format("dot"), &buf); err != nil {
-		fmt.Println("Error rendering graph:", err)
-	}
+	graphString.WriteString("}")
 
-	ascii, err := dotToAscii(buf.String(), true)
+	ascii, err := dotToAscii(graphString.String(), true)
 	if err != nil {
-		return fmt.Sprintf("Error converting graph to ASCII: %v", err)
+		return "", fmt.Errorf("error converting graph to ASCII: %w", err)
 	}
 
-	return "\n" + ascii
+	return "\n" + ascii, nil
+}
+
+func getKindFromNodeId(nodeId string) string {
+	parts := strings.Split(nodeId, "/")
+	return parts[0]
+}
+
+func getNameFromNodeId(nodeId string) string {
+	parts := strings.Split(nodeId, "/")
+	return parts[1]
 }
 
 func dotToAscii(dot string, fancy bool) (string, error) {

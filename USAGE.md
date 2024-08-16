@@ -569,12 +569,15 @@ Available shell commands:
 * `exit` - Exit the shell.
 * `\n <namespace>|all` - Set the namespace context for the shell to either `<namespace>` or all namespaces.
 * `\m` - Toggle multiline mode (execute query on ';').
+* `\g` - Toggle graph mode (print graph as ASCII art).
+* `\gl` - Toggle graph layout (Left to Right or Top to Bottom).
 * `\d` - Print debug information.
 * `\q` - Toggle printing query execution time.
 * `\r` - Toggle raw output (disable colorized JSON).
 * `\cc` - Clear the cache.
 * `\pc` - Print the cache.
 * `\lm` - List available macros.
+* `:macro_name [args]` - Execute a macro.
 
 ### Query
 
