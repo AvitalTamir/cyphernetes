@@ -280,22 +280,22 @@ func runShell(cmd *cobra.Command, args []string) {
 				fmt.Printf("Error >> %s\n", err)
 				continue
 			}
-			graph, err = sanitizeGraph(graph, result)
-			if err != nil {
-				fmt.Printf("Error >> %s\n", err)
-			} else {
-				if !disableGraphOutput {
-					fmt.Println(DrawGraphviz(graph, result))
+			if !disableGraphOutput {
+				graphAscii, err := drawGraph(graph, result)
+				if err != nil {
+					fmt.Printf("Error >> %s\n", err)
+				} else {
+					fmt.Println(graphAscii)
 				}
-				if !disableColorJsonOutput {
-					result = colorizeJson(result)
-				}
-				if result != "{}" {
-					fmt.Println(result)
-				}
-				if printQueryExecutionTime {
-					fmt.Printf("\nQuery executed in %s\n\n", execTime)
-				}
+			}
+			if !disableColorJsonOutput {
+				result = colorizeJson(result)
+			}
+			if result != "{}" {
+				fmt.Println(result)
+			}
+			if printQueryExecutionTime {
+				fmt.Printf("\nQuery executed in %s\n\n", execTime)
 			}
 		}
 		// Add input to history
@@ -331,12 +331,12 @@ func executeMacro(input string) (string, error) {
 
 	execTime = time.Since(startTime)
 
-	graph, err = sanitizeGraph(graph, strings.Join(results, "\n"))
-	if err != nil {
-		return "", fmt.Errorf("error sanitizing graph: %w", err)
-	}
 	if !disableGraphOutput {
-		fmt.Println(DrawGraphviz(graph, strings.Join(results, "\n")))
+		graphAscii, err := drawGraph(graph, strings.Join(results, "\n"))
+		if err != nil {
+			return "", fmt.Errorf("error drawing graph: %w", err)
+		}
+		fmt.Println(graphAscii)
 	}
 	return strings.Join(results, "\n"), nil
 }
