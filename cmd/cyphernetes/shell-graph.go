@@ -69,12 +69,11 @@ func drawGraph(graph parser.Graph, result string) (string, error) {
 
 	var graphString strings.Builder
 	graphString.WriteString("graph {\n")
-	graphString.WriteString("\trankdir = LR;\n\n")
+	if graphLayoutLR {
+		graphString.WriteString("\trankdir = LR;\n\n")
+	}
 
-	// Iterate over edges
 	for _, edge := range graph.Edges {
-		// Get "from" node
-		// Add edge
 		graphString.WriteString(fmt.Sprintf("\"*%s* %s\" -> \"*%s* %s\" [label=\":%s\"];\n",
 			getKindFromNodeId(edge.From),
 			getNameFromNodeId(edge.From),
@@ -84,7 +83,6 @@ func drawGraph(graph parser.Graph, result string) (string, error) {
 	}
 
 	// iterate over graph.Nodes and find nodes which are not in the graphString
-	// and add them to the graphString
 	for _, node := range graph.Nodes {
 		if !strings.Contains(graphString.String(), fmt.Sprintf("\"%s %s\"", node.Kind, node.Name)) {
 			graphString.WriteString(fmt.Sprintf("\"*%s* %s\";\n", node.Kind, node.Name))

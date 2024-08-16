@@ -68,14 +68,14 @@ Created services/nginx
 Query executed in 30.692208ms
 ```
 
-### It has macros too
+### It has macros and graphs too
 Macros are minimalistic, user-extensible & batteries included stored procedures.
-They turn the Cyphernetes shell into a true kubectl alternative.
+They turn the Cyphernetes shell into a handy kubectl alternative.
 Many useful macros are included - and it's easy to define your own.
 
 ```graphql
 # This macro creates a service and public ingress for a deployment.
-# Cyphernetes can optionally draw a graph of affected nodes!
+# Cyphernetes can optionally draw a graph of affected nodes as ASCII art.
 
 > :expose_public nginx foo.com
 Created services/nginx
