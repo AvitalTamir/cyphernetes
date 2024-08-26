@@ -61,6 +61,14 @@ func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
 	return g, nil
 }
 
+func mergeGraphs(graph parser.Graph, newGraph parser.Graph) parser.Graph {
+	// merge the nodes
+	graph.Nodes = append(graph.Nodes, newGraph.Nodes...)
+	// merge the edges
+	graph.Edges = append(graph.Edges, newGraph.Edges...)
+	return graph
+}
+
 func drawGraph(graph parser.Graph, result string) (string, error) {
 	graph, err := sanitizeGraph(graph, result)
 	if err != nil {
@@ -110,7 +118,7 @@ func getNameFromNodeId(nodeId string) string {
 }
 
 func dotToAscii(dot string, fancy bool) (string, error) {
-	fmt.Println("Creating ASCII graph...")
+	fmt.Println("Converting Graph to ASCII...")
 	defer func() {
 		fmt.Print("\033[1A\033[K") // Move cursor up one line and clear it
 	}()

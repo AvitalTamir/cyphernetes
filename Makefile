@@ -32,7 +32,7 @@ build-all-platforms-and-archs:
 # Define how to run tests
 test:
 	@echo "🧪 Running tests..."
-	go test ./... -coverprofile=coverage.out | sed 's/^/   /g'
+	go test ./... | sed 's/^/   /g'
 
 # Define how to generate the grammar parser
 gen-parser:

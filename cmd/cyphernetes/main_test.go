@@ -14,8 +14,8 @@ func TestMain(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	// Call the Execute function
-	Execute()
+	// Test the Execute function
+	main()
 
 	// Restore stdout
 	w.Close()

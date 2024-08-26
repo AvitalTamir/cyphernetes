@@ -9,6 +9,10 @@ import (
 	"github.com/chzyer/readline"
 )
 
+type readlineNewExFunc func(*readline.Config) (*readline.Instance, error)
+
+var readlineNewEx readlineNewExFunc = readline.NewEx
+
 func TestShellPrompt(t *testing.T) {
 	// Save the original namespace and restore it after the test
 	originalNamespace := parser.Namespace
@@ -77,6 +81,41 @@ func TestFilterInput(t *testing.T) {
 			_, got := filterInput(tt.input)
 			if got != tt.expected {
 				t.Errorf("filterInput(%v) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSyntaxHighlighterPaint(t *testing.T) {
+	h := &syntaxHighlighter{}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Keywords",
+			input:    "MATCH (n:Node) WHERE n.property = 'value' RETURN n",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN n\x1b[0m",
+		},
+		{
+			name:     "Properties",
+			input:    "MATCH (n:Node {key: \"value\"})",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey\x1b[0m: \x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m\x1b[0m",
+		},
+		{
+			name:     "Return with JSONPath",
+			input:    "RETURN n.name, n.age",
+			expected: "\x1b[35mRETURN n\x1b[37m.\x1b[35mname\x1b[37m,\x1b[35m n\x1b[37m.\x1b[35mage\x1b[0m",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(h.Paint([]rune(tt.input), 0))
+			if result != tt.expected {
+				t.Errorf("\nPaint() = %v\n   want = %v\n    raw = %#v\n   want = %#v", result, tt.expected, result, tt.expected)
 			}
 		})
 	}
