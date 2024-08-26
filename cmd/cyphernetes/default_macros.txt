@@ -1,4 +1,4 @@
-:po # List pods
+:getpo # List pods
 MATCH (pods:Pod)
 RETURN pods.metadata.name,
        pods.status.phase AS Status,
@@ -6,7 +6,7 @@ RETURN pods.metadata.name,
        pods.status.podIP AS IP,
        pods.metadata.creationTimestamp AS Age;
 
-:deploy # List deployments
+:getdeploy # List deployments
 MATCH (deployments:Deployment)
 RETURN deployments.metadata.name,
        deployments.status.replicas AS Ready,
@@ -15,7 +15,7 @@ RETURN deployments.metadata.name,
        deployments.status.availableReplicas AS Available,
        deployments.metadata.creationTimestamp AS Age;
 
-:svc # List services
+:getsvc # List services
 MATCH (services:Service)
 RETURN services.metadata.name,
        services.spec.type AS Type,
@@ -24,13 +24,13 @@ RETURN services.metadata.name,
        services.spec.ports AS Ports,
        services.metadata.creationTimestamp AS Age;
 
-:ns # List namespaces
+:getns # List namespaces
 MATCH (namespaces:Namespace)
 RETURN namespaces.metadata.name,
        namespaces.status.phase AS Status,
        namespaces.metadata.creationTimestamp AS Age;
 
-:no # List nodes
+:getno # List nodes
 MATCH (nodes:Node)
 RETURN nodes.metadata.name,
        nodes.status.nodeInfo.osImage AS OS,
@@ -39,7 +39,7 @@ RETURN nodes.metadata.name,
        nodes.status.allocatable.memory AS Memory,
        nodes.spec.unschedulable AS Unschedulable;
 
-:pv # List persistent volumes
+:getpv # List persistent volumes
 MATCH (persistentVolumes:PersistentVolume)
 RETURN persistentVolumes.metadata.name,
        persistentVolumes.spec.capacity.storage AS Capacity,
@@ -47,7 +47,7 @@ RETURN persistentVolumes.metadata.name,
        persistentVolumes.spec.storageClassName AS StorageClass,
        persistentVolumes.status.phase AS Status;
 
-:pvc # List persistent volume claims
+:getpvc # List persistent volume claims
 MATCH (persistentVolumeClaims:PersistentVolumeClaim)
 RETURN persistentVolumeClaims.metadata.name,
        persistentVolumeClaims.spec.volumeName AS Volume,
@@ -55,7 +55,7 @@ RETURN persistentVolumeClaims.metadata.name,
        persistentVolumeClaims.status.phase AS Status,
        persistentVolumeClaims.metadata.creationTimestamp AS Age;
 
-:event # List warning events
+:getevent # List warning events
 MATCH (events:Event)
 WHERE events.type = "Warning"
 RETURN events.involvedObject.kind AS Resource,
@@ -63,6 +63,46 @@ RETURN events.involvedObject.kind AS Resource,
        events.reason AS Reason,
        events.message AS Message,
        events.lastTimestamp AS LastSeen;
+
+:geting # List ingresses
+MATCH (ingresses:Ingress)
+RETURN ingresses.metadata.name,
+       ingresses.spec.rules[0].host AS Host,
+       ingresses.spec.rules[0].http.paths[0].path AS Path,
+       ingresses.spec.rules[0].http.paths[0].backend.serviceName AS Service,
+       ingresses.metadata.creationTimestamp AS Age;
+
+:getcm # List config maps
+MATCH (configMaps:ConfigMap)->(pods:Pod)
+RETURN configMaps.metadata.name,
+       configMaps.metadata.namespace AS Namespace,
+       configMaps.metadata.creationTimestamp AS Age
+       pods.metadata.name AS UsedIn;
+
+:getsecret # List secrets
+MATCH (secrets:Secret)->(pods:Pod)
+RETURN secrets.metadata.name,
+       secrets.metadata.namespace AS Namespace,
+       secrets.type AS Type,
+       secrets.metadata.creationTimestamp AS Age,
+       pods.metadata.name AS UsedIn;
+
+:getjob # List jobs
+MATCH (jobs:Job)
+RETURN jobs.metadata.name,
+       jobs.status.succeeded AS Succeeded,
+       jobs.status.failed AS Failed,
+       jobs.spec.completions AS Completions,
+       jobs.status.startTime AS StartTime,
+       jobs.status.completionTime AS CompletionTime;
+
+:getcronjob # List cron jobs
+MATCH (cronJobs:CronJob)
+RETURN cronJobs.metadata.name,
+       cronJobs.spec.schedule AS Schedule,
+       cronJobs.spec.suspend AS Suspended,
+       cronJobs.status.lastScheduleTime AS LastSchedule,
+       cronJobs.metadata.creationTimestamp AS Age;
 
 :podmon # Monitor pod resources
 MATCH (pods:Pod)
@@ -72,51 +112,17 @@ RETURN pods.metadata.name,
        pods.spec.containers[0].resources.requests.memory AS RequestedMemory,
        pods.status.containerStatuses[0].restartCount AS Restarts;
 
-:ing # List ingresses
-MATCH (ingresses:Ingress)
-RETURN ingresses.metadata.name,
-       ingresses.spec.rules[0].host AS Host,
-       ingresses.spec.rules[0].http.paths[0].path AS Path,
-       ingresses.spec.rules[0].http.paths[0].backend.serviceName AS Service,
-       ingresses.metadata.creationTimestamp AS Age;
-
-:cm # List config maps
-MATCH (configMaps:ConfigMap)
-RETURN configMaps.metadata.name,
-       configMaps.metadata.namespace AS Namespace,
-       configMaps.metadata.creationTimestamp AS Age;
-
-:secret # List secrets
-MATCH (secrets:Secret)
-RETURN secrets.metadata.name,
-       secrets.metadata.namespace AS Namespace,
-       secrets.type AS Type,
-       secrets.metadata.creationTimestamp AS Age;
-
-:job # List jobs
-MATCH (jobs:Job)
-RETURN jobs.metadata.name,
-       jobs.status.succeeded AS Succeeded,
-       jobs.status.failed AS Failed,
-       jobs.spec.completions AS Completions,
-       jobs.status.startTime AS StartTime,
-       jobs.status.completionTime AS CompletionTime;
-
-:cronjob # List cron jobs
-MATCH (cronJobs:CronJob)
-RETURN cronJobs.metadata.name,
-       cronJobs.spec.schedule AS Schedule,
-       cronJobs.spec.suspend AS Suspended,
-       cronJobs.status.lastScheduleTime AS LastSchedule,
-       cronJobs.metadata.creationTimestamp AS Age;
-
 :expose deploymentName # Expose a deployment as a service
 MATCH (deployment:Deployment {name: "$deploymentName"})
 CREATE (deployment)->(service:Service);
 MATCH (services:Service {name: "$deploymentName"})
 RETURN services.metadata.name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP;
 
-:expose_public deploymentName hostname # Expose a deployment as a service and ingress
+:scale kind name count # Scale a deployment or statefulset
+MATCH (workload:$kind {name: "$name"})
+SET workload.spec.replicas = $count;
+
+:exposepublic deploymentName hostname # Expose a deployment as a service and ingress
 MATCH (deployment:Deployment {name: "$deploymentName"})
 CREATE (deployment)->(service:Service);
 MATCH (services:Service {name: "$deploymentName"})
@@ -124,7 +130,7 @@ CREATE (services)->(i:ingress {"spec":{"rules": [{"host": "$hostname"}]}});
 MATCH (deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress)
 RETURN services.metadata.name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP, ingresses.spec.rules[0].host AS Host, ingresses.spec.rules[0].http.paths[0].path AS Path, ingresses.spec.rules[0].http.paths[0].backend.service.name AS Service;
 
-:public_deploy deploymentName # Examine a deployment and its services and ingress
+:deployexposure deploymentName # Examine a deployment and its services and ingress
 MATCH (pods:Pod)->(replicaSets:ReplicaSet)->(deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress) 
 RETURN pods.metadata.name,
        deployments.metadata.name AS Deployment,
@@ -136,10 +142,10 @@ RETURN pods.metadata.name,
        ingresses.spec.rules[0].http.paths[0].path AS Path,
        ingresses.spec.rules[0].http.paths[0].backend.service.name AS IngressBackend;
 
-:create_deploy deploymentName image # Create a deployment
+:createdeploy deploymentName image # Create a deployment
 CREATE (deployment:Deployment {"metadata": {"name": "$deploymentName", "labels": {"app": "$deploymentName"}}, "spec": {"strategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 1, "maxSurge": 1}}, "selector": {"matchLabels": {"app": "$deploymentName"}}, "template": {"metadata": {"labels": {"app": "$deploymentName"}}, "spec": {"containers": [{"name": "$deploymentName", "image": "$image"}]}}}});
 
-:deployment_replicas # Count the number of desired vs available replicas for all deployments
+:countreplica # Count the number of desired vs available replicas for all deployments
 MATCH (deployments:Deployment)->(replicaSets:ReplicaSet)->(pods:Pod)
 WHERE pods.status.phase = "Running"
 RETURN SUM{deployments.spec.replicas} AS TotalDesired,
@@ -147,3 +153,4 @@ RETURN SUM{deployments.spec.replicas} AS TotalDesired,
        deployments.metadata.name,
        replicaSets.metadata.name,
        pods.metadata.name;
+
