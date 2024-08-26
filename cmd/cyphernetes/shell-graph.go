@@ -110,6 +110,11 @@ func getNameFromNodeId(nodeId string) string {
 }
 
 func dotToAscii(dot string, fancy bool) (string, error) {
+	fmt.Println("Creating ASCII graph...")
+	defer func() {
+		fmt.Print("\033[1A\033[K") // Move cursor up one line and clear it
+	}()
+
 	url := "https://ascii.cyphernet.es/dot-to-ascii.php"
 	boxart := 0
 	if fancy {
