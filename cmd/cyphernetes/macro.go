@@ -95,6 +95,9 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 			}
 			name := parts[0]
 			args := parts[1:]
+			if name == "" {
+				return fmt.Errorf("macro has no name (line %d)", lineNumber)
+			}
 
 			// Validate macro name
 			if !isValidMacroName(name) {
@@ -102,6 +105,7 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 			}
 
 			currentMacro = &Macro{Name: name, Args: args}
+
 			currentStatement.Reset()
 		} else if currentMacro == nil {
 			return fmt.Errorf("statement found outside of macro definition at line %d", lineNumber)
@@ -127,6 +131,9 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 		}
 		if len(currentMacro.Statements) == 0 {
 			return fmt.Errorf("macro '%s' has no statements (line %d)", currentMacro.Name, lineNumber)
+		}
+		if currentMacro.Name == "" {
+			return fmt.Errorf("macro has no name (line %d)", lineNumber)
 		}
 		mm.AddMacro(currentMacro, false)
 	}

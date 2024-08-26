@@ -15,6 +15,10 @@ type Expression struct {
 	Clauses []Clause
 }
 
+func (e *Expression) String() string {
+	return fmt.Sprintf("%v", e.Clauses)
+}
+
 type Clause interface {
 	isClause()
 }

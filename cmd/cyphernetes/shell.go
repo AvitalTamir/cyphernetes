@@ -60,7 +60,17 @@ func shellPrompt() string {
 	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, context, ns)
 }
 
+func SetQueryExecutor(exec *parser.QueryExecutor) {
+	executor = exec
+}
+
+var getCurrentContextFunc = getCurrentContextFromConfig
+
 func getCurrentContext() (string, error) {
+	return getCurrentContextFunc()
+}
+
+func getCurrentContextFromConfig() (string, error) {
 	// Use the local kubeconfig context
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
