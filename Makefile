@@ -47,12 +47,13 @@ clean:
 	rm -rf coverage.out
 
 coverage:
+	mkdir -p .coverage
 	@echo "🧪 Generating coverage report for cmd/cyphernetes..."
-	go test ./cmd/cyphernetes -coverprofile=coverage.out
-	go tool cover -func=coverage.out | sed 's/^/   /g'
-	go tool cover -html=coverage.out -o ./coverage.html
+	go test ./cmd/cyphernetes -coverprofile=.coverage/coverage.out
+	go tool cover -func=.coverage/coverage.out | sed 's/^/   /g'
+	go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
 	@echo "🌎 Opening coverage report in browser..."
-	open file://$$(pwd)/coverage.html
+	open file://$$(pwd)/.coverage/coverage.html
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean

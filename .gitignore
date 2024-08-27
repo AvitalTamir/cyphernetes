@@ -27,3 +27,4 @@ __debug*
 y.output
 .DS_Store
 
+.coverage
