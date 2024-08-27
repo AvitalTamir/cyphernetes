@@ -147,7 +147,13 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			logDebug("Returning SET token")
 			return int(SET)
 		case "DELETE":
-			logDebug("Returning SET token")
+			logDebug("Returning DELETE token")
+			l.buf.tok = DELETE
+			l.definingSet = false
+			l.definingCreate = false
+			l.definingMatch = false
+			l.definingReturn = false
+			l.definingWhere = false
 			return int(DELETE)
 		case "CREATE":
 			logDebug("Returning CREATE token")

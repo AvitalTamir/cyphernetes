@@ -98,57 +98,66 @@ func TestLexer(t *testing.T) {
 		// 		"",         // EOF
 		// 	},
 		// },
-		// {
-		// 	name:  "MATCH and RETURN with props and relationship",
-		// 	input: "MATCH (k:Kind {name: \"test\"})-[r:REL]->(k2:Kind) RETURN k.name, k.age",
-		// 	wantTokens: []int{
-		// 		MATCH,
-		// 		LPAREN,
-		// 		IDENT,
-		// 		COLON,
-		// 		IDENT,
-		// 		LBRACE,
-		// 		IDENT,
-		// 		COLON,
-		// 		STRING,
-		// 		RBRACE,
-		// 		REL_NOPROPS_RIGHT,
-		// 		LPAREN,
-		// 		IDENT,
-		// 		COLON,
-		// 		IDENT,
-		// 		RPAREN,
-		// 		RETURN,
-		// 		JSONPATH,
-		// 		COMMA,
-		// 		JSONPATH,
-		// 		EOF,
-		// 	},
-		// 	wantLiterals: []string{
-		// 		"",         // MATCH
-		// 		"",         // LPAREN
-		// 		"k",        // IDENT
-		// 		"",         // COLON
-		// 		"Kind",     // IDENT
-		// 		"",         // LBRACE
-		// 		"name",     // IDENT
-		// 		"",         // COLON
-		// 		"\"test\"", // STRING
-		// 		"",         // RBRACE
-		// 		"",         // RPAREN
-		// 		"",         // REL_NOPROPS_RIGHT
-		// 		"",         // LPAREN
-		// 		"k2",       // IDENT
-		// 		"",         // COLON
-		// 		"Kind",     // IDENT
-		// 		"",         // RPAREN
-		// 		"",         // RETURN
-		// 		"k.name",   // JSONPATH
-		// 		"",         // COMMA
-		// 		"k.age",    // JSONPATH
-		// 		"",         // EOF
-		// 	},
-		// },
+		{
+			name:  "MATCH and RETURN with props and relationship",
+			input: "MATCH (k:Kind {name: \"test\"})-[r:REL]->(k2:Kind) RETURN k.name, k.age",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				LBRACE,
+				JSONPATH,
+				COLON,
+				STRING,
+				RBRACE,
+				RPAREN,
+				REL_BEGINPROPS_NONE,
+				IDENT,
+				COLON,
+				IDENT,
+				REL_ENDPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				COMMA,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",         // MATCH
+				"",         // LPAREN
+				"k",        // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // LBRACE
+				"name",     // IDENT
+				"",         // COLON
+				"\"test\"", // STRING
+				"",         // RBRACE
+				"",         // RPAREN
+				"",         // REL_BEGINPROPS_LEFT
+				"r",        // IDENT
+				"",         // COLON
+				"REL",      // IDENT
+				"",         // REL_ENDPROPS_RIGHT
+				"",         // LPAREN
+				"k2",       // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // RPAREN
+				"",         // RETURN
+				"k.name",   // JSONPATH
+				"",         // COMMA
+				"k.age",    // JSONPATH
+				"",         // EOF
+			},
+		},
 		// Add a test for MATCH and SET
 		{
 			name:  "MATCH and SET",
@@ -369,6 +378,56 @@ func TestLexer(t *testing.T) {
 				"",       // COMMA
 				"k.name", // JSONPATH
 				"",       // EOF
+			},
+		},
+		{
+			name:  "MATCH WHERE with DELETE",
+			input: "MATCH (k:Kind)->(s:Kind2) WHERE k.name = \"test\" DELETE k,s",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				REL_NOPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				EQUALS,
+				STRING,
+				DELETE,
+				IDENT,
+				COMMA,
+				IDENT,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",         // MATCH
+				"",         // LPAREN
+				"k",        // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // RPAREN
+				"",         // REL_NOPROPS_RIGHT
+				"",         // LPAREN
+				"s",        // IDENT
+				"",         // COLON
+				"Kind2",    // IDENT
+				"",         // RPAREN
+				"",         // WHERE
+				"k.name",   // JSONPATH
+				"",         // EQUALS
+				"\"test\"", // STRING
+				"",         // DELETE
+				"k",        // IDENT
+				"",         // COMMA
+				"s",        // IDENT
+				"",         // EOF
 			},
 		},
 	}
