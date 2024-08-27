@@ -58,46 +58,46 @@ func TestLexer(t *testing.T) {
 				"",       // EOF
 			},
 		},
-		// {
-		// 	name:  "MATCH and RETURN with props",
-		// 	input: "MATCH (k:Kind {name: \"test\"}) RETURN k.name, k.age",
-		// 	wantTokens: []int{
-		// 		MATCH,
-		// 		LPAREN,
-		// 		IDENT,
-		// 		COLON,
-		// 		IDENT,
-		// 		LBRACE,
-		// 		IDENT,
-		// 		COLON,
-		// 		STRING,
-		// 		RBRACE,
-		// 		RPAREN,
-		// 		RETURN,
-		// 		JSONPATH,
-		// 		COMMA,
-		// 		JSONPATH,
-		// 		EOF,
-		// 	},
-		// 	wantLiterals: []string{
-		// 		"",         // MATCH
-		// 		"",         // LPAREN
-		// 		"k",        // IDENT
-		// 		"",         // COLON
-		// 		"Kind",     // IDENT
-		// 		"",         // LBRACE
-		// 		"name",     // IDENT
-		// 		"",         // COLON
-		// 		"\"test\"", // STRING
-		// 		"",         // RBRACE
-		// 		"",         // RPAREN
-		// 		"",         // RETURN
-		// 		"k.name",   // JSONPATH
-		// 		"",         // COMMA
-		// 		"k.age",    // JSONPATH
-		// 		"",         // EOF
-		// 	},
-		// },
+		{
+			name:  "MATCH and RETURN with props",
+			input: "MATCH (k:Kind {name: \"test\"}) RETURN k.name, k.age",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				LBRACE,
+				JSONPATH,
+				COLON,
+				STRING,
+				RBRACE,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				COMMA,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",         // MATCH
+				"",         // LPAREN
+				"k",        // IDENT
+				"",         // COLON
+				"Kind",     // IDENT
+				"",         // LBRACE
+				"name",     // IDENT
+				"",         // COLON
+				"\"test\"", // STRING
+				"",         // RBRACE
+				"",         // RPAREN
+				"",         // RETURN
+				"k.name",   // JSONPATH
+				"",         // COMMA
+				"k.age",    // JSONPATH
+				"",         // EOF
+			},
+		},
 		{
 			name:  "MATCH and RETURN with props and relationship",
 			input: "MATCH (k:Kind {name: \"test\"})-[r:REL]->(k2:Kind) RETURN k.name, k.age",
@@ -381,7 +381,7 @@ func TestLexer(t *testing.T) {
 			},
 		},
 		{
-			name:  "MATCH WHERE with DELETE",
+			name:  "MATCH Relationship WHERE with DELETE",
 			input: "MATCH (k:Kind)->(s:Kind2) WHERE k.name = \"test\" DELETE k,s",
 			wantTokens: []int{
 				MATCH,
@@ -428,6 +428,92 @@ func TestLexer(t *testing.T) {
 				"",         // COMMA
 				"s",        // IDENT
 				"",         // EOF
+			},
+		},
+		{
+			name:  "MATCH multiple Relationship WHERE with multiple DELETE",
+			input: "MATCH (p:pod)->(rs:replicaSet)->(d:Deployment)->(s:service)->(i:ing) WHERE d.metadata.name = \"test\" DELETE s,i",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				REL_NOPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				REL_NOPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				REL_NOPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				REL_NOPROPS_RIGHT,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				EQUALS,
+				STRING,
+				DELETE,
+				IDENT,
+				COMMA,
+				IDENT,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",                // MATCH
+				"",                // LPAREN
+				"p",               // IDENT
+				"",                // COLON
+				"pod",             // IDENT
+				"",                // RPAREN
+				"",                // REL_NOPROPS_RIGHT
+				"",                // LPAREN
+				"rs",              // IDENT
+				"",                // COLON
+				"replicaSet",      // IDENT
+				"",                // RPAREN
+				"",                // REL_NOPROPS_RIGHT
+				"",                // LPAREN
+				"d",               // IDENT
+				"",                // COLON
+				"Deployment",      // IDENT
+				"",                // RPAREN
+				"",                // REL_NOPROPS_RIGHT
+				"",                // LPAREN
+				"s",               // IDENT
+				"",                // COLON
+				"service",         // IDENT
+				"",                // RPAREN
+				"",                // REL_NOPROPS_RIGHT
+				"",                // LPAREN
+				"i",               // IDENT
+				"",                // COLON
+				"ing",             // IDENT
+				"",                // RPAREN
+				"",                // WHERE
+				"d.metadata.name", // JSONPATH
+				"",                // EQUALS
+				"\"test\"",        // STRING
+				"",                // DELETE
+				"s",               // IDENT
+				"",                // COMMA
+				"i",               // IDENT
+				"",                // EOF
 			},
 		},
 	}
