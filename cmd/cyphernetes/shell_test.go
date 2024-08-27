@@ -10,10 +10,6 @@ import (
 	"github.com/chzyer/readline"
 )
 
-type readlineNewExFunc func(*readline.Config) (*readline.Instance, error)
-
-var readlineNewEx readlineNewExFunc = readline.NewEx
-
 func TestShellPrompt(t *testing.T) {
 	// Save the original namespace and restore it after the test
 	originalNamespace := parser.Namespace

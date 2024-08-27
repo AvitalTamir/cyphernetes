@@ -78,11 +78,9 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 			}
 
 			// Process nodes
-			for _, node := range c.Nodes {
-				err := q.processNode(node, c, results)
-				if err != nil {
-					return *results, err
-				}
+			err := q.processNodes(c, results)
+			if err != nil {
+				return *results, err
 			}
 
 		case *SetClause:
@@ -167,17 +165,13 @@ func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
 
 				// If both nodes exist in the match clause, error out
 				if resultMap[rel.LeftNode.ResourceProperties.Name] != nil && resultMap[rel.RightNode.ResourceProperties.Name] != nil {
-					if (node) != nil {
-						return *results, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
-					} else {
-						return *results, fmt.Errorf("can't match and create node in the same expression")
-					}
+					return *results, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
 				}
 
 				// TODO: create both nodes and determine the spec from the relationship instead of this:
 				// If neither node exists in the match clause, error out
 				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil && resultMap[rel.RightNode.ResourceProperties.Name] == nil {
-					return *results, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", node.ResourceProperties.Name, foreignNode.ResourceProperties.Name)
+					return *results, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
 				}
 
 				// find out whice node exists in the match clause, then use it to construct the spec according to the relationship
@@ -694,7 +688,7 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 	return nil
 }
 
-func (q *QueryExecutor) processNode(node *NodePattern, c *MatchClause, results *QueryResult) error {
+func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
 			// error out

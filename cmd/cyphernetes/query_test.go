@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/spf13/cobra"
 )
 
 // MockQueryExecutor implements the Execute method of QueryExecutor
@@ -102,10 +101,9 @@ func TestRunQuery(t *testing.T) {
 			}()
 
 			// Execute the command
-			cmd := &cobra.Command{}
 			buf := new(bytes.Buffer)
 
-			runQuery(cmd, tt.args, buf)
+			runQuery(tt.args, buf)
 
 			// Check the output
 			got := strings.TrimSpace(buf.String())
