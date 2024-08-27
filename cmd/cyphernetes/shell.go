@@ -19,6 +19,7 @@ import (
 
 //go:embed default_macros.txt
 var defaultMacros string
+var executeStatementFunc = executeStatement
 
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
@@ -254,6 +255,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			rl.SaveHistory(line)
 			continue
 		}
+
 		if multiLineInput {
 			line = strings.TrimSpace(line)
 			if len(line) == 0 {
@@ -268,12 +270,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			cmd = strings.TrimSuffix(cmd, ";")
 			cmds = cmds[:0]
 			rl.SetPrompt(shellPrompt())
-			rl.SaveHistory(cmd)
-
 			input = strings.TrimSpace(cmd)
 		} else {
 			input = strings.TrimSpace(line)
 		}
+		rl.SaveHistory(input)
 
 		if input == "exit" {
 			break
@@ -381,7 +382,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 		}
 		// Add input to history
-		rl.SaveHistory(input)
+		// rl.SaveHistory(input)
 	}
 }
 
@@ -408,7 +409,7 @@ func processQuery(query string) (string, parser.Graph, error) {
 		var results []string
 		var graphInternal parser.Graph
 		for i, stmt := range statements {
-			result, err := executeStatement(stmt)
+			result, err := executeStatementFunc(stmt)
 			if err != nil {
 				return "", parser.Graph{}, fmt.Errorf("error executing statement %d: %w", i+1, err)
 			}

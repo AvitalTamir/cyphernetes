@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
@@ -116,6 +117,65 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 			result := string(h.Paint([]rune(tt.input), 0))
 			if result != tt.expected {
 				t.Errorf("\nPaint() = %v\n   want = %v\n    raw = %#v\n   want = %#v", result, tt.expected, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExecuteMacro(t *testing.T) {
+	// Create a new MacroManager
+	mm := NewMacroManager()
+
+	// Add a test macro
+	testMacro := &Macro{
+		Name:        "testMacro",
+		Args:        []string{"arg1"},
+		Statements:  []string{"MATCH (n:$arg1) RETURN n"},
+		Description: "Test macro",
+	}
+	mm.AddMacro(testMacro, false)
+
+	// Set the global macroManager to our test instance
+	macroManager = mm
+
+	tests := []struct {
+		name           string
+		macroName      string
+		args           []string
+		expectedResult string
+		expectError    bool
+	}{
+		{
+			name:           "Macro not found",
+			macroName:      "nonExistentMacro",
+			args:           []string{},
+			expectedResult: "",
+			expectError:    true,
+		},
+		{
+			name:           "Incorrect argument count",
+			macroName:      "testMacro",
+			args:           []string{},
+			expectedResult: "",
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executeMacro(":" + tt.macroName + " " + strings.Join(tt.args, " "))
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if result != tt.expectedResult {
+					t.Errorf("Expected result %q, but got %q", tt.expectedResult, result)
+				}
 			}
 		})
 	}
