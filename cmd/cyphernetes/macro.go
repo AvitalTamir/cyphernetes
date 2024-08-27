@@ -7,7 +7,10 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 	"unicode"
+
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 )
 
 type Macro struct {
@@ -33,6 +36,46 @@ func (mm *MacroManager) AddMacro(macro *Macro, overwrite bool) {
 	}
 	mm.Macros[macro.Name] = macro
 }
+
+func executeMacro(input string) (string, error) {
+	startTime := time.Now()
+
+	macroName := strings.TrimPrefix(input, ":")
+	parts := strings.Fields(macroName)
+	macroName = parts[0]
+	args := parts[1:]
+
+	statements, err := macroManager.ExecuteMacro(macroName, args)
+	if err != nil {
+		return "", err
+	}
+
+	var results []string
+	var graph parser.Graph
+	for i, stmt := range statements {
+		result, graphInternal, err := processQuery(stmt)
+		if err != nil {
+			return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
+		}
+		if result != "{}" {
+			results = append(results, result)
+			graph = mergeGraphs(graph, graphInternal)
+		}
+	}
+
+	execTime = time.Since(startTime)
+
+	if !disableGraphOutput {
+		graphAscii, err := drawGraph(graph, strings.Join(results, "\n"))
+		if err != nil {
+			return "", fmt.Errorf("error drawing graph: %w", err)
+		}
+		fmt.Println(graphAscii)
+	}
+	return strings.Join(results, "\n"), nil
+}
+
+// Execute the query against the Kubernetes API.
 
 func (mm *MacroManager) ExecuteMacro(name string, args []string) ([]string, error) {
 	macro, exists := mm.Macros[name]
@@ -95,6 +138,9 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 			}
 			name := parts[0]
 			args := parts[1:]
+			if name == "" {
+				return fmt.Errorf("macro has no name (line %d)", lineNumber)
+			}
 
 			// Validate macro name
 			if !isValidMacroName(name) {
@@ -102,6 +148,7 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 			}
 
 			currentMacro = &Macro{Name: name, Args: args}
+
 			currentStatement.Reset()
 		} else if currentMacro == nil {
 			return fmt.Errorf("statement found outside of macro definition at line %d", lineNumber)
@@ -127,6 +174,9 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 		}
 		if len(currentMacro.Statements) == 0 {
 			return fmt.Errorf("macro '%s' has no statements (line %d)", currentMacro.Name, lineNumber)
+		}
+		if currentMacro.Name == "" {
+			return fmt.Errorf("macro has no name (line %d)", lineNumber)
 		}
 		mm.AddMacro(currentMacro, false)
 	}

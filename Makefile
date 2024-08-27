@@ -44,10 +44,19 @@ clean:
 	@echo "🫧 Cleaning..."
 	go clean -cache > /dev/null
 	rm -rf dist/
+	rm -rf coverage.out
+
+coverage:
+	@echo "🧪 Generating coverage report for cmd/cyphernetes..."
+	go test ./cmd/cyphernetes -coverprofile=coverage.out
+	go tool cover -func=coverage.out | sed 's/^/   /g'
+	go tool cover -html=coverage.out -o ./coverage.html
+	@echo "🌎 Opening coverage report in browser..."
+	open file://$$(pwd)/coverage.html
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
-.SILENT: build test gen-parser clean
+.SILENT: build test gen-parser clean coverage
 
 # Add a help command to list available targets
 help:

@@ -30,6 +30,23 @@ func Execute() {
 	}
 }
 
+// TestExecute is a helper function for testing the Execute function
+func TestExecute(args []string) error {
+	// Save the original os.Args
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Set up the new os.Args for testing
+	os.Args = append([]string{"cmd"}, args...)
+
+	// Create a new root command for testing
+	cmd := &cobra.Command{Use: "test"}
+	cmd.AddCommand(rootCmd)
+
+	// Execute the command
+	return cmd.Execute()
+}
+
 func init() {
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cyphernetes.yaml)")
 

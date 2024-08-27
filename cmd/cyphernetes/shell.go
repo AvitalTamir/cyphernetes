@@ -19,6 +19,7 @@ import (
 
 //go:embed default_macros.txt
 var defaultMacros string
+var executeStatementFunc = executeStatement
 
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
@@ -26,6 +27,8 @@ var ShellCmd = &cobra.Command{
 	Run:   runShell,
 }
 
+var executor = parser.GetQueryExecutorInstance()
+var execTime time.Duration
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
 var disableColorJsonOutput bool = false
@@ -60,7 +63,17 @@ func shellPrompt() string {
 	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, context, ns)
 }
 
+func SetQueryExecutor(exec *parser.QueryExecutor) {
+	executor = exec
+}
+
+var getCurrentContextFunc = getCurrentContextFromConfig
+
 func getCurrentContext() (string, error) {
+	return getCurrentContextFunc()
+}
+
+func getCurrentContextFromConfig() (string, error) {
 	// Use the local kubeconfig context
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
@@ -82,7 +95,7 @@ var (
 	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
 	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
-	propertiesRegex     = regexp.MustCompile(`\{(\w+): "([^"]+)"\}`)
+	propertiesRegex     = regexp.MustCompile(`\{([^{}]*(\{[^{}]*\}[^{}]*)*)\}`)
 	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
 )
@@ -105,9 +118,6 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	// Coloring for quoted variables
 	lineStr = variableRegex.ReplaceAllString(lineStr, "\033[90m$0\033[0m") // Dark grey for quoted variables
 
-	// Apply coloring for properties in format {key: "value", ...}
-	lineStr = propertiesRegex.ReplaceAllString(lineStr, "{\033[33m$1\033[0m: \033[36m$2\033[0m}") // Yellow for key, Cyan for value
-
 	// Coloring for identifiers (left and right of the colon)
 	lineStr = identifierRegex.ReplaceAllString(lineStr, "\033[33m$1\033[0m:\033[94m$2\033[0m") // Orange for left, Light blue for right
 
@@ -115,18 +125,81 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := returnRegex.FindStringSubmatch(match)
 		if len(parts) == 3 {
-			// Color "RETURN" in purple and keep the rest of the string in the same color
 			rest := parts[2]
 			// Apply white color to dots and asterisks in the JSONPath list
 			rest = returnJsonPathRegex.ReplaceAllString(rest, "\033[37m$1\033[35m")
+			// Apply white color to commas and keep the rest purple
+			rest = strings.ReplaceAll(rest, ",", "\033[37m,\033[35m")
 			return "\033[35m" + strings.ToUpper(parts[1]) + rest
 		}
 		return match
 	})
 
-	// add color reset to the end of the line
+	// in lineStr, find all text (.*) between { and } and strip all color codes:
+	// - all text that looks like "\x1b[33m" or "\x1b[36m" or "\x1b[90m" or "\x1b[37m" or "\x1b[35m" or "\x1b[0m"
+	// - all text that looks like "\x1b[([0-9;]+)m"
+	// - all text that looks like "\033[33m" or "\033[36m" or "\033[90m" or "\033[37m" or "\033[35m" or "\033[0m"
+	// // Strip color codes from text between { and }
+	// lineStr = regexp.MustCompile(`\{([^}]*)\}`).ReplaceAllStringFunc(lineStr, func(match string) string {
+	// 	// Remove all ANSI color codes
+	// 	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(match, "")
+
+	// 	// Apply new coloring while preserving original spacing
+	// 	colored := propertiesRegex.ReplaceAllStringFunc(stripped, func(propMatch string) string {
+	// 		parts := propertiesRegex.FindStringSubmatch(propMatch)
+	// 		if len(parts) == 4 {
+	// 			key := parts[1]
+	// 			spacing := parts[2]
+	// 			value := parts[3]
+	// 			return fmt.Sprintf("\033[33m%s\033[0m%s\033[36m%s\033[0m", key, spacing, value)
+	// 		}
+	// 		return propMatch
+	// 	})
+
+	// 	// Ensure color is reset at the end
+	// 	return colored
+	// })
+
+	// Colorize properties
+	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
+		return colorizeProperties(match)
+	})
+
+	// Ensure color is reset at the end of the entire line
 	lineStr += "\033[0m"
 	return []rune(lineStr)
+}
+
+func colorizeProperties(obj string) string {
+	// Remove existing color codes
+	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(obj, "")
+
+	// Remove the outer curly braces before processing
+	stripped = strings.TrimPrefix(stripped, "{")
+	stripped = strings.TrimSuffix(stripped, "}")
+
+	// Colorize properties
+	colored := regexp.MustCompile(`("?\w+"?)(\s*:\s*)("[^"]*"|[^,{}]+|(\{[^{}]*\}))`).ReplaceAllStringFunc(stripped, func(prop string) string {
+		parts := regexp.MustCompile(`("?\w+"?)(\s*:\s*)(.+)`).FindStringSubmatch(prop)
+		if len(parts) == 4 {
+			key := parts[1]
+			spacing := parts[2]
+			value := parts[3]
+
+			// Check if value is a nested object
+			if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
+				value = colorizeProperties(value) // Recursively colorize nested objects
+			} else {
+				value = "\033[36m" + value + "\033[0m" // Cyan for non-object values
+			}
+
+			return fmt.Sprintf("\033[33m%s\033[0m%s%s", key, spacing, value)
+		}
+		return prop
+	})
+
+	// Add back the outer curly braces
+	return "{" + colored + "}"
 }
 
 func runShell(cmd *cobra.Command, args []string) {
@@ -182,6 +255,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			rl.SaveHistory(line)
 			continue
 		}
+
 		if multiLineInput {
 			line = strings.TrimSpace(line)
 			if len(line) == 0 {
@@ -196,12 +270,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			cmd = strings.TrimSuffix(cmd, ";")
 			cmds = cmds[:0]
 			rl.SetPrompt(shellPrompt())
-			rl.SaveHistory(cmd)
-
 			input = strings.TrimSpace(cmd)
 		} else {
 			input = strings.TrimSpace(line)
 		}
+		rl.SaveHistory(input)
 
 		if input == "exit" {
 			break
@@ -309,59 +382,9 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 		}
 		// Add input to history
-		rl.SaveHistory(input)
+		// rl.SaveHistory(input)
 	}
 }
-
-func executeMacro(input string) (string, error) {
-	startTime := time.Now()
-
-	macroName := strings.TrimPrefix(input, ":")
-	parts := strings.Fields(macroName)
-	macroName = parts[0]
-	args := parts[1:]
-
-	statements, err := macroManager.ExecuteMacro(macroName, args)
-	if err != nil {
-		return "", err
-	}
-
-	var results []string
-	var graph parser.Graph
-	for i, stmt := range statements {
-		result, graphInternal, err := processQuery(stmt)
-		if err != nil {
-			return "", fmt.Errorf("error executing statement %d: %w", i+1, err)
-		}
-		if result != "{}" {
-			results = append(results, result)
-			graph = mergeGraphs(graph, graphInternal)
-		}
-	}
-
-	execTime = time.Since(startTime)
-
-	if !disableGraphOutput {
-		graphAscii, err := drawGraph(graph, strings.Join(results, "\n"))
-		if err != nil {
-			return "", fmt.Errorf("error drawing graph: %w", err)
-		}
-		fmt.Println(graphAscii)
-	}
-	return strings.Join(results, "\n"), nil
-}
-
-func mergeGraphs(graph parser.Graph, newGraph parser.Graph) parser.Graph {
-	// merge the nodes
-	graph.Nodes = append(graph.Nodes, newGraph.Nodes...)
-	// merge the edges
-	graph.Edges = append(graph.Edges, newGraph.Edges...)
-	return graph
-}
-
-// Execute the query against the Kubernetes API.
-var executor = parser.GetQueryExecutorInstance()
-var execTime time.Duration
 
 func processQuery(query string) (string, parser.Graph, error) {
 	startTime := time.Now()
@@ -386,7 +409,7 @@ func processQuery(query string) (string, parser.Graph, error) {
 		var results []string
 		var graphInternal parser.Graph
 		for i, stmt := range statements {
-			result, err := executeStatement(stmt)
+			result, err := executeStatementFunc(stmt)
 			if err != nil {
 				return "", parser.Graph{}, fmt.Errorf("error executing statement %d: %w", i+1, err)
 			}
