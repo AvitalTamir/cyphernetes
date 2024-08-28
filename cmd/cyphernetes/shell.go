@@ -518,7 +518,8 @@ func colorizeJson(jsonString string) string {
 	var obj interface{}
 	err := json.Unmarshal([]byte(jsonString), &obj)
 	if err != nil {
-		fmt.Println("Error unmarshalling json: ", err)
+		// Not a valid JSON object, likely an empty response.
+		// We simply return the non-colorized payload.
 		return jsonString
 	}
 
@@ -526,7 +527,10 @@ func colorizeJson(jsonString string) string {
 	f.Indent = 2
 	s, err := f.Marshal(obj)
 	if err != nil {
-		fmt.Println("Error marshalling json: ", err)
+		// This was valid JSON that got colored but cannot be marshaled back
+		// This indicated an issue in the coloring itself and should be examined
+		// We print out the error message and return the non-colorized payload
+		fmt.Println("Error marshalling colorized json: ", err)
 		return jsonString
 	}
 	return string(s)

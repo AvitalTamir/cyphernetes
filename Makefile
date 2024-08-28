@@ -20,7 +20,7 @@ build-all-platforms-and-archs:
 	@echo "👷 Building ${BINARY_NAME}..."
 	@for kernel in $(TARGET_KERNELS); do \
 		for arch in $(TARGET_ARCHS); do \
-			echo "Building for $$kernel/$$arch"; \
+			echo "   - $$kernel/$$arch"; \
 			cd cmd/cyphernetes && GOOS=$$kernel GOARCH=$$arch go build -o ${BINARY_NAME} > /dev/null; \
 			mkdir -p ../../dist/; \
 			mv ${BINARY_NAME} ../../dist/cyphernetes-$$kernel-$$arch; \
