@@ -6,7 +6,7 @@
 
 Cyphernetes turns this: 😣
 ```bash
-# Select all zero-scaled Deployments in all namespace,
+# Select all zero-scaled Deployments in all namespaces,
 # find all Ingresses routing these deployments -
 # for each Ingress change it's ingress class to 'inactive':
 
