@@ -6,9 +6,9 @@
 
 Cyphernetes turns this: 😣
 ```bash
-# Select Deployments in all Namespaces which are scaled to zero,
-# find all Ingresses routing into these deployments -
-# finally for each Ingress change it's ingress class to 'inactive':
+# Select all zero-scaled Deployments in all namespace,
+# find all Ingresses routing these deployments -
+# for each Ingress change it's ingress class to 'inactive':
 
 kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
 [.metadata.namespace, .metadata.name, (.spec.selector | to_entries | map("\(.key)=\(.value)") | \
