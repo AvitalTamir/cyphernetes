@@ -32,8 +32,8 @@ SET i.spec.ingressClassName="inactive";
 
 ## How?
 
-Cyphernetes is [Cypher](https://neo4j.com/developer/cypher/) repurposed for working with the Kubernetes API.
-It is a mixture of ascii-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
+Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
+It is a mixture of ASCII-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
 
 ### Examples
 ```graphql
