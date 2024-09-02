@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/chzyer/readline"
 )
 
 func TestShellPrompt(t *testing.T) {
 	// Save the original namespace and restore it after the test
-	originalNamespace := parser.Namespace
-	defer func() { parser.Namespace = originalNamespace }()
+	originalNamespace := core.Namespace
+	defer func() { core.Namespace = originalNamespace }()
 
 	tests := []struct {
 		name      string
@@ -27,7 +27,7 @@ func TestShellPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser.Namespace = tt.namespace
+			core.Namespace = tt.namespace
 			got := shellPrompt()
 			if !regexp.MustCompile(tt.want).MatchString(got) {
 				t.Errorf("shellPrompt() = %v, does not match regex %v", got, tt.want)

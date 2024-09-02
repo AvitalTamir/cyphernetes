@@ -6,14 +6,14 @@ import (
 	"io"
 	"os"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/spf13/cobra"
 )
 
 var (
-	parseQuery       = parser.ParseQuery
-	newQueryExecutor = parser.NewQueryExecutor
-	executeMethod    = (*parser.QueryExecutor).Execute
+	parseQuery       = core.ParseQuery
+	newQueryExecutor = core.NewQueryExecutor
+	executeMethod    = (*core.QueryExecutor).Execute
 )
 
 var queryCmd = &cobra.Command{
