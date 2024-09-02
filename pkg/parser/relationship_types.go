@@ -342,7 +342,7 @@ var relationshipRules = []RelationshipRule{
 		Relationship: ServiceExposeDeployment,
 		MatchCriteria: []MatchCriterion{
 			{
-				FieldA: "$.spec.template.metadata.labels",
+				FieldA: "$.spec.selector.matchLabels",
 				FieldB: "$.spec.selector",
 				DefaultProps: []DefaultProp{
 					{
