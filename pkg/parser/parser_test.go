@@ -1,5 +1,5 @@
 // parser_test.go
-package core
+package parser
 
 import (
 	"encoding/json"
@@ -67,7 +67,7 @@ func TestParseQueryWithReturn(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -148,7 +148,7 @@ func TestSingleNodePattern(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -196,7 +196,7 @@ func TestMultipleNodePatternsCommaSeparated(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -260,7 +260,7 @@ func TestMultipleNodePatternsRelationship(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -331,7 +331,7 @@ func TestComplexNodePatternsAndRelationships(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -417,7 +417,7 @@ func TestChainedRelationships(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -522,7 +522,7 @@ func TestChainedRelationshipsWithComma(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -567,7 +567,7 @@ func TestMatchSetExpression(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -606,7 +606,7 @@ func TestMatchDeleteExpression(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -677,7 +677,7 @@ func TestMatchCreateExpression(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)
@@ -719,7 +719,7 @@ func TestMatchWhereReturn(t *testing.T) {
 		},
 	}
 
-	// Call the core.
+	// Call the parser.
 	expr, err := ParseQuery(query)
 	if err != nil {
 		t.Fatalf("ParseQuery() error = %v", err)

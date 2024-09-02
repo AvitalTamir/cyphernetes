@@ -1,4 +1,4 @@
-package core
+package parser
 
 type ResourceRelationship struct {
 	FromKind string

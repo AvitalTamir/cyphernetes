@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -116,7 +116,7 @@ func getMacros() []string {
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
 	// first get the full name of the kind from the gvr cache
-	gvr, err := core.FindGVR(executor.Clientset, kind)
+	gvr, err := parser.FindGVR(executor.Clientset, kind)
 	if err == nil {
 		resourceNormalizedName := strings.ToLower(gvr.Resource)
 		// then get the tree structure from the cache, otherwise fetch it from the api
@@ -166,7 +166,7 @@ func getKindForIdentifier(line string, identifier string) string {
 func getResourceKinds(identifier string) []string {
 	// iterate over the gvr cache and return all resource kinds that match the identifier
 	var kinds []string
-	for _, gvr := range core.GvrCache {
+	for _, gvr := range parser.GvrCache {
 		if strings.HasPrefix(gvr.GroupResource().Resource, identifier) {
 			kinds = append(kinds, gvr.Resource)
 		}

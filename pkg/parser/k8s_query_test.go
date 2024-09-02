@@ -1,4 +1,4 @@
-package core_test
+package parser_test
 
 import (
 	"encoding/json"

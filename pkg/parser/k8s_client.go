@@ -1,4 +1,4 @@
-package core
+package parser
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -53,7 +54,15 @@ type apiResponse struct {
 
 func NewQueryExecutor() (*QueryExecutor, error) {
 	// Use the local kubeconfig context
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+	// Try to use the in-cluster config first
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		// If that fails, fall back to kubeconfig
+		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create config: %v", err)
+		}
+	}
 	if err != nil {
 		fmt.Println("Error creating in-cluster config")
 		return nil, err

@@ -1,5 +1,5 @@
 %{
-package core
+package parser
 
 import (
     "fmt"

@@ -10,17 +10,17 @@ import (
 
 	"slices"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 )
 
-func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
+func sanitizeGraph(g parser.Graph, result string) (parser.Graph, error) {
 	// create a unique map of nodes
-	nodeMap := make(map[string]core.Node)
+	nodeMap := make(map[string]parser.Node)
 	for _, node := range g.Nodes {
 		nodeId := fmt.Sprintf("%s/%s", node.Kind, node.Name)
 		nodeMap[nodeId] = node
 	}
-	g.Nodes = make([]core.Node, 0, len(nodeMap))
+	g.Nodes = make([]parser.Node, 0, len(nodeMap))
 	for _, node := range nodeMap {
 		g.Nodes = append(g.Nodes, node)
 	}
@@ -33,7 +33,7 @@ func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
 	}
 
 	// now let's filter out nodes that have no data (in g.Data)
-	var filteredNodes []core.Node
+	var filteredNodes []parser.Node
 	for _, node := range g.Nodes {
 		if resultMap[node.Id] != nil {
 			for _, resultMapNode := range resultMap[node.Id].([]interface{}) {
@@ -51,7 +51,7 @@ func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
 		filteredNodeIds = append(filteredNodeIds, nodeId)
 	}
 	// now let's filter out edges that point to nodes that don't exist
-	var filteredEdges []core.Edge
+	var filteredEdges []parser.Edge
 	for _, edge := range g.Edges {
 		if slices.Contains(filteredNodeIds, edge.From) && slices.Contains(filteredNodeIds, edge.To) {
 			filteredEdges = append(filteredEdges, edge)
@@ -61,7 +61,7 @@ func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
 	return g, nil
 }
 
-func mergeGraphs(graph core.Graph, newGraph core.Graph) core.Graph {
+func mergeGraphs(graph parser.Graph, newGraph parser.Graph) parser.Graph {
 	// merge the nodes
 	graph.Nodes = append(graph.Nodes, newGraph.Nodes...)
 	// merge the edges
@@ -69,7 +69,7 @@ func mergeGraphs(graph core.Graph, newGraph core.Graph) core.Graph {
 	return graph
 }
 
-func drawGraph(graph core.Graph, result string) (string, error) {
+func drawGraph(graph parser.Graph, result string) (string, error) {
 	graph, err := sanitizeGraph(graph, result)
 	if err != nil {
 		return "", fmt.Errorf("error sanitizing graph: %w", err)

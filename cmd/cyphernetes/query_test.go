@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 )
 
 // MockQueryExecutor implements the Execute method of QueryExecutor
 type MockQueryExecutor struct {
-	ExecuteFunc func(expr *core.Expression) (core.QueryResult, error)
+	ExecuteFunc func(expr *parser.Expression) (parser.QueryResult, error)
 }
 
-func (m *MockQueryExecutor) Execute(expr *core.Expression) (core.QueryResult, error) {
+func (m *MockQueryExecutor) Execute(expr *parser.Expression) (parser.QueryResult, error) {
 	return m.ExecuteFunc(expr)
 }
 
@@ -61,19 +61,19 @@ func TestRunQuery(t *testing.T) {
 			originalNewQueryExecutor := newQueryExecutor
 			originalExecuteMethod := executeMethod
 
-			parseQuery = func(query string) (*core.Expression, error) {
+			parseQuery = func(query string) (*parser.Expression, error) {
 				if tt.parseQueryErr != nil {
 					return nil, tt.parseQueryErr
 				}
-				return &core.Expression{}, nil
+				return &parser.Expression{}, nil
 			}
 
 			mockExecutor := &MockQueryExecutor{
-				ExecuteFunc: func(expr *core.Expression) (core.QueryResult, error) {
+				ExecuteFunc: func(expr *parser.Expression) (parser.QueryResult, error) {
 					if tt.executeErr != nil {
-						return core.QueryResult{}, tt.executeErr
+						return parser.QueryResult{}, tt.executeErr
 					}
-					return core.QueryResult{
+					return parser.QueryResult{
 						Data: map[string]interface{}{
 							"test": "data",
 						},
@@ -81,15 +81,15 @@ func TestRunQuery(t *testing.T) {
 				},
 			}
 
-			newQueryExecutor = func() (*core.QueryExecutor, error) {
+			newQueryExecutor = func() (*parser.QueryExecutor, error) {
 				if tt.newExecutorErr != nil {
 					return nil, tt.newExecutorErr
 				}
-				return &core.QueryExecutor{}, nil
+				return &parser.QueryExecutor{}, nil
 			}
 
 			// Replace the Execute method
-			executeMethod = func(qe *core.QueryExecutor, expr *core.Expression) (core.QueryResult, error) {
+			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression) (parser.QueryResult, error) {
 				return mockExecutor.Execute(expr)
 			}
 
