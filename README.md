@@ -7,7 +7,7 @@
 Cyphernetes turns this: 😣
 ```bash
 # Select all zero-scaled Deployments in all namespaces,
-# find all Ingresses routing these deployments -
+# find all Ingresses routing to these deployments -
 # for each Ingress change it's ingress class to 'inactive':
 
 kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
