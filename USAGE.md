@@ -207,8 +207,8 @@ RETURN p.metadata.name, p.status.phase
 ```graphql
 # Find all zero-scaled deployments and set their related ingresses' ingressClassName to "inactive"
 MATCH (d:Deployment)->(s:Service)->(i:Ingress)
-WHERE d.spec.replicas=0
-SET i.spec.ingressClassName = "inactive"
+WHERE d.spec.replicas >= 1
+SET i.spec.ingressClassName = "active"
 ```
 
 ### Matching Multiple Nodes
