@@ -13,12 +13,8 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cyphernetes",
-	Short: "Cyphernetes is a CLI tool for managing Kubernetes resources using a Cypher-inspired query language",
-	Long: `Cyphernetes allows users to interact with their Kubernetes resources 
-           using a graph-like query language for complex operations.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Short: "Cyphernetes is a tool for querying Kubernetes resources",
+	Long:  `Cyphernetes allows you to query Kubernetes resources using a Cypher-like query language.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

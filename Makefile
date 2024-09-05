@@ -3,7 +3,7 @@ BINARY_NAME=cyphernetes
 TARGET_KERNELS=darwin linux
 TARGET_ARCHS=amd64 arm64
 # Define the default make target
-all: bt
+all: operator bt
 
 # Build then Test
 bt: build test
@@ -39,12 +39,19 @@ gen-parser:
 	@echo "🧠 Generating parser..."
 	goyacc -o pkg/parser/cyphernetes.go -p "yy" grammar/cyphernetes.y
 
+operator:
+	@echo "🤖 Creating operator manifests..."
+	$(MAKE) -C operator deployment-manifests > /dev/null
+
+.PHONY: operator
+
 # Define how to clean the build
 clean:
-	@echo "🫧 Cleaning..."
+	@echo "💧 Cleaning..."
 	go clean -cache > /dev/null
 	rm -rf dist/
 	rm -rf coverage.out
+	rm -rf cmd/cyphernetes/manifests
 
 coverage:
 	mkdir -p .coverage
@@ -57,7 +64,7 @@ coverage:
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
-.SILENT: build test gen-parser clean coverage
+.SILENT: build test gen-parser clean coverage operator
 
 # Add a help command to list available targets
 help:

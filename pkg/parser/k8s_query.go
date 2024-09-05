@@ -44,7 +44,10 @@ type QueryResult struct {
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
-func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
+func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
+	if namespace != "" {
+		Namespace = namespace
+	}
 	results := &QueryResult{
 		Data: make(map[string]interface{}),
 		Graph: Graph{

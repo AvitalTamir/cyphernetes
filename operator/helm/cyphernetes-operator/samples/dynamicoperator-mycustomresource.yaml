@@ -1,0 +1,50 @@
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: mycustomresource-operator
+spec:
+  resourceKind: mycustomresource
+  namespace: default
+  onCreate: |
+    CREATE (deployment:Deployment {
+      "metadata": {
+        "name": "child-of-{{$.metadata.name}}",
+        "labels": {
+          "app": "child-of-{{$.metadata.name}}"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "{{$.apiVersion}}",
+            "kind": "{{$.kind}}",
+            "name": "{{$.metadata.name}}",
+            "uid": "{{$.metadata.uid}}"
+          }
+        ]
+      },
+      "spec": {
+        "selector": {
+          "matchLabels": {
+            "app": "child-of-{{$.metadata.name}}"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "child-of-{{$.metadata.name}}"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "child-of-{{$.metadata.name}}",
+                "image": "{{$.spec.image}}"
+              }
+            ]
+          }
+        }
+      }
+    })
+  onDelete: |
+    MATCH (deployment:Deployment {name: "child-of-{{$.metadata.name}}"})
+    DELETE deployment
+  finalizer: true

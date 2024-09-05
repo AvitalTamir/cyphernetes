@@ -1,0 +1,28 @@
+# permissions for end users to edit dynamicoperators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: cyphernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: dynamicoperator-editor-role
+rules:
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/status
+  verbs:
+  - get
+

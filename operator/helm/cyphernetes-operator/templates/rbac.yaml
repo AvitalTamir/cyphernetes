@@ -1,0 +1,212 @@
+{{- include "cyphernetes-operator.validateValues" . -}}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cyphernetes-operator.labels" . | nindent 4 }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-manager-role
+rules:
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- range .Values.watchedKinds }}
+- apiGroups:
+  - "*"
+  resources:
+  - {{ . }}
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+{{- end }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cyphernetes-operator.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cyphernetes-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-leader-election-role
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-leader-election-rolebinding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "cyphernetes-operator.fullname" . }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cyphernetes-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cyphernetes-operator.fullname" . }}-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cyphernetes-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-additional-manager-role
+rules:
+{{- range .Values.watchedKinds }}
+- apiGroups:
+  - {{ include "cyphernetes-operator.getAPIGroup" . }}
+  resources:
+  - {{ include "cyphernetes-operator.getResource" . }}
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+{{- end }}
+{{- range .Values.extraPermissions }}
+- apiGroups:
+  - {{ include "cyphernetes-operator.getAPIGroup" .kind }}
+  resources:
+  - {{ include "cyphernetes-operator.getResource" .kind }}
+  verbs:
+  {{- toYaml .verbs | nindent 2 }}
+{{- end }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cyphernetes-operator.fullname" . }}-additional-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cyphernetes-operator.fullname" . }}-additional-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cyphernetes-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}

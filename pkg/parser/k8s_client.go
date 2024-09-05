@@ -97,6 +97,14 @@ func NewQueryExecutor() (*QueryExecutor, error) {
 	return executor, nil
 }
 
+func (q *QueryExecutor) GetClientset() kubernetes.Interface {
+	return q.Clientset
+}
+
+func (q *QueryExecutor) GetDynamicClient() dynamic.Interface {
+	return q.DynamicClient
+}
+
 func (q *QueryExecutor) processRequests() {
 	for request := range q.requestChannel {
 		q.semaphore <- struct{}{} // Acquire a token

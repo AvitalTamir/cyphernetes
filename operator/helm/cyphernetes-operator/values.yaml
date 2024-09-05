@@ -1,0 +1,57 @@
+replicaCount: 1
+
+image:
+  repository: fatliverfreddy/cyphernetes-operator
+  pullPolicy: IfNotPresent
+  tag: "v0.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# At least one kind must be specified
+watchedKinds:
+  - mycustomresources.example.com
+
+extraPermissions:
+  - kind: deployments.apps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # - kind: pods
+  #   verbs:
+  #     - get
+  #     - list
+  #     - watch
+
+installCRDs: true
