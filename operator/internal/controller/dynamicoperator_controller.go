@@ -16,6 +16,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -62,36 +63,58 @@ func (r *DynamicOperatorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		"DynamicClient", fmt.Sprintf("%v", r.DynamicClient),
 		"Clientset", fmt.Sprintf("%v", r.Clientset))
 
+	// Implement retry logic
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := r.reconcileWithRetry(ctx, req)
+		if err == nil {
+			return ctrl.Result{}, nil
+		}
+
+		if apierrors.IsConflict(err) {
+			logger.Info("Conflict detected, retrying", "attempt", attempt+1)
+			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond) // Exponential backoff
+			continue
+		}
+
+		// If it's not a conflict error, return the error
+		return ctrl.Result{}, err
+	}
+
+	// If we've exhausted all retries, log an error and return
+	logger.Error(fmt.Errorf("failed to reconcile after %d attempts", maxRetries), "reconciliation failed")
+	return ctrl.Result{}, fmt.Errorf("failed to reconcile after %d attempts", maxRetries)
+}
+
+func (r *DynamicOperatorReconciler) reconcileWithRetry(ctx context.Context, req ctrl.Request) error {
+	logger := log.FromContext(ctx)
+
 	var dynamicOperator operatorv1.DynamicOperator
 	if err := r.Get(ctx, req.NamespacedName, &dynamicOperator); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			// DynamicOperator resource not found, it's been deleted
 			logger.Info("DynamicOperator resource not found. Cleaning up.")
-			// Perform any necessary cleanup here
-			return ctrl.Result{}, nil
+			return nil
 		}
 		logger.Error(err, "unable to fetch DynamicOperator")
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// Additional validation
 	if dynamicOperator.Spec.ResourceKind == "" {
 		err := fmt.Errorf("resourceKind is required")
 		logger.Error(err, "invalid DynamicOperator specification")
-		return ctrl.Result{}, err
+		return err
 	}
 
 	if dynamicOperator.Spec.OnCreate == "" && dynamicOperator.Spec.OnUpdate == "" && dynamicOperator.Spec.OnDelete == "" {
 		err := fmt.Errorf("at least one of onCreate, onUpdate, or onDelete must be specified")
 		logger.Error(err, "invalid DynamicOperator specification")
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// Check if this is a delete operation
 	if !dynamicOperator.DeletionTimestamp.IsZero() {
-		// The object is being deleted
 		logger.Info("DynamicOperator is being deleted", "name", dynamicOperator.Name)
-		// Perform any cleanup or finalizer logic here
 		return r.handleDeletion(ctx, &dynamicOperator)
 	}
 
@@ -99,7 +122,7 @@ func (r *DynamicOperatorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if dynamicOperator.Spec.Finalizer && !containsString(dynamicOperator.Finalizers, finalizerName) {
 		dynamicOperator.Finalizers = append(dynamicOperator.Finalizers, finalizerName)
 		if err := r.Update(ctx, &dynamicOperator); err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
 	}
 
@@ -107,73 +130,44 @@ func (r *DynamicOperatorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	log.Log.Info("Setting up dynamic watcher", "dynamicOperator", dynamicOperator.Name)
 	if err := r.setupDynamicWatcher(ctx, &dynamicOperator); err != nil {
 		logger.Error(err, "failed to set up dynamic watcher")
-		return ctrl.Result{}, err
+		return err
 	}
 	log.Log.Info("Dynamic watcher setup complete", "dynamicOperator", dynamicOperator.Name)
 
-	// Update DynamicOperator status
-	dynamicOperator.Status.ActiveWatchers = 1
-	dynamicOperator.Status.LastExecutionTime = &metav1.Time{Time: time.Now()}
-	if err := r.Status().Update(ctx, &dynamicOperator); err != nil {
-		logger.Error(err, "failed to update DynamicOperator status")
-		return ctrl.Result{}, err
-	}
-
-	// Set up a simple watch for debugging
-	go func() {
-		gvr, err := r.GVRFinder.FindGVR(r.QueryExecutor.GetClientset(), dynamicOperator.Spec.ResourceKind)
-		if err != nil {
-			log.Log.Error(err, "Failed to find GVR", "resourceKind", dynamicOperator.Spec.ResourceKind)
-			return
+	// Update DynamicOperator status with retry
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get the latest version of DynamicOperator
+		if err := r.Get(ctx, req.NamespacedName, &dynamicOperator); err != nil {
+			return err
 		}
-		watcher, err := r.DynamicClient.Resource(gvr).Namespace(dynamicOperator.Spec.Namespace).Watch(ctx, metav1.ListOptions{})
-		if err != nil {
-			log.Log.Error(err, "Failed to set up watcher")
-			return
+
+		// Update the status
+		dynamicOperator.Status.ActiveWatchers = 1
+		dynamicOperator.Status.LastExecutionTime = &metav1.Time{Time: time.Now()}
+
+		if err := r.Status().Update(ctx, &dynamicOperator); err != nil {
+			logger.Error(err, "failed to update DynamicOperator status")
+			return err
 		}
-		for event := range watcher.ResultChan() {
-			obj, ok := event.Object.(*unstructured.Unstructured)
-			if !ok {
-				log.Log.Error(nil, "Failed to convert object to *unstructured.Unstructured")
-				continue
-			}
-
-			log.Log.Info("Event received",
-				"type", event.Type,
-				"name", obj.GetName(),
-				"namespace", obj.GetNamespace(),
-				"deletionTimestamp", obj.GetDeletionTimestamp())
-
-			if event.Type == watch.Modified && obj.GetDeletionTimestamp() != nil {
-				log.Log.Info("Deletion detected via update event",
-					"resource", obj.GetName(),
-					"namespace", obj.GetNamespace(),
-					"deletionTimestamp", obj.GetDeletionTimestamp())
-
-				// Call handleDelete directly
-				r.handleDelete(ctx, &dynamicOperator, obj, obj.GetNamespace())
-			}
-		}
-	}()
-
-	return ctrl.Result{}, nil
+		return nil
+	})
 }
 
-func (r *DynamicOperatorReconciler) handleDeletion(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) (ctrl.Result, error) {
+func (r *DynamicOperatorReconciler) handleDeletion(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) error {
 	if !containsString(dynamicOperator.Finalizers, finalizerName) {
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	if err := r.removeFinalizers(ctx, dynamicOperator); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	dynamicOperator.Finalizers = removeString(dynamicOperator.Finalizers, finalizerName)
 	if err := r.Update(ctx, dynamicOperator); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *DynamicOperatorReconciler) removeFinalizers(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) error {
@@ -274,31 +268,31 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 		cache.Indexers{},
 	)
 
-	// Add event handlers only for specified events
-	eventHandler := cache.ResourceEventHandlerFuncs{}
-
-	if dynamicOperator.Spec.OnCreate != "" {
-		log.Log.Info("Registering create event handler", "resourceKind", dynamicOperator.Spec.ResourceKind)
-		eventHandler.AddFunc = func(obj interface{}) {
+	// Add event handlers
+	eventHandler := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
 			log.Log.Info("Create event triggered", "resource", getName(obj))
 			r.debounceExecution(ctx, dynamicOperator, obj, r.handleCreate, "create")
-		}
-	}
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			newUnstructured, ok := newObj.(*unstructured.Unstructured)
+			if !ok {
+				log.Log.Error(fmt.Errorf("failed to convert object to *unstructured.Unstructured"), "resource", getName(newObj))
+				return
+			}
 
-	if dynamicOperator.Spec.OnUpdate != "" {
-		log.Log.Info("Registering update event handler", "resourceKind", dynamicOperator.Spec.ResourceKind)
-		eventHandler.UpdateFunc = func(old, new interface{}) {
-			log.Log.Info("Update event triggered", "resource", getName(new))
-			r.debounceExecution(ctx, dynamicOperator, new, r.handleUpdate, "update")
-		}
-	}
-
-	if dynamicOperator.Spec.OnDelete != "" {
-		log.Log.Info("Registering delete event handler", "resourceKind", dynamicOperator.Spec.ResourceKind)
-		eventHandler.DeleteFunc = func(obj interface{}) {
+			if newUnstructured.GetDeletionTimestamp() != nil {
+				log.Log.Info("Deletion detected via update event", "resource", getName(newObj))
+				r.handleDelete(ctx, dynamicOperator, newObj, dynamicOperator.Namespace)
+			} else {
+				log.Log.Info("Update event triggered", "resource", getName(newObj))
+				r.debounceExecution(ctx, dynamicOperator, newObj, r.handleUpdate, "update")
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
 			log.Log.Info("Delete event triggered", "resource", getName(obj))
-			r.debounceExecution(ctx, dynamicOperator, obj, r.handleDelete, "delete")
-		}
+			r.handleDelete(ctx, dynamicOperator, obj, dynamicOperator.Namespace)
+		},
 	}
 
 	informer.AddEventHandler(eventHandler)
