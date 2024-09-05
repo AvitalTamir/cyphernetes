@@ -481,11 +481,26 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 		return fmt.Errorf("error unmarshaling JSON to map: %v", err)
 	}
 
+	// Split the query into statements
+	statements := splitQueryIntoStatements(query)
+
+	// Execute each statement
+	for _, statement := range statements {
+		err := r.executeStatement(statement, objMap, namespace)
+		if err != nil {
+			return fmt.Errorf("error executing statement: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap map[string]interface{}, namespace string) error {
 	// Regular expression to find all {{$.path.to.property}} patterns
 	re := regexp.MustCompile(`\{\{\$(.[^}]+)\}\}`)
 
-	// Replace all matches in the query
-	sanitizedQuery := re.ReplaceAllStringFunc(query, func(match string) string {
+	// Replace all matches in the statement
+	sanitizedStatement := re.ReplaceAllStringFunc(statement, func(match string) string {
 		// Extract the JSONPath expression
 		jsonPathExpr := "$" + match[3:len(match)-2] // Keep the '$' prefix and remove '{{' prefix and '}}' suffix
 
@@ -506,14 +521,15 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 		// Convert the result to a string
 		return fmt.Sprintf("%v", result)
 	})
-	sanitizedQuery = strings.ReplaceAll(sanitizedQuery, "\n", "")
+	sanitizedStatement = strings.TrimSpace(sanitizedStatement)
+	sanitizedStatement = strings.ReplaceAll(sanitizedStatement, "\n", " ")
 
-	ast, err := parser.ParseQuery(sanitizedQuery)
+	ast, err := parser.ParseQuery(sanitizedStatement)
 	if err != nil {
 		return err
 	}
 
-	// Execute the sanitized query
+	// Execute the sanitized statement
 	result, err := r.QueryExecutor.Execute(ast, namespace)
 	if err != nil {
 		// Check if the error is due to "already exists"
@@ -521,14 +537,53 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 			log.Log.Info("Resource already exists, continuing", "error", err)
 			return nil
 		}
-		return fmt.Errorf("error executing query: %v", err)
+		return fmt.Errorf("error executing statement: %v", err)
 	}
 
 	// Process the result
-	log.Log.Info("Cyphernetes query executed successfully", "result", result)
-	// ...
+	log.Log.Info("Cyphernetes statement executed successfully", "result", result)
 
 	return nil
+}
+
+func splitQueryIntoStatements(query string) []string {
+	// Split the query by semicolons, but ignore semicolons within quotes
+	var statements []string
+	var currentStatement strings.Builder
+	inQuotes := false
+	escapeNext := false
+
+	for _, char := range query {
+		switch char {
+		case '\'', '"':
+			if !escapeNext {
+				inQuotes = !inQuotes
+			}
+		case '\\':
+			escapeNext = true
+			currentStatement.WriteRune(char)
+			continue
+		case ';':
+			if !inQuotes {
+				statement := strings.TrimSpace(currentStatement.String())
+				if statement != "" {
+					statements = append(statements, statement)
+				}
+				currentStatement.Reset()
+				continue
+			}
+		}
+		escapeNext = false
+		currentStatement.WriteRune(char)
+	}
+
+	// Add the last statement if there's any
+	lastStatement := strings.TrimSpace(currentStatement.String())
+	if lastStatement != "" {
+		statements = append(statements, lastStatement)
+	}
+
+	return statements
 }
 
 // Helper functions
@@ -550,8 +605,6 @@ func removeString(slice []string, s string) []string {
 	}
 	return result
 }
-
-// Add this near the bottom of the file
 
 type RealGVRFinder struct{}
 

@@ -43,8 +43,10 @@ spec:
           }
         }
       }
-    })
+    });
+    MATCH (d:Deployment {name: "child-of-{{$.metadata.name}}"})
+    CREATE (deployment)->(s:Service);
   onDelete: |
-    MATCH (deployment:Deployment {name: "child-of-{{$.metadata.name}}"})
-    DELETE deployment
+    MATCH (deployment:Deployment {name: "child-of-{{$.metadata.name}}"})->(s:Service)
+    DELETE deployment, s;
   finalizer: true
