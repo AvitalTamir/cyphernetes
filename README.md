@@ -35,8 +35,15 @@ SET i.spec.ingressClassName="inactive";
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
 It is a mixture of ASCII-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
 
-### Examples
+There are multiple ways to run Cyphernetes queries:
+1. Using the interactive shell by running `cyphernetes shell` in your terminal
+2. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
+3. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/helm/cyphernetes-operator/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator which lets you define powerful Kubernetes workflows on-the-fly
+4. Using the Cyphernetes API in your own Go programs
+
+### Some examples from the shell
 ```graphql
+# Get the desired and running replicas for all deployments
 MATCH (d:Deployment)
 RETURN d.spec.replicas AS desiredReplicas, 
        d.status.availableReplicas AS runningReplicas;
@@ -75,7 +82,16 @@ Many useful macros are included - and it's easy to define your own.
 
 ```graphql
 # This macro creates a service and public ingress for a deployment.
-# Cyphernetes can optionally draw a graph of affected nodes as ASCII art.
+# It's defined like this:
+# :exposepublic deploymentName hostname # Expose a deployment as a service and ingress
+# MATCH (deployment:Deployment {name: "$deploymentName"})
+# CREATE (deployment)->(service:Service);
+# MATCH (services:Service {name: "$deploymentName"})
+# CREATE (services)->(i:ingress {"spec":{"rules": [{"host": "$hostname"}]}});
+# MATCH (deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress)
+# RETURN services.metadata.name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP, ingresses.spec.rules[0].host AS Host, ingresses.spec.rules[0].http.paths[0].path AS Path, ingresses.spec.rules[0].http.paths[0].backend.service.name AS Service;
+
+# Cyphernetes can optionally draw a graph of affected nodes as ASCII-art!
 
 > :expose_public nginx foo.com
 Created services/nginx

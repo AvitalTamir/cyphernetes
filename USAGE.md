@@ -181,6 +181,36 @@ RETURN d.metadata.name,
 }
 ```
 
+`WHERE` clauses support the following operators:
+* `=` - equal to
+* `!=` - not equal to
+* `<` - less than
+* `>` - greater than
+* `<=` - less than or equal to
+* `>=` - greater than or equal to
+
+Examples:
+```graphql
+# Get all deployments with more than 2 replicas
+MATCH (d:Deployment)
+WHERE d.spec.replicas > 2
+RETURN d.metadata.name, d.spec.replicas
+```
+
+```graphql
+# Get all pods that are not running
+MATCH (p:Pod)
+WHERE p.status.phase != "Running"
+RETURN p.metadata.name, p.status.phase
+```
+
+```graphql
+# Find all zero-scaled deployments and set their related ingresses' ingressClassName to "inactive"
+MATCH (d:Deployment)->(s:Service)->(i:Ingress)
+WHERE d.spec.replicas=0
+SET i.spec.ingressClassName = "inactive"
+```
+
 ### Matching Multiple Nodes
 
 Use commas to match two or more nodes:
