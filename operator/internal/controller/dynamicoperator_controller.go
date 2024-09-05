@@ -16,9 +16,9 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"encoding/json"
@@ -39,13 +39,15 @@ const finalizerName = "dynamicoperator.cyphernetes-operator.cyphernet.es/finaliz
 // DynamicOperatorReconciler reconciles a DynamicOperator object
 type DynamicOperatorReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	QueryExecutor QueryExecutorInterface
-	GVRFinder     GVRFinder
-	DynamicClient dynamic.Interface
-	Clientset     kubernetes.Interface
-	executionLock sync.Mutex
-	lastExecution map[string]time.Time
+	Scheme         *runtime.Scheme
+	QueryExecutor  QueryExecutorInterface
+	GVRFinder      GVRFinder
+	DynamicClient  dynamic.Interface
+	Clientset      kubernetes.Interface
+	executionLock  sync.Mutex
+	lastExecution  map[string]time.Time
+	activeWatchers map[string]context.CancelFunc
+	watcherLock    sync.RWMutex
 }
 
 //+kubebuilder:rbac:groups=cyphernetes-operator.cyphernet.es,resources=dynamicoperators,verbs=get;list;watch;create;update;patch;delete
@@ -56,142 +58,99 @@ func (r *DynamicOperatorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	logger := log.FromContext(ctx)
 	logger.Info("Starting reconciliation", "request", req)
 
-	// Log the state of the reconciler
-	logger.Info("Reconciler state",
-		"QueryExecutor", fmt.Sprintf("%v", r.QueryExecutor),
-		"GVRFinder", fmt.Sprintf("%v", r.GVRFinder),
-		"DynamicClient", fmt.Sprintf("%v", r.DynamicClient),
-		"Clientset", fmt.Sprintf("%v", r.Clientset))
-
-	// Implement retry logic
-	maxRetries := 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := r.reconcileWithRetry(ctx, req)
-		if err == nil {
-			return ctrl.Result{}, nil
-		}
-
-		if apierrors.IsConflict(err) {
-			logger.Info("Conflict detected, retrying", "attempt", attempt+1)
-			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond) // Exponential backoff
-			continue
-		}
-
-		// If it's not a conflict error, return the error
-		return ctrl.Result{}, err
-	}
-
-	// If we've exhausted all retries, log an error and return
-	logger.Error(fmt.Errorf("failed to reconcile after %d attempts", maxRetries), "reconciliation failed")
-	return ctrl.Result{}, fmt.Errorf("failed to reconcile after %d attempts", maxRetries)
-}
-
-func (r *DynamicOperatorReconciler) reconcileWithRetry(ctx context.Context, req ctrl.Request) error {
-	logger := log.FromContext(ctx)
-
 	var dynamicOperator operatorv1.DynamicOperator
 	if err := r.Get(ctx, req.NamespacedName, &dynamicOperator); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			logger.Info("DynamicOperator resource not found. Cleaning up.")
-			return nil
+			logger.Info("DynamicOperator resource not found. Initiating cleanup.")
+			r.logActiveWatchers()
+			err := r.cleanupWatcher(req.Namespace + "/" + req.Name)
+			if err != nil {
+				logger.Error(err, "Failed to cleanup watcher")
+				return ctrl.Result{}, err
+			}
+			logger.Info("Cleanup completed successfully")
+			return ctrl.Result{}, nil
 		}
-		logger.Error(err, "unable to fetch DynamicOperator")
-		return err
-	}
-
-	// Additional validation
-	if dynamicOperator.Spec.ResourceKind == "" {
-		err := fmt.Errorf("resourceKind is required")
-		logger.Error(err, "invalid DynamicOperator specification")
-		return err
-	}
-
-	if dynamicOperator.Spec.OnCreate == "" && dynamicOperator.Spec.OnUpdate == "" && dynamicOperator.Spec.OnDelete == "" {
-		err := fmt.Errorf("at least one of onCreate, onUpdate, or onDelete must be specified")
-		logger.Error(err, "invalid DynamicOperator specification")
-		return err
+		logger.Error(err, "Unable to fetch DynamicOperator")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// Check if this is a delete operation
 	if !dynamicOperator.DeletionTimestamp.IsZero() {
-		logger.Info("DynamicOperator is being deleted", "name", dynamicOperator.Name)
-		return r.handleDeletion(ctx, &dynamicOperator)
+		return r.handleDynamicOperatorDeletion(ctx, &dynamicOperator)
 	}
 
-	// Add finalizer if it's not present and finalizer is enabled
-	if dynamicOperator.Spec.Finalizer && !containsString(dynamicOperator.Finalizers, finalizerName) {
-		dynamicOperator.Finalizers = append(dynamicOperator.Finalizers, finalizerName)
-		if err := r.Update(ctx, &dynamicOperator); err != nil {
-			return err
-		}
+	// Check if this is an update operation
+	r.watcherLock.RLock()
+	_, exists := r.activeWatchers[dynamicOperator.Namespace+"/"+dynamicOperator.Name]
+	r.watcherLock.RUnlock()
+	if exists {
+		return r.handleDynamicOperatorUpdate(ctx, &dynamicOperator)
 	}
 
-	// Set up or update the dynamic watcher
-	log.Log.Info("Setting up dynamic watcher", "dynamicOperator", dynamicOperator.Name)
-	if err := r.setupDynamicWatcher(ctx, &dynamicOperator); err != nil {
-		logger.Error(err, "failed to set up dynamic watcher")
-		return err
-	}
-	log.Log.Info("Dynamic watcher setup complete", "dynamicOperator", dynamicOperator.Name)
-
-	// Update DynamicOperator status with retry
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Get the latest version of DynamicOperator
-		if err := r.Get(ctx, req.NamespacedName, &dynamicOperator); err != nil {
-			return err
-		}
-
-		// Update the status
-		dynamicOperator.Status.ActiveWatchers = 1
-		dynamicOperator.Status.LastExecutionTime = &metav1.Time{Time: time.Now()}
-
-		if err := r.Status().Update(ctx, &dynamicOperator); err != nil {
-			logger.Error(err, "failed to update DynamicOperator status")
-			return err
-		}
-		return nil
-	})
+	// This is a new DynamicOperator, set up the watcher
+	return r.setupDynamicWatcher(ctx, &dynamicOperator)
 }
 
-func (r *DynamicOperatorReconciler) handleDeletion(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) error {
-	if !containsString(dynamicOperator.Finalizers, finalizerName) {
-		return nil
+func (r *DynamicOperatorReconciler) handleDynamicOperatorDeletion(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) (ctrl.Result, error) {
+	log.Log.Info("Handling DynamicOperator deletion", "name", dynamicOperator.Name)
+
+	err := r.cleanupWatcher(dynamicOperator.Namespace + "/" + dynamicOperator.Name)
+	if err != nil {
+		log.Log.Error(err, "Failed to cleanup watcher during deletion")
+		return ctrl.Result{}, err
 	}
 
-	if err := r.removeFinalizers(ctx, dynamicOperator); err != nil {
-		return err
-	}
-
+	// Remove our finalizer from the list and update it.
 	dynamicOperator.Finalizers = removeString(dynamicOperator.Finalizers, finalizerName)
 	if err := r.Update(ctx, dynamicOperator); err != nil {
-		return err
+		log.Log.Error(err, "Failed to remove finalizer from DynamicOperator")
+		return ctrl.Result{}, err
+	}
+
+	log.Log.Info("Successfully handled DynamicOperator deletion", "name", dynamicOperator.Name)
+	// Stop reconciliation as the item is being deleted
+	return ctrl.Result{}, nil
+}
+
+func (r *DynamicOperatorReconciler) handleDynamicOperatorUpdate(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) (ctrl.Result, error) {
+	r.watcherLock.Lock()
+	defer r.watcherLock.Unlock()
+
+	if cancel, exists := r.activeWatchers[dynamicOperator.Namespace+"/"+dynamicOperator.Name]; exists {
+		cancel() // Stop the old watcher
+		delete(r.activeWatchers, dynamicOperator.Namespace+"/"+dynamicOperator.Name)
+		log.Log.Info("Old watcher stopped", "dynamicOperator", dynamicOperator.Namespace+"/"+dynamicOperator.Name)
+	}
+
+	// Set up a new watcher with the updated configuration
+	return r.setupDynamicWatcher(ctx, dynamicOperator)
+}
+
+func (r *DynamicOperatorReconciler) cleanupWatcher(name string) error {
+	r.watcherLock.Lock()
+	defer r.watcherLock.Unlock()
+
+	if cancel, exists := r.activeWatchers[name]; exists {
+		log.Log.Info("Stopping watcher", "dynamicOperator", name)
+		cancel()
+		delete(r.activeWatchers, name)
+		log.Log.Info("Watcher stopped and removed", "dynamicOperator", name)
+	} else {
+		log.Log.Info("No active watcher found for cleanup", "dynamicOperator", name)
 	}
 
 	return nil
 }
 
-func (r *DynamicOperatorReconciler) removeFinalizers(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) error {
-	gvr, err := r.GVRFinder.FindGVR(r.QueryExecutor.GetClientset(), dynamicOperator.Spec.ResourceKind)
-	if err != nil {
-		return err
-	}
+func (r *DynamicOperatorReconciler) logActiveWatchers() {
+	r.watcherLock.RLock()
+	defer r.watcherLock.RUnlock()
 
-	list, err := r.QueryExecutor.GetDynamicClient().Resource(gvr).Namespace(dynamicOperator.Spec.Namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
+	log.Log.Info("Current active watchers", "count", len(r.activeWatchers))
+	for key := range r.activeWatchers {
+		log.Log.Info("Active watcher", "dynamicOperator", key)
 	}
-
-	for _, item := range list.Items {
-		if containsString(item.GetFinalizers(), finalizerName) {
-			item.SetFinalizers(removeString(item.GetFinalizers(), finalizerName))
-			_, err := r.QueryExecutor.GetDynamicClient().Resource(gvr).Namespace(item.GetNamespace()).Update(ctx, &item, metav1.UpdateOptions{})
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -220,6 +179,8 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.DynamicClient = dynamicClient
 	r.Clientset = clientset
 	r.lastExecution = make(map[string]time.Time)
+	r.activeWatchers = make(map[string]context.CancelFunc)
+	log.Log.Info("Initialized activeWatchers map")
 
 	log.Log.Info("DynamicOperatorReconciler setup complete",
 		"QueryExecutor", fmt.Sprintf("%v", r.QueryExecutor),
@@ -229,26 +190,29 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1.DynamicOperator{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1,
+		}).
 		Complete(r)
 }
 
-func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) error {
+func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator) (ctrl.Result, error) {
 	log.Log.Info("Setting up dynamic watcher", "resourceKind", dynamicOperator.Spec.ResourceKind, "namespace", dynamicOperator.Spec.Namespace)
 
 	if r.Clientset == nil {
 		log.Log.Error(nil, "Clientset is nil")
-		return fmt.Errorf("clientset is not initialized")
+		return ctrl.Result{}, fmt.Errorf("clientset is not initialized")
 	}
 	if r.DynamicClient == nil {
 		log.Log.Error(nil, "DynamicClient is nil")
-		return fmt.Errorf("dynamic client is not initialized")
+		return ctrl.Result{}, fmt.Errorf("dynamic client is not initialized")
 	}
 
 	log.Log.Info("Finding GVR", "ResourceKind", dynamicOperator.Spec.ResourceKind)
 	gvr, err := r.GVRFinder.FindGVR(r.Clientset, dynamicOperator.Spec.ResourceKind)
 	if err != nil {
 		log.Log.Error(err, "Failed to find GVR")
-		return fmt.Errorf("failed to find GVR for %s: %w", dynamicOperator.Spec.ResourceKind, err)
+		return ctrl.Result{}, fmt.Errorf("failed to find GVR for %s: %w", dynamicOperator.Spec.ResourceKind, err)
 	}
 
 	log.Log.Info("GVR found", "GVR", gvr)
@@ -298,19 +262,29 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 	informer.AddEventHandler(eventHandler)
 
 	// Start the informer
+	watcherCtx, cancel := context.WithCancel(context.Background())
+
+	// Store the cancel function
+	r.watcherLock.Lock()
+	r.activeWatchers[dynamicOperator.Namespace+"/"+dynamicOperator.Name] = cancel
+	r.watcherLock.Unlock()
+
+	log.Log.Info("Watcher registered", "dynamicOperator", dynamicOperator.Namespace+"/"+dynamicOperator.Name)
+
 	go func() {
 		log.Log.Info("Starting informer", "resourceKind", dynamicOperator.Spec.ResourceKind)
-		informer.Run(ctx.Done())
+		informer.Run(watcherCtx.Done())
+		log.Log.Info("Informer stopped", "resourceKind", dynamicOperator.Spec.ResourceKind)
 	}()
 
 	// Wait for the cache to sync
 	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
 		log.Log.Error(nil, "Failed to sync cache", "resourceKind", dynamicOperator.Spec.ResourceKind)
-		return fmt.Errorf("failed to sync cache for %s", dynamicOperator.Spec.ResourceKind)
+		return ctrl.Result{}, fmt.Errorf("failed to sync cache for %s", dynamicOperator.Spec.ResourceKind)
 	}
 	log.Log.Info("Cache synced successfully", "resourceKind", dynamicOperator.Spec.ResourceKind)
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func (r *DynamicOperatorReconciler) debounceExecution(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, handler func(context.Context, *operatorv1.DynamicOperator, interface{}, string), action string) {

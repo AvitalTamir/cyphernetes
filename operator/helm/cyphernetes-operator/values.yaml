@@ -36,24 +36,36 @@ affinity: {}
 
 # At least one kind must be specified
 managedKinds:
-  - mycustomresources.cyphernet.es
+  - deployments.apps
 
 extraPermissions:
-  - kind: deployments.apps
-    verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
   - kind: services
     verbs:
       - get
       - list
       - watch
-      - create
+  - kind: ingresses.networking.k8s.io
+    verbs:
+      - get
+      - list
+      - watch
       - update
       - patch
-      - delete
+  # - kind: deployments.apps
+  #   verbs:
+  #     - get
+  #     - list
+  #     - watch
+  #     - create
+  #     - update
+  #     - patch
+  #     - delete
+  # - kind: services
+  #   verbs:
+  #     - get
+  #     - list
+  #     - watch
+  #     - create
+  #     - update
+  #     - patch
+  #     - delete
