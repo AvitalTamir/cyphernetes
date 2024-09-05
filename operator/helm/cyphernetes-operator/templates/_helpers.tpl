@@ -63,8 +63,8 @@ Create the name of the service account to use
 
 {{/* Validate values */}}
 {{- define "cyphernetes-operator.validateValues" -}}
-{{- if not .Values.watchedKinds -}}
-{{- fail "At least one kind must be specified in .Values.watchedKinds" -}}
+{{- if not .Values.managedKinds -}}
+{{- fail "At least one kind must be specified in .Values.managedKinds" -}}
 {{- end -}}
 {{- range .Values.extraPermissions -}}
 {{- if not .kind -}}

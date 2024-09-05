@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: fatliverfreddy/cyphernetes-operator
   pullPolicy: IfNotPresent
-  tag: "v0.0.0"
+  tag: "latest"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -35,8 +35,8 @@ tolerations: []
 affinity: {}
 
 # At least one kind must be specified
-watchedKinds:
-  - mycustomresources.example.com
+managedKinds:
+  - mycustomresources.cyphernet.es
 
 extraPermissions:
   - kind: deployments.apps
@@ -48,10 +48,12 @@ extraPermissions:
       - update
       - patch
       - delete
-  # - kind: pods
-  #   verbs:
-  #     - get
-  #     - list
-  #     - watch
-
-installCRDs: true
+  - kind: services
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete

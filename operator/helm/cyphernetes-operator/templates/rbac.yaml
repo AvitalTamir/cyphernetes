@@ -41,7 +41,7 @@ rules:
   - get
   - patch
   - update
-{{- range .Values.watchedKinds }}
+{{- range .Values.managedKinds }}
 - apiGroups:
   - "*"
   resources:
@@ -174,7 +174,7 @@ kind: ClusterRole
 metadata:
   name: {{ include "cyphernetes-operator.fullname" . }}-additional-manager-role
 rules:
-{{- range .Values.watchedKinds }}
+{{- range .Values.managedKinds }}
 - apiGroups:
   - {{ include "cyphernetes-operator.getAPIGroup" . }}
   resources:

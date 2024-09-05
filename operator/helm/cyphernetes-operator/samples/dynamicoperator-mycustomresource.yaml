@@ -6,7 +6,7 @@ spec:
   resourceKind: mycustomresource
   namespace: default
   onCreate: |
-    CREATE (deployment:Deployment {
+    CREATE (d:Deployment {
       "metadata": {
         "name": "child-of-{{$.metadata.name}}",
         "labels": {
@@ -45,8 +45,8 @@ spec:
       }
     });
     MATCH (d:Deployment {name: "child-of-{{$.metadata.name}}"})
-    CREATE (deployment)->(s:Service);
+    CREATE (d)->(s:Service);
   onDelete: |
-    MATCH (deployment:Deployment {name: "child-of-{{$.metadata.name}}"})->(s:Service)
-    DELETE deployment, s;
+    MATCH (d:Deployment {name: "child-of-{{$.metadata.name}}"})->(s:Service)
+    DELETE d, s;
   finalizer: true

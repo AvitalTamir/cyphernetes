@@ -1,4 +1,4 @@
-apiVersion: example.com/v1
+apiVersion: cyphernet.es/v1
 kind: MyCustomResource
 metadata:
   name: mycustomresource-sample
