@@ -38,8 +38,9 @@ type DeleteClause struct {
 }
 
 type KeyValuePair struct {
-	Key   string
-	Value interface{}
+	Key      string
+	Value    interface{}
+	Operator string
 }
 
 type CreateClause struct {

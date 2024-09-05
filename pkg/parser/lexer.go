@@ -209,6 +209,13 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	case '=':
 		logDebug("Returning EQUALS token")
 		return int(EQUALS)
+	case '!':
+		ch := l.s.Peek()
+		if ch == '=' {
+			l.s.Next() // Consume '='
+			return int(NOT_EQUALS)
+		}
+		return int(ILLEGAL)
 	case ')':
 		logDebug("Returning RPAREN token")
 		l.definingProps = false // Indicate that we've read a RPAREN.
@@ -267,8 +274,11 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			} else {
 				return int(ILLEGAL)
 			}
+		} else if ch == '=' {
+			l.s.Next() // Consume '='
+			return int(LESS_THAN_EQUALS)
 		}
-		return int(ILLEGAL)
+		return int(LESS_THAN)
 	case ']':
 		ch := l.s.Peek()
 		if ch == '-' {
@@ -285,7 +295,12 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		}
 		return int(ILLEGAL)
 	case '>', '[':
-		return int(ILLEGAL)
+		ch := l.s.Peek()
+		if ch == '=' {
+			l.s.Next() // Consume '='
+			return int(GREATER_THAN_EQUALS)
+		}
+		return int(GREATER_THAN)
 	default:
 		logDebug("Illegal token:", tok)
 		return int(ILLEGAL)
