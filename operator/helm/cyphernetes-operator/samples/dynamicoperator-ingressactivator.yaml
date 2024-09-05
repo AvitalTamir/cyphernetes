@@ -8,4 +8,7 @@ spec:
   onUpdate: |
     MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
     WHERE d.spec.replicas = 0
-    SET i.spec.ingressClassName = "inactive"
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";
