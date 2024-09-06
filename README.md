@@ -41,6 +41,11 @@ There are multiple ways to run Cyphernetes queries:
 3. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/helm/cyphernetes-operator/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator which lets you define powerful Kubernetes workflows on-the-fly
 4. Using the Cyphernetes API in your own Go programs
 
+To learn more about how to use Cyphernetes, refer to these documents:
+* [LANGUAGE.md](docs/LANGUAGE.md) - a crash-course in Cyphernetes language syntax
+* [CLI.md](docs/CLI.md) - a guide to using Cyphernetes shell, query command and macros
+* [OPERATOR.md](docs/OPERATOR.md) - a guide to using Cyphernetes DynamicOperator
+
 ### Some examples from the shell
 ```graphql
 # Get the desired and running replicas for all deployments
@@ -127,8 +132,6 @@ Created ingresses/nginx
 
 Macro executed in 50.305083ms
 ```
-
-For more usage examples, please see the [Usage Guide](https://github.com/AvitalTamir/cyphernetes/blob/main/USAGE.md).
 
 ## Get Cyphernetes
 
