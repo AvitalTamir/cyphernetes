@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
 	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/oliveagle/jsonpath"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // GVRFinder is an interface for finding GroupVersionResource
@@ -327,6 +329,7 @@ func (r *DynamicOperatorReconciler) handleCreate(ctx context.Context, dynamicOpe
 			log.Log.Error(err, "Failed to execute onCreate query")
 			return
 		}
+
 		// Add finalizer only if the creation was successful or the resource already existed
 		r.addFinalizer(ctx, dynamicOperator, obj)
 	}
@@ -458,12 +461,22 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 	// Split the query into statements
 	statements := splitQueryIntoStatements(query)
 
+	// Get the delay duration from environment variable
+	delayStr := os.Getenv("OPERATOR_STATEMENT_EXECUTION_DELAY")
+	delay, err := time.ParseDuration(delayStr)
+	if err != nil {
+		delay = time.Duration(100) * time.Millisecond // Default to no delay if env var is not set or invalid
+	}
+
 	// Execute each statement
 	for _, statement := range statements {
 		err := r.executeStatement(statement, objMap, namespace)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err)
 		}
+
+		// Apply the delay between statement executions
+		time.Sleep(delay)
 	}
 
 	return nil
@@ -505,13 +518,49 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 
 	// Execute the sanitized statement
 	result, err := r.QueryExecutor.Execute(ast, namespace)
+
 	if err != nil {
 		// Check if the error is due to "already exists"
 		if strings.Contains(err.Error(), "already exists") {
 			log.Log.Info("Resource already exists, continuing", "error", err)
-			return nil
+		} else {
+			return fmt.Errorf("error executing statement: %v", err)
 		}
-		return fmt.Errorf("error executing statement: %v", err)
+	}
+
+	// Check if we need to add owner references to created resources
+	if createClause := findCreateClause(ast); createClause != nil {
+		var nodesToAddOwnerRef []*parser.NodePattern
+		var matchCreateNode *parser.NodePattern
+
+		matchClause := findMatchClause(ast)
+		if matchClause == nil {
+			// If there's no match clause, add owner reference to all created nodes
+			nodesToAddOwnerRef = createClause.Nodes
+		} else {
+			// If there's a match clause, find nodes in create that don't exist in match
+			matchNodeNames := make(map[string]bool)
+			for _, node := range matchClause.Nodes {
+				matchNodeNames[node.ResourceProperties.Name] = true
+			}
+
+			for _, node := range createClause.Nodes {
+				if !matchNodeNames[node.ResourceProperties.Name] {
+					nodesToAddOwnerRef = append(nodesToAddOwnerRef, node)
+				} else {
+					matchCreateNode = node
+				}
+			}
+		}
+
+		// Add owner references to the identified nodes
+		for _, node := range nodesToAddOwnerRef {
+			err := r.addOwnerReference(result, node, matchCreateNode, objMap, namespace)
+			if err != nil {
+				log.Log.Error(err, "Failed to add owner reference", "node", node.ResourceProperties.Name)
+				// Consider whether to return the error or continue with other nodes
+			}
+		}
 	}
 
 	// Process the result
@@ -590,4 +639,124 @@ type QueryExecutorInterface interface {
 	Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error)
 	GetClientset() kubernetes.Interface
 	GetDynamicClient() dynamic.Interface
+}
+
+func (r *DynamicOperatorReconciler) addOwnerReference(result parser.QueryResult, node *parser.NodePattern, matchCreateNode *parser.NodePattern, ownerObj map[string]interface{}, namespace string) error {
+	gvr, err := r.GVRFinder.FindGVR(r.Clientset, node.ResourceProperties.Kind)
+	if err != nil {
+		return fmt.Errorf("failed to find GVR for %s: %v", node.ResourceProperties.Kind, err)
+	}
+
+	// Extract the name from node.ResourceProperties.
+	// It is either inside node.resourceProperties.JsonData (in .metadata.name) (JsonData is a string, so we need to unmarshal it.)
+	// or in the result.ReturnItems[].JsonPath (in .metadata.name) (JsonData is a map[string]interface{}, so we can access it directly.)
+	var name string
+	var data map[string]interface{}
+	if node.ResourceProperties.JsonData != "" {
+		err = json.Unmarshal([]byte(node.ResourceProperties.JsonData), &data)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal JsonData: %v", err)
+		}
+		name = data["metadata"].(map[string]interface{})["name"].(string)
+	} else {
+		// now we are extracting the matchCreateNode name from result.Graph.Nodes[].
+		for _, node := range result.Graph.Nodes {
+			if node.Id == matchCreateNode.ResourceProperties.Name {
+				name = node.Name
+			}
+		}
+	}
+	if name == "" {
+		return fmt.Errorf("failed to find name for %s while adding owner reference", node.ResourceProperties.Name)
+	}
+
+	// Get the created resource
+	createdResource, err := r.DynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get created resource %s: %v", node.ResourceProperties.Name, err)
+	}
+
+	// Create the OwnerReference
+	ownerRef := metav1.OwnerReference{
+		APIVersion: ownerObj["apiVersion"].(string),
+		Kind:       ownerObj["kind"].(string),
+		Name:       ownerObj["metadata"].(map[string]interface{})["name"].(string),
+		UID:        types.UID(ownerObj["metadata"].(map[string]interface{})["uid"].(string)),
+	}
+
+	// Check if the OwnerReference already exists
+	existingOwnerRefs := createdResource.GetOwnerReferences()
+	for _, existingRef := range existingOwnerRefs {
+		if existingRef.UID == ownerRef.UID {
+			// OwnerReference already exists, no need to add it
+			return nil
+		}
+	}
+
+	// Add the OwnerReference to the created resource if it doesn't exist
+	// Retry loop for updating the resource with owner reference
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		// Get the latest version of the resource
+		latestResource, err := r.DynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get latest version of resource: %v", err)
+		}
+
+		// Check if the OwnerReference already exists in the latest version
+		latestOwnerRefs := latestResource.GetOwnerReferences()
+		ownerRefExists := false
+		for _, existingRef := range latestOwnerRefs {
+			if existingRef.UID == ownerRef.UID {
+				ownerRefExists = true
+				break
+			}
+		}
+
+		if !ownerRefExists {
+			// Add the OwnerReference to the latest version of the resource
+			latestResource.SetOwnerReferences(append(latestOwnerRefs, ownerRef))
+
+			// Try to update the resource
+			_, err = r.DynamicClient.Resource(gvr).Namespace(namespace).Update(context.TODO(), latestResource, metav1.UpdateOptions{})
+			if err == nil {
+				// Update successful
+				log.Log.Info("Added owner reference successfully", "resource", node.ResourceProperties.Name, "owner", ownerRef.Name)
+				return nil
+			}
+
+			if !apierrors.IsConflict(err) {
+				// If it's not a conflict error, return the error
+				return fmt.Errorf("failed to update resource with owner reference: %v", err)
+			}
+
+			// If it's a conflict error, we'll retry
+			log.Log.Info("Conflict occurred while updating resource, retrying", "attempt", i+1, "resource", node.ResourceProperties.Name)
+			time.Sleep(time.Millisecond * 100 * time.Duration(i+1)) // Exponential backoff
+		} else {
+			// OwnerReference already exists in the latest version, no need to update
+			return nil
+		}
+	}
+
+	return fmt.Errorf("failed to update resource with owner reference after %d attempts", maxRetries)
+}
+
+// Helper functions to find specific clauses in the AST
+func findCreateClause(ast *parser.Expression) *parser.CreateClause {
+	for _, clause := range ast.Clauses {
+		if createClause, ok := clause.(*parser.CreateClause); ok {
+			return createClause
+		}
+	}
+	return nil
+}
+
+func findMatchClause(ast *parser.Expression) *parser.MatchClause {
+	for _, clause := range ast.Clauses {
+		if matchClause, ok := clause.(*parser.MatchClause); ok {
+			return matchClause
+		}
+	}
+	return nil
 }

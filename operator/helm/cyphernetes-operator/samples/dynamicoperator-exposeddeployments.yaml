@@ -12,14 +12,6 @@ spec:
         "labels": {
           "app": "child-of-{{$.metadata.name}}"
         },
-        "ownerReferences": [
-          {
-            "apiVersion": "{{$.apiVersion}}",
-            "kind": "{{$.kind}}",
-            "name": "{{$.metadata.name}}",
-            "uid": "{{$.metadata.uid}}"
-          }
-        ]
       },
       "spec": {
         "selector": {
