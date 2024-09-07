@@ -1,9 +1,9 @@
 apiVersion: cyphernetes-operator.cyphernet.es/v1
 kind: DynamicOperator
 metadata:
-  name: mycustomresource-operator
+  name: exposeddeployment-operator
 spec:
-  resourceKind: mycustomresource
+  resourceKind: exposeddeployments
   namespace: default
   onCreate: |
     CREATE (d:Deployment {

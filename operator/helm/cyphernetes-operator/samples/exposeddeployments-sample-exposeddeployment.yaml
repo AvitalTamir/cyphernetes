@@ -1,6 +1,6 @@
 apiVersion: cyphernet.es/v1
-kind: MyCustomResource
+kind: ExposedDeployment
 metadata:
-  name: mycustomresource-sample
+  name: sample-exposeddeployment
 spec:
   image: nginx

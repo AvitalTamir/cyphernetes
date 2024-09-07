@@ -34,38 +34,43 @@ tolerations: []
 
 affinity: {}
 
-# At least one kind must be specified
+# At least one kind must be specified.
+# These are the kinds that dynamic operators created by this controller can manage.
 managedKinds:
-  - deployments.apps
+  - exposeddeployments # For exposeddeployment operator
+  # - deployments.apps # For active/inactive ingress operator
 
+# These are the permissions to run Cyphernetes queries by the dynamic operators created by this controller.
 extraPermissions:
+  # Example permissions for exposeddeployments operator
+  - kind: deployments.apps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   - kind: services
     verbs:
       - get
       - list
       - watch
-  - kind: ingresses.networking.k8s.io
-    verbs:
-      - get
-      - list
-      - watch
+      - create
       - update
       - patch
-  # - kind: deployments.apps
-  #   verbs:
-  #     - get
-  #     - list
-  #     - watch
-  #     - create
-  #     - update
-  #     - patch
-  #     - delete
+      - delete
+  # Example permissions for ingresses active/inactive operator
   # - kind: services
   #   verbs:
   #     - get
   #     - list
   #     - watch
-  #     - create
+  # - kind: ingresses.networking.k8s.io
+  #   verbs:
+  #     - get
+  #     - list
+  #     - watch
   #     - update
   #     - patch
-  #     - delete
