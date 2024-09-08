@@ -16,8 +16,8 @@ import (
 
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
+	"github.com/wader/readline"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -138,31 +138,6 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		}
 		return match
 	})
-
-	// in lineStr, find all text (.*) between { and } and strip all color codes:
-	// - all text that looks like "\x1b[33m" or "\x1b[36m" or "\x1b[90m" or "\x1b[37m" or "\x1b[35m" or "\x1b[0m"
-	// - all text that looks like "\x1b[([0-9;]+)m"
-	// - all text that looks like "\033[33m" or "\033[36m" or "\033[90m" or "\033[37m" or "\033[35m" or "\033[0m"
-	// // Strip color codes from text between { and }
-	// lineStr = regexp.MustCompile(`\{([^}]*)\}`).ReplaceAllStringFunc(lineStr, func(match string) string {
-	// 	// Remove all ANSI color codes
-	// 	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(match, "")
-
-	// 	// Apply new coloring while preserving original spacing
-	// 	colored := propertiesRegex.ReplaceAllStringFunc(stripped, func(propMatch string) string {
-	// 		parts := propertiesRegex.FindStringSubmatch(propMatch)
-	// 		if len(parts) == 4 {
-	// 			key := parts[1]
-	// 			spacing := parts[2]
-	// 			value := parts[3]
-	// 			return fmt.Sprintf("\033[33m%s\033[0m%s\033[36m%s\033[0m", key, spacing, value)
-	// 		}
-	// 		return propMatch
-	// 	})
-
-	// 	// Ensure color is reset at the end
-	// 	return colored
-	// })
 
 	// Colorize properties
 	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
