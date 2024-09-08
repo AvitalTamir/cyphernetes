@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/chzyer/readline"
+	"github.com/wader/readline"
 )
 
 func TestShellPrompt(t *testing.T) {
@@ -40,23 +40,26 @@ func TestGetCurrentContext(t *testing.T) {
 	originalFunc := getCurrentContextFunc
 	defer func() { getCurrentContextFunc = originalFunc }()
 
-	getCurrentContextFunc = func() (string, error) {
-		return "test-context", nil
+	getCurrentContextFunc = func() (string, string, error) {
+		return "test-context", "test-namespace", nil
 	}
 
-	context, err := getCurrentContext()
+	context, namespace, err := getCurrentContext()
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if context != "test-context" {
 		t.Errorf("Expected context 'test-context', got '%s'", context)
 	}
-
-	getCurrentContextFunc = func() (string, error) {
-		return "", fmt.Errorf("test error")
+	if namespace != "test-namespace" {
+		t.Errorf("Expected namespace 'test-namespace', got '%s'", namespace)
 	}
 
-	_, err = getCurrentContext()
+	getCurrentContextFunc = func() (string, string, error) {
+		return "", "", fmt.Errorf("test error")
+	}
+
+	_, _, err = getCurrentContext()
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}

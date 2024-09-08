@@ -24,6 +24,7 @@ import (
 //go:embed default_macros.txt
 var defaultMacros string
 var executeStatementFunc = executeStatement
+var ctx string
 
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
@@ -57,14 +58,8 @@ func shellPrompt() string {
 		ns = "ALL NAMESPACES"
 		color = "31"
 	}
-	// Get the name of the current Kubernetes context
-	context, err := getCurrentContext()
-	if err != nil {
-		fmt.Println("Error getting current context: ", err)
-		return ""
-	}
 
-	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, context, ns)
+	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, ctx, ns)
 }
 
 func SetQueryExecutor(exec *parser.QueryExecutor) {
@@ -73,11 +68,11 @@ func SetQueryExecutor(exec *parser.QueryExecutor) {
 
 var getCurrentContextFunc = getCurrentContextFromConfig
 
-func getCurrentContext() (string, error) {
+func getCurrentContext() (string, string, error) {
 	return getCurrentContextFunc()
 }
 
-func getCurrentContextFromConfig() (string, error) {
+func getCurrentContextFromConfig() (string, string, error) {
 	// Use the local kubeconfig context
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
@@ -85,11 +80,12 @@ func getCurrentContextFromConfig() (string, error) {
 			CurrentContext: "",
 		}).RawConfig()
 	if err != nil {
-		fmt.Println("Error creating in-cluster config")
-		return "", err
+		fmt.Println("Error getting current context from kubeconfig")
+		return "", "", err
 	}
 	currentContextName := config.CurrentContext
-	return currentContextName, nil
+	namespace := config.Contexts[currentContextName].Namespace
+	return currentContextName, namespace, nil
 }
 
 type syntaxHighlighter struct{}
@@ -553,6 +549,18 @@ func init() {
 		if err := macroManager.LoadMacrosFromFile(userMacrosFile); err != nil {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
+	}
+
+	// Get the name of the current Kubernetes context
+	contextName, namespace, err := getCurrentContext()
+	if err != nil {
+		fmt.Println("Error getting current context: ", err)
+		return
+	}
+	ctx = contextName
+
+	if namespace != "" && namespace != "default" {
+		parser.Namespace = namespace
 	}
 }
 
