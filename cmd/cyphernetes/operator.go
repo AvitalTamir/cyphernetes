@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -53,10 +54,15 @@ var kinds []string
 func init() {
 	operatorCmd.AddCommand(deployCmd)
 	operatorCmd.AddCommand(removeCmd)
+	operatorCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(operatorCmd)
 
 	deployCmd.Flags().StringSliceVarP(&kinds, "kind", "k", []string{}, "Resource kinds to add full RBAC permissions for (can be used multiple times)")
 	deployCmd.MarkFlagRequired("kind")
+
+	createCmd.Flags().StringVarP(&onCreate, "on-create", "c", "", "Query to run on resource creation")
+	createCmd.Flags().StringVarP(&onUpdate, "on-update", "u", "", "Query to run on resource update")
+	createCmd.Flags().StringVarP(&onDelete, "on-delete", "d", "", "Query to run on resource deletion")
 }
 
 func runDeploy(cmd *cobra.Command, args []string) {
@@ -408,4 +414,59 @@ func removeAdditionalRBACPermissions(clientset *kubernetes.Clientset) error {
 	}
 
 	return nil
+}
+
+var createCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create a DynamicOperator manifest",
+	Args:  cobra.ExactArgs(1),
+	Run:   runCreate,
+}
+
+var (
+	onCreate string
+	onUpdate string
+	onDelete string
+)
+
+func runCreate(cmd *cobra.Command, args []string) {
+	name := args[0]
+
+	dynamicOperator := map[string]interface{}{
+		"apiVersion": "cyphernetes-operator.cyphernet.es/v1",
+		"kind":       "DynamicOperator",
+		"metadata": map[string]interface{}{
+			"name": name,
+		},
+		"spec": map[string]interface{}{
+			"resourceKind": "pods",
+			"namespace":    "default",
+		},
+	}
+
+	defaultQuery := "MATCH (p:Pods) RETURN p.metadata.name"
+
+	if onCreate != "" || onUpdate != "" || onDelete != "" {
+		if onCreate != "" {
+			dynamicOperator["spec"].(map[string]interface{})["onCreate"] = onCreate
+		}
+		if onUpdate != "" {
+			dynamicOperator["spec"].(map[string]interface{})["onUpdate"] = onUpdate
+		}
+		if onDelete != "" {
+			dynamicOperator["spec"].(map[string]interface{})["onDelete"] = onDelete
+		}
+	} else {
+		dynamicOperator["spec"].(map[string]interface{})["onCreate"] = defaultQuery
+		dynamicOperator["spec"].(map[string]interface{})["onUpdate"] = defaultQuery
+		dynamicOperator["spec"].(map[string]interface{})["onDelete"] = defaultQuery
+	}
+
+	yamlData, err := yaml.Marshal(dynamicOperator)
+	if err != nil {
+		fmt.Printf("Error marshaling YAML: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Print(string(yamlData))
 }
