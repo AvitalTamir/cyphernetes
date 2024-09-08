@@ -11,7 +11,7 @@ spec:
         "name": "child-of-{{$.metadata.name}}",
         "labels": {
           "app": "child-of-{{$.metadata.name}}"
-        },
+        }
       },
       "spec": {
         "selector": {
@@ -41,4 +41,3 @@ spec:
   onDelete: |
     MATCH (d:Deployment {name: "child-of-{{$.metadata.name}}"})->(s:Service)
     DELETE d, s;
-  finalizer: true
