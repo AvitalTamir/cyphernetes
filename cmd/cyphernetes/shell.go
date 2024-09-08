@@ -4,11 +4,15 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
+
+	"os/signal"
+	"syscall"
 
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
@@ -208,19 +212,21 @@ func runShell(cmd *cobra.Command, args []string) {
 		Prompt:                 shellPrompt(),
 		HistoryFile:            historyFile,
 		AutoComplete:           completer,
-		InterruptPrompt:        "^C",
+		InterruptPrompt:        "", // Set this to empty string
 		EOFPrompt:              "exit",
 		Painter:                &syntaxHighlighter{},
 		DisableAutoSaveHistory: true,
-
-		HistorySearchFold:   true,
-		FuncFilterInputRune: filterInput,
+		HistorySearchFold:      true,
+		FuncFilterInputRune:    filterInput,
 	})
 	if err != nil {
 		panic(err)
 	}
 	defer rl.Close()
-	rl.CaptureExitSignal()
+
+	// Set up a channel to receive interrupt signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
@@ -231,11 +237,28 @@ func runShell(cmd *cobra.Command, args []string) {
 
 	var cmds []string
 	var input string
+	executing := false
+
+	go func() {
+		for range sigChan {
+			handleInterrupt(rl, &cmds, &executing)
+		}
+	}()
 
 	for {
 		line, err := rl.Readline()
-		if err != nil { // io.EOF, Ctrl-D
-			break
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				if len(line) == 0 {
+					fmt.Println("\nExiting...")
+					return
+				}
+				continue
+			} else if err == io.EOF {
+				break
+			}
+			fmt.Println("Error reading input:", err)
+			continue
 		}
 
 		if strings.HasPrefix(line, ":") {
@@ -357,8 +380,10 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println("\\lm                - List all registered macros")
 			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
+			executing = true
 			// Process the input if not empty
 			result, graph, err := processQuery(input)
+			executing = false
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 				continue
@@ -381,8 +406,6 @@ func runShell(cmd *cobra.Command, args []string) {
 				fmt.Printf("\nQuery executed in %s\n\n", execTime)
 			}
 		}
-		// Add input to history
-		// rl.SaveHistory(input)
 	}
 }
 
@@ -556,4 +579,22 @@ func init() {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
 	}
+}
+
+func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
+	if *executing {
+		// If we're executing a query, do nothing
+		return
+	}
+
+	if len(*cmds) == 0 {
+		// If the input is empty, exit the program
+		fmt.Println("\nExiting...")
+		os.Exit(0)
+	}
+
+	// Clear the current input and reset the prompt
+	*cmds = []string{}
+	rl.SetPrompt(shellPrompt())
+	rl.Refresh()
 }
