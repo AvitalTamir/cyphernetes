@@ -177,6 +177,10 @@ func colorizeProperties(obj string) string {
 	return "{" + colored + "}"
 }
 
+type Listener interface {
+	OnChange(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool)
+}
+
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
 	rl, err := readline.NewEx(&readline.Config{
@@ -194,6 +198,11 @@ func runShell(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 	defer rl.Close()
+
+	rl.Config.SetListener(func(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool) {
+		rl.Refresh()
+		return line, pos, false
+	})
 
 	// Set up a channel to receive interrupt signals
 	sigChan := make(chan os.Signal, 1)
