@@ -22,9 +22,6 @@ type DynamicOperatorSpec struct {
 
 	// OnDelete is the Cyphernetes query to execute when a resource is deleted
 	OnDelete string `json:"onDelete,omitempty"`
-
-	// Finalizer specifies whether the operator should register itself as a finalizer on the watched resources
-	Finalizer bool `json:"finalizer,omitempty"`
 }
 
 // DynamicOperatorStatus defines the observed state of DynamicOperator

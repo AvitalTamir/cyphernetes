@@ -49,10 +49,6 @@ spec:
           spec:
             description: DynamicOperatorSpec defines the desired state of DynamicOperator
             properties:
-              finalizer:
-                description: Finalizer specifies whether the operator should register
-                  itself as a finalizer on the watched resources
-                type: boolean
               namespace:
                 description: Namespace specifies the namespace to watch. If empty,
                   it watches all namespaces

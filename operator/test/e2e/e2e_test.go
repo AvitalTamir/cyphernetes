@@ -268,6 +268,10 @@ DELETE d, s;
 				return true
 			}, timeout, interval).Should(BeTrue())
 
+			// By("Verifying the Deployment's image has been templated correctly")
+			// log.Printf("Deployment: %v", deployment)
+			// Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx"))
+
 			By("Verifying the Deployment has the correct owner reference")
 			Expect(deployment.OwnerReferences).To(HaveLen(1))
 			Expect(deployment.OwnerReferences[0].Name).To(Equal("sample-exposeddeployment"))
@@ -427,7 +431,6 @@ DELETE d, s;
 					return err
 				}
 				// sleep for 10 seconds to allow the deployment to scale to 0
-				time.Sleep(time.Second * 5)
 				deployment.Spec.Replicas = ptr.To(int32(0))
 				return k8sClient.Update(ctx, deployment)
 			}, timeout, interval).Should(Succeed())

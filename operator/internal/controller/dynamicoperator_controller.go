@@ -46,7 +46,6 @@ type DynamicOperatorReconciler struct {
 	GVRFinder      GVRFinder
 	DynamicClient  dynamic.Interface
 	Clientset      kubernetes.Interface
-	executionLock  sync.Mutex
 	lastExecution  map[string]time.Time
 	activeWatchers map[string]context.CancelFunc
 	watcherLock    sync.RWMutex
@@ -238,7 +237,7 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 	eventHandler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Log.Info("Create event triggered", "resource", getName(obj))
-			r.debounceExecution(ctx, dynamicOperator, obj, r.handleCreate, "create")
+			r.handleExecution(ctx, dynamicOperator, obj, r.handleCreate, "create")
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			newUnstructured, ok := newObj.(*unstructured.Unstructured)
@@ -249,15 +248,15 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 
 			if newUnstructured.GetDeletionTimestamp() != nil {
 				log.Log.Info("Deletion detected via update event", "resource", getName(newObj))
-				r.handleDelete(ctx, dynamicOperator, newObj, dynamicOperator.Namespace)
+				r.handleExecution(ctx, dynamicOperator, newObj, r.handleDelete, "delete")
 			} else {
 				log.Log.Info("Update event triggered", "resource", getName(newObj))
-				r.debounceExecution(ctx, dynamicOperator, newObj, r.handleUpdate, "update")
+				r.handleExecution(ctx, dynamicOperator, newObj, r.handleUpdate, "update")
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			log.Log.Info("Delete event triggered", "resource", getName(obj))
-			r.handleDelete(ctx, dynamicOperator, obj, dynamicOperator.Namespace)
+			r.handleExecution(ctx, dynamicOperator, obj, r.handleDelete, "delete")
 		},
 	}
 
@@ -289,34 +288,14 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 	return ctrl.Result{}, nil
 }
 
-func (r *DynamicOperatorReconciler) debounceExecution(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, handler func(context.Context, *operatorv1.DynamicOperator, interface{}, string), action string) {
-	log.Log.Info("Entering debounceExecution", "action", action, "resource", getName(obj))
-
-	r.executionLock.Lock()
-	defer r.executionLock.Unlock()
+func (r *DynamicOperatorReconciler) handleExecution(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, handler func(context.Context, *operatorv1.DynamicOperator, interface{}, string), action string) {
+	log.Log.Info("Handling execution", "action", action, "resource", getName(obj))
 
 	name := getName(obj)
-	key := fmt.Sprintf("%s-%s", action, name)
-	now := time.Now()
 
-	// Always process delete operations immediately
-	if action == "delete" {
-		log.Log.Info("Processing delete operation immediately", "resource", name)
-		handler(ctx, dynamicOperator, obj, dynamicOperator.ObjectMeta.Namespace)
-		r.lastExecution[key] = now
-		return
-	}
-
-	if lastExec, ok := r.lastExecution[key]; ok {
-		if now.Sub(lastExec) < time.Second*5 { // 5-second debounce period
-			log.Log.Info("Debounce period not elapsed, skipping execution", "action", action, "resource", name)
-			return
-		}
-	}
-
-	log.Log.Info("Debounce period elapsed or first execution, proceeding", "action", action, "resource", name)
-	r.lastExecution[key] = now
+	// Always process operations immediately
 	handler(ctx, dynamicOperator, obj, dynamicOperator.ObjectMeta.Namespace)
+
 	log.Log.Info("Handler execution completed", "action", action, "resource", name)
 }
 
