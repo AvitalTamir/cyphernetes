@@ -3,7 +3,8 @@ BINARY_NAME=cyphernetes
 TARGET_KERNELS=darwin linux
 TARGET_ARCHS=amd64 arm64
 # Define the default make target
-all: operator bt
+all: operator-manifests bt
+	@echo "🎉 Done!"
 
 # Build then Test
 bt: build test
@@ -14,7 +15,6 @@ build: gen-parser
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/
 	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes-darwin-arm64
-	@echo "🎉 Done!"
 
 build-all-platforms-and-archs:
 	@echo "👷 Building ${BINARY_NAME}..."
@@ -39,11 +39,17 @@ gen-parser:
 	@echo "🧠 Generating parser..."
 	goyacc -o pkg/parser/cyphernetes.go -p "yy" grammar/cyphernetes.y
 
-operator:
+operator-manifests:
 	@echo "🤖 Creating operator manifests..."
 	$(MAKE) -C operator deployment-manifests > /dev/null
 
-.PHONY: operator
+operator-docker-build:
+	# @echo "🐳 Building operator docker image..."
+	$(MAKE) -C operator docker-build IMG=fatliverfreddy/cyphernetes-operator:latest > /dev/null
+
+operator-docker-push:
+	@echo "🐳 Pushing operator docker image..."
+	$(MAKE) -C operator docker-push IMG=fatliverfreddy/cyphernetes-operator:latest > /dev/null
 
 # Define how to clean the build
 clean:
@@ -62,9 +68,13 @@ coverage:
 	@echo "🌎 Opening coverage report in browser..."
 	open file://$$(pwd)/.coverage/coverage.html
 
+operator-test:
+	@echo "🤖 Testing operator..."
+	$(MAKE) -C operator test | sed 's/^/   /g'
+
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
-.SILENT: build test gen-parser clean coverage operator
+.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push
 
 # Add a help command to list available targets
 help:
