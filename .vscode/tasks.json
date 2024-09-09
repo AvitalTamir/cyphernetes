@@ -4,10 +4,8 @@
         {
             "label": "operator-test-setup",
             "type": "shell",
-            "command": "cd ${workspaceFolder}/operator && make manifests generate fmt vet envtest",
-            "problemMatcher": [
-                "$go"
-            ]
+            "command": "make -C ${workspaceFolder}/operator envtest",
+            "problemMatcher": []
         }
     ]
 }

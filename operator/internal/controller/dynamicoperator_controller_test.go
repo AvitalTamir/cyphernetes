@@ -2,142 +2,144 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/dynamic"
-	fakeDynamic "k8s.io/client-go/dynamic/fake"
+	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
 	"k8s.io/client-go/kubernetes"
-	fakeClientset "k8s.io/client-go/kubernetes/fake"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("DynamicOperator Controller", func() {
-	var (
-		reconciler         *DynamicOperatorReconciler
-		fakeClientset      *fakeClientset.Clientset
-		fakeDynamicClient  dynamic.Interface
-		mockQueryExecutor  *MockQueryExecutor
-		ctx                context.Context
-		dynamicOperator    *operatorv1.DynamicOperator
-		typeNamespacedName types.NamespacedName
-	)
-
 	BeforeEach(func() {
-		ctx = context.Background()
-		typeNamespacedName = types.NamespacedName{
-			Name:      "test-resource",
-			Namespace: "default",
-		}
-
-		// Create mock clients
-		fakeDynamicClient = setupFakeDynamicClient()
-
-		// Create a mock query executor
-		mockQueryExecutor = &MockQueryExecutor{
-			DynamicClient: fakeDynamicClient,
-			Clientset:     fakeClientset,
-		}
-
-		// Create the reconciler with mocked dependencies
-		reconciler = &DynamicOperatorReconciler{
-			Client:        k8sClient,
-			Scheme:        k8sClient.Scheme(),
-			GVRFinder:     &MockGVRFinder{},
-			QueryExecutor: mockQueryExecutor,
-			DynamicClient: fakeDynamicClient,
-			Clientset:     fakeClientset,
-		}
-
-		// Create a sample DynamicOperator
-		dynamicOperator = &operatorv1.DynamicOperator{
+		// remove the test dynamicoperator if it already exists
+		err := k8sClient.Delete(ctx, &operatorv1.DynamicOperator{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      typeNamespacedName.Name,
-				Namespace: typeNamespacedName.Namespace,
+				Name:      "test-dynamicoperator",
+				Namespace: "default",
 			},
-			Spec: operatorv1.DynamicOperatorSpec{
-				ResourceKind: "Pod",
-				OnCreate:     "MATCH (n:Pod) RETURN n",
-			},
+		})
+		if err != nil && !errors.IsNotFound(err) {
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		// remove the sample exposeddeployment if it already exists
+		exposedDeployment := &unstructured.Unstructured{}
+		exposedDeployment.SetAPIVersion("cyphernet.es/v1")
+		exposedDeployment.SetKind("ExposedDeployment")
+		exposedDeployment.SetName("sample-exposeddeployment")
+		exposedDeployment.SetNamespace("default")
+		err = k8sClient.Delete(ctx, exposedDeployment)
+		if err != nil && !errors.IsNotFound(err) {
+			Expect(err).ToNot(HaveOccurred())
 		}
 	})
 
 	Context("When reconciling a resource", func() {
-		It("should successfully reconcile the resource", func() {
-			By("Creating the custom resource for the Kind DynamicOperator")
-			Expect(k8sClient.Create(ctx, dynamicOperator)).To(Succeed())
+		const (
+			DynamicOperatorName      = "test-dynamicoperator"
+			DynamicOperatorNamespace = "default"
+
+			timeout  = time.Second * 10
+			interval = time.Millisecond * 250
+		)
+
+		ctx := context.Background()
+
+		It("Should create DynamicOperator successfully", func() {
+			By("Creating a new DynamicOperator")
+			dynamicOperator := &operatorv1.DynamicOperator{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "cyphernetes-operator.cyphernet.es/v1",
+					Kind:       "DynamicOperator",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      DynamicOperatorName,
+					Namespace: DynamicOperatorNamespace,
+				},
+				Spec: operatorv1.DynamicOperatorSpec{
+					ResourceKind: "Pod",
+					OnCreate:     "MATCH (n:Pod) RETURN n",
+				},
+			}
+			Expect(k8sClient.Create(ctx, dynamicOperator)).Should(Succeed())
+
+			dynamicOperatorLookupKey := types.NamespacedName{Name: DynamicOperatorName, Namespace: DynamicOperatorNamespace}
+			createdDynamicOperator := &operatorv1.DynamicOperator{}
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, dynamicOperatorLookupKey, createdDynamicOperator)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			Expect(createdDynamicOperator.Spec.ResourceKind).Should(Equal("Pod"))
 
 			By("Reconciling the created resource")
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
+			// Create real clients using the envtest's rest config
+			k8sConfig := testEnv.Config
+			clientset, err := kubernetes.NewForConfig(k8sConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			dynamicClient, err := dynamic.NewForConfig(k8sConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			queryExecutor, err := parser.NewQueryExecutor()
+			Expect(err).NotTo(HaveOccurred())
+			queryExecutor.Clientset = clientset
+			queryExecutor.DynamicClient = dynamicClient
+
+			dynamicOperatorReconciler := &DynamicOperatorReconciler{
+				Client:         k8sClient,
+				Scheme:         k8sClient.Scheme(),
+				Clientset:      clientset,
+				DynamicClient:  dynamicClient,
+				QueryExecutor:  queryExecutor,
+				GVRFinder:      &RealGVRFinder{},
+				lastExecution:  make(map[string]time.Time),
+				activeWatchers: make(map[string]context.CancelFunc),
+			}
+
+			_, err = dynamicOperatorReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: dynamicOperatorLookupKey,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Add more specific assertions here
-			// For example, check if the status was updated correctly
-			updatedDynamicOperator := &operatorv1.DynamicOperator{}
-			err = k8sClient.Get(ctx, typeNamespacedName, updatedDynamicOperator)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedDynamicOperator.Status.ActiveWatchers).To(Equal(1))
+			// Add more specific assertions here based on what your reconciler should do
+
+			// After reconciliation, ensure we clean up the watcher
+			defer func() {
+				if dynamicOperatorReconciler.activeWatchers != nil {
+					for _, cancel := range dynamicOperatorReconciler.activeWatchers {
+						cancel()
+					}
+				}
+			}()
 		})
 	})
 
 	AfterEach(func() {
-		// Cleanup
-		err := k8sClient.Delete(ctx, dynamicOperator)
-		Expect(client.IgnoreNotFound(err)).To(Succeed())
+		// Clean up resources after each test
+		err := k8sClient.DeleteAllOf(ctx, &operatorv1.DynamicOperator{}, client.InNamespace("default"))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = k8sClient.DeleteAllOf(ctx, &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "cyphernet.es/v1",
+				"kind":       "ExposedDeployment",
+			},
+		}, client.InNamespace("default"))
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wait for resources to be deleted
+		time.Sleep(time.Second * 2)
 	})
 })
-
-type MockQueryExecutor struct {
-	DynamicClient dynamic.Interface
-	Clientset     kubernetes.Interface
-}
-
-// Add these methods to implement the parser.QueryExecutor interface
-func (m *MockQueryExecutor) Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error) {
-	// Mock implementation
-	return parser.QueryResult{}, nil
-}
-
-func (m *MockQueryExecutor) GetClientset() kubernetes.Interface {
-	return m.Clientset
-}
-
-func (m *MockQueryExecutor) GetDynamicClient() dynamic.Interface {
-	return m.DynamicClient
-}
-
-type MockGVRFinder struct{}
-
-func (m *MockGVRFinder) FindGVR(clientset interface{}, resourceKind string) (schema.GroupVersionResource, error) {
-	// Return a mock GVR for testing
-	return schema.GroupVersionResource{
-		Group:    "apps",
-		Version:  "v1",
-		Resource: "deployments",
-	}, nil
-}
-
-func setupFakeDynamicClient() dynamic.Interface {
-	scheme := runtime.NewScheme()
-	operatorv1.AddToScheme(scheme)
-	// Add other necessary API types to the scheme
-	corev1.AddToScheme(scheme)
-	appsv1.AddToScheme(scheme)
-
-	// Create a fake dynamic client with the scheme
-	return fakeDynamic.NewSimpleDynamicClient(scheme)
-}

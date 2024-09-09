@@ -6,7 +6,6 @@ toolchain go1.23.0
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
-	github.com/chzyer/readline v1.5.1
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/cobra v1.8.1
 	github.com/wader/readline v0.0.0-20230307172220-bcb7158e7448
