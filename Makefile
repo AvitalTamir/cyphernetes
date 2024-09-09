@@ -44,7 +44,7 @@ operator-manifests:
 	$(MAKE) -C operator deployment-manifests > /dev/null
 
 operator-docker-build:
-	# @echo "🐳 Building operator docker image..."
+	@echo "🐳 Building operator docker image..."
 	$(MAKE) -C operator docker-build IMG=fatliverfreddy/cyphernetes-operator:latest > /dev/null
 
 operator-docker-push:

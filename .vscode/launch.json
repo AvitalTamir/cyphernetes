@@ -2,7 +2,7 @@
     "version": "0.8.0",
     "configurations": [
         {
-            "name": "Shell",
+            "name": "CLI:Shell",
             "type": "go",
             "request": "launch",
             "mode": "debug",
@@ -11,7 +11,16 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Operator",
+            "name": "CLI:Test",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/cmd/cyphernetes",
+            "args": ["-test.v"],
+            "showLog": true
+        },
+        {
+            "name": "Operator:Run",
             "type": "go",
             "request": "launch",
             "mode": "debug",
@@ -25,12 +34,19 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Run Tests",
+            "name": "Operator:Test",
             "type": "go",
             "request": "launch",
             "mode": "test",
-            "program": "${workspaceFolder}/cmd/cyphernetes",
+            "program": "${workspaceFolder}/operator/test/e2e",
             "args": ["-test.v"],
+            "env": {
+                "KUBEBUILDER_ASSETS": "${workspaceFolder}/operator/bin/k8s/${env:ENVTEST_K8S_VERSION}-${env:GOOS:-darwin}-${env:GOARCH:-arm64}",
+                "ENVTEST_K8S_VERSION": "1.31.0",
+                "GOOS": "${env:GOOS:-darwin}",
+                "GOARCH": "${env:GOARCH:-arm64}"
+            },
+            "preLaunchTask": "operator-test-setup",
             "showLog": true
         }
     ]
