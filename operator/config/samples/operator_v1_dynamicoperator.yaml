@@ -1,0 +1,9 @@
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  labels:
+    app.kubernetes.io/name: cyphernetes-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: dynamicoperator-sample
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,7 @@
+apiVersion: cyphernet.es/v1
+kind: ExposedDeployment
+metadata:
+  name: sample-exposeddeployment
+  namespace: default
+spec:
+  image: nginx

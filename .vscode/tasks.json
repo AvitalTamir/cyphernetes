@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "operator-test-setup",
+            "type": "shell",
+            "command": "make -C ${workspaceFolder}/operator envtest",
+            "problemMatcher": []
+        }
+    ]
+}

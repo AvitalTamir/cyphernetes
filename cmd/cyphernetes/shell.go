@@ -4,22 +4,27 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
+	"os/signal"
+	"syscall"
+
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/chzyer/readline"
 	cobra "github.com/spf13/cobra"
+	"github.com/wader/readline"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 //go:embed default_macros.txt
 var defaultMacros string
 var executeStatementFunc = executeStatement
+var ctx string
 
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
@@ -53,14 +58,8 @@ func shellPrompt() string {
 		ns = "ALL NAMESPACES"
 		color = "31"
 	}
-	// Get the name of the current Kubernetes context
-	context, err := getCurrentContext()
-	if err != nil {
-		fmt.Println("Error getting current context: ", err)
-		return ""
-	}
 
-	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, context, ns)
+	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, ctx, ns)
 }
 
 func SetQueryExecutor(exec *parser.QueryExecutor) {
@@ -69,11 +68,11 @@ func SetQueryExecutor(exec *parser.QueryExecutor) {
 
 var getCurrentContextFunc = getCurrentContextFromConfig
 
-func getCurrentContext() (string, error) {
+func getCurrentContext() (string, string, error) {
 	return getCurrentContextFunc()
 }
 
-func getCurrentContextFromConfig() (string, error) {
+func getCurrentContextFromConfig() (string, string, error) {
 	// Use the local kubeconfig context
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
@@ -81,11 +80,12 @@ func getCurrentContextFromConfig() (string, error) {
 			CurrentContext: "",
 		}).RawConfig()
 	if err != nil {
-		fmt.Println("Error creating in-cluster config")
-		return "", err
+		fmt.Println("Error getting current context from kubeconfig")
+		return "", "", err
 	}
 	currentContextName := config.CurrentContext
-	return currentContextName, nil
+	namespace := config.Contexts[currentContextName].Namespace
+	return currentContextName, namespace, nil
 }
 
 type syntaxHighlighter struct{}
@@ -135,31 +135,6 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		return match
 	})
 
-	// in lineStr, find all text (.*) between { and } and strip all color codes:
-	// - all text that looks like "\x1b[33m" or "\x1b[36m" or "\x1b[90m" or "\x1b[37m" or "\x1b[35m" or "\x1b[0m"
-	// - all text that looks like "\x1b[([0-9;]+)m"
-	// - all text that looks like "\033[33m" or "\033[36m" or "\033[90m" or "\033[37m" or "\033[35m" or "\033[0m"
-	// // Strip color codes from text between { and }
-	// lineStr = regexp.MustCompile(`\{([^}]*)\}`).ReplaceAllStringFunc(lineStr, func(match string) string {
-	// 	// Remove all ANSI color codes
-	// 	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(match, "")
-
-	// 	// Apply new coloring while preserving original spacing
-	// 	colored := propertiesRegex.ReplaceAllStringFunc(stripped, func(propMatch string) string {
-	// 		parts := propertiesRegex.FindStringSubmatch(propMatch)
-	// 		if len(parts) == 4 {
-	// 			key := parts[1]
-	// 			spacing := parts[2]
-	// 			value := parts[3]
-	// 			return fmt.Sprintf("\033[33m%s\033[0m%s\033[36m%s\033[0m", key, spacing, value)
-	// 		}
-	// 		return propMatch
-	// 	})
-
-	// 	// Ensure color is reset at the end
-	// 	return colored
-	// })
-
 	// Colorize properties
 	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
 		return colorizeProperties(match)
@@ -202,25 +177,36 @@ func colorizeProperties(obj string) string {
 	return "{" + colored + "}"
 }
 
+type Listener interface {
+	OnChange(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool)
+}
+
 func runShell(cmd *cobra.Command, args []string) {
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:                 shellPrompt(),
 		HistoryFile:            historyFile,
 		AutoComplete:           completer,
-		InterruptPrompt:        "^C",
+		InterruptPrompt:        "", // Set this to empty string
 		EOFPrompt:              "exit",
 		Painter:                &syntaxHighlighter{},
 		DisableAutoSaveHistory: true,
-
-		HistorySearchFold:   true,
-		FuncFilterInputRune: filterInput,
+		HistorySearchFold:      true,
+		FuncFilterInputRune:    filterInput,
 	})
 	if err != nil {
 		panic(err)
 	}
 	defer rl.Close()
-	rl.CaptureExitSignal()
+
+	rl.Config.SetListener(func(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool) {
+		rl.Refresh()
+		return line, pos, false
+	})
+
+	// Set up a channel to receive interrupt signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	fmt.Println("Cyphernetes Interactive Shell")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
@@ -231,11 +217,28 @@ func runShell(cmd *cobra.Command, args []string) {
 
 	var cmds []string
 	var input string
+	executing := false
+
+	go func() {
+		for range sigChan {
+			handleInterrupt(rl, &cmds, &executing)
+		}
+	}()
 
 	for {
 		line, err := rl.Readline()
-		if err != nil { // io.EOF, Ctrl-D
-			break
+		if err != nil {
+			if err == readline.ErrInterrupt {
+				if len(line) == 0 {
+					fmt.Println("\nExiting...")
+					return
+				}
+				continue
+			} else if err == io.EOF {
+				break
+			}
+			fmt.Println("Error reading input:", err)
+			continue
 		}
 
 		if strings.HasPrefix(line, ":") {
@@ -357,8 +360,10 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println("\\lm                - List all registered macros")
 			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
+			executing = true
 			// Process the input if not empty
 			result, graph, err := processQuery(input)
+			executing = false
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 				continue
@@ -381,8 +386,6 @@ func runShell(cmd *cobra.Command, args []string) {
 				fmt.Printf("\nQuery executed in %s\n\n", execTime)
 			}
 		}
-		// Add input to history
-		// rl.SaveHistory(input)
 	}
 }
 
@@ -497,7 +500,7 @@ func executeStatement(query string) (string, error) {
 		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
 
-	results, err := executor.Execute(ast)
+	results, err := executor.Execute(ast, "")
 	if err != nil {
 		return "", fmt.Errorf("error executing query >> %s", err)
 	}
@@ -556,4 +559,34 @@ func init() {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
 	}
+
+	// Get the name of the current Kubernetes context
+	contextName, namespace, err := getCurrentContext()
+	if err != nil {
+		fmt.Println("Error getting current context: ", err)
+		return
+	}
+	ctx = contextName
+
+	if namespace != "" && namespace != "default" {
+		parser.Namespace = namespace
+	}
+}
+
+func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
+	if *executing {
+		// If we're executing a query, do nothing
+		return
+	}
+
+	if len(*cmds) == 0 {
+		// If the input is empty, exit the program
+		fmt.Println("\nExiting...")
+		os.Exit(0)
+	}
+
+	// Clear the current input and reset the prompt
+	*cmds = []string{}
+	rl.SetPrompt(shellPrompt())
+	rl.Refresh()
 }

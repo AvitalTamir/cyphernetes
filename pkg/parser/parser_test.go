@@ -559,8 +559,9 @@ func TestMatchSetExpression(t *testing.T) {
 			&SetClause{
 				KeyValuePairs: []*KeyValuePair{
 					{
-						Key:   "n.name",
-						Value: "test",
+						Key:      "n.name",
+						Value:    "test",
+						Operator: "EQUALS",
 					},
 				},
 			},
@@ -706,8 +707,9 @@ func TestMatchWhereReturn(t *testing.T) {
 				Relationships: []*Relationship{},
 				ExtraFilters: []*KeyValuePair{
 					{
-						Key:   "k.name",
-						Value: "test",
+						Key:      "k.name",
+						Value:    "test",
+						Operator: "EQUALS",
 					},
 				},
 			},
@@ -747,8 +749,9 @@ func TestMatchWhereReturnAs(t *testing.T) {
 				Relationships: []*Relationship{},
 				ExtraFilters: []*KeyValuePair{
 					{
-						Key:   "k.name",
-						Value: "test",
+						Key:      "k.name",
+						Value:    "test",
+						Operator: "EQUALS",
 					},
 				},
 			},
@@ -768,6 +771,233 @@ func TestMatchWhereReturnAs(t *testing.T) {
 
 	// Check if the resulting AST matches the expected structure
 	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
+	}
+}
+
+// Add these new test functions to the existing parser_test.go file
+
+func TestParseQueryWithNotEquals(t *testing.T) {
+	query := `MATCH (d:Deployment) WHERE d.spec.replicas != 3 RETURN d.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "Deployment",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "d.spec.replicas",
+						Value:    3,
+						Operator: "NOT_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithGreaterThan(t *testing.T) {
+	query := `MATCH (p:Pod) WHERE p.spec.containers[0].resources.limits.cpu > "500m" RETURN p.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "p",
+							Kind: "Pod",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "p.spec.containers[0].resources.limits.cpu",
+						Value:    "500m",
+						Operator: "GREATER_THAN",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "p.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithLessThan(t *testing.T) {
+	query := `MATCH (n:Node) WHERE n.status.allocatable.memory < "16Gi" RETURN n.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "n.status.allocatable.memory",
+						Value:    "16Gi",
+						Operator: "LESS_THAN",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "n.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithGreaterThanOrEqual(t *testing.T) {
+	query := `MATCH (d:Deployment) WHERE d.spec.replicas >= 5 RETURN d.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "Deployment",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "d.spec.replicas",
+						Value:    5,
+						Operator: "GREATER_THAN_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithLessThanOrEqual(t *testing.T) {
+	query := `MATCH (p:Pod) WHERE p.spec.containers[0].resources.requests.memory <= "512Mi" RETURN p.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "p",
+							Kind: "Pod",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "p.spec.containers[0].resources.requests.memory",
+						Value:    "512Mi",
+						Operator: "LESS_THAN_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "p.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithMultipleComparisons(t *testing.T) {
+	query := `MATCH (d:Deployment) WHERE d.spec.replicas > 2, d.metadata.name != "default", d.spec.template.spec.containers[0].resources.limits.cpu <= "1" RETURN d.metadata.name, d.spec.replicas`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "Deployment",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "d.spec.replicas",
+						Value:    2,
+						Operator: "GREATER_THAN",
+					},
+					{
+						Key:      "d.metadata.name",
+						Value:    "default",
+						Operator: "NOT_EQUALS",
+					},
+					{
+						Key:      "d.spec.template.spec.containers[0].resources.limits.cpu",
+						Value:    "1",
+						Operator: "LESS_THAN_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+					{JsonPath: "d.spec.replicas"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+// Helper function to reduce boilerplate in test cases
+func testParseQuery(t *testing.T, query string, expected *Expression) {
+	expr, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	if !reflect.DeepEqual(expr, expected) {
+		exprJson, _ := json.Marshal(expr)
+		expectedJson, _ := json.Marshal(expected)
+		fmt.Printf("expr: %+v\n", string(exprJson))
+		fmt.Printf("expected: %+v\n", string(expectedJson))
 		t.Errorf("ParseQuery() = %v, want %v", expr, expected)
 	}
 }

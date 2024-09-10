@@ -32,11 +32,18 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 	if len(words) > 0 {
 
-		// Check if the last word starts with a '(', followed by a word, followed by a colon and we're now directly after the colon
-		// make the check with regex:
-		resourceKindIdentifierRegex := regexp.MustCompile(`\(\w+:\w+$`)
+		// Check if the last word starts with a '(', followed by a word, followed by a colon
+		// or if it's a connected node pattern
+		resourceKindIdentifierRegex := regexp.MustCompile(`(\(\w+:\w+$|\)->\(\w+:\w+$)`)
 		if resourceKindIdentifierRegex.MatchString(lastWord) {
-			identifier := strings.SplitAfter(lastWord, ":")[1]
+			var identifier string
+			if strings.Contains(lastWord, ")->") {
+				// For connected nodes, get the last node
+				parts := strings.Split(lastWord, ")->")
+				identifier = strings.SplitAfter(parts[len(parts)-1], ":")[1]
+			} else {
+				identifier = strings.SplitAfter(lastWord, ":")[1]
+			}
 			resourceKinds := getResourceKinds(identifier)
 			for _, kind := range resourceKinds {
 				if strings.HasPrefix(kind, identifier) {

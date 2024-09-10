@@ -14,7 +14,7 @@ type MockQueryExecutor struct {
 	ExecuteFunc func(expr *parser.Expression) (parser.QueryResult, error)
 }
 
-func (m *MockQueryExecutor) Execute(expr *parser.Expression) (parser.QueryResult, error) {
+func (m *MockQueryExecutor) Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error) {
 	return m.ExecuteFunc(expr)
 }
 
@@ -89,8 +89,8 @@ func TestRunQuery(t *testing.T) {
 			}
 
 			// Replace the Execute method
-			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression) (parser.QueryResult, error) {
-				return mockExecutor.Execute(expr)
+			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression, namespace string) (parser.QueryResult, error) {
+				return mockExecutor.Execute(expr, "")
 			}
 
 			// Restore original functions after test

@@ -1,0 +1,36 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+    - name: Setup Kind
+      uses: engineerd/setup-kind@v0.5.0
+      with:
+        version: "v0.11.1"
+    - name: Install Envtest
+      run: |
+        go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+        setup-envtest use
+        echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path)" >> $GITHUB_ENV
+    - name: Install goyacc
+      run: go install golang.org/x/tools/cmd/goyacc@latest
+    - name: Create the operator manifests
+      run: make operator-manifests
+    - name: Run tests
+      run: make test
+    - name: Run operator tests
+      env:
+        KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_ASSETS }}
+      run: make operator-test
+    - name: Build operator docker image
+      run: make -C operator docker-build

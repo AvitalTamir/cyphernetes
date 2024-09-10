@@ -44,7 +44,10 @@ type QueryResult struct {
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
-func (q *QueryExecutor) Execute(ast *Expression) (QueryResult, error) {
+func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
+	if namespace != "" {
+		Namespace = namespace
+	}
 	results := &QueryResult{
 		Data: make(map[string]interface{}),
 		Graph: Graph{
@@ -980,12 +983,37 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					logDebug("Path not found:", filter.Key)
 					// remove the resource from the slice
 					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+					continue
 				}
-				// convert the result and the value to strings and compare them
-				resultStr := fmt.Sprintf("%v", result)
-				valueStr := fmt.Sprintf("%v", filter.Value)
 
-				if resultStr != valueStr {
+				// Convert result and filter.Value to comparable types
+				resultValue, filterValue, err := convertToComparableTypes(result, filter.Value)
+				if err != nil {
+					logDebug(fmt.Sprintf("Error converting types: %v", err))
+					continue
+				}
+
+				keep := false
+				switch filter.Operator {
+				case "EQUALS":
+					keep = reflect.DeepEqual(resultValue, filterValue)
+				case "NOT_EQUALS":
+					keep = !reflect.DeepEqual(resultValue, filterValue)
+				case "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUALS", "LESS_THAN_EQUALS":
+					if resultNum, ok := resultValue.(float64); ok {
+						if filterNum, ok := filterValue.(float64); ok {
+							keep = compareNumbers(resultNum, filterNum, filter.Operator)
+						} else {
+							logDebug(fmt.Sprintf("Invalid comparison: %v is not a number", filterValue))
+						}
+					} else {
+						logDebug(fmt.Sprintf("Invalid comparison: %v is not a number", resultValue))
+					}
+				default:
+					logDebug(fmt.Sprintf("Unknown operator: %s", filter.Operator))
+				}
+
+				if !keep {
 					// remove the resource from the slice
 					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
 				}
@@ -1099,5 +1127,57 @@ func patchResultMap(result map[string]interface{}, fullPath string, newValue int
 		newMap := make(map[string]interface{})
 		result[nextLevel] = newMap
 		patchResultMap(newMap, remainingPath, newValue)
+	}
+}
+
+func convertToComparableTypes(result, filterValue interface{}) (interface{}, interface{}, error) {
+	// If both are already the same type, return them as is
+	if reflect.TypeOf(result) == reflect.TypeOf(filterValue) {
+		return result, filterValue, nil
+	}
+
+	// Try to convert both to float64 for numeric comparisons
+	resultFloat, resultErr := toFloat64(result)
+	filterFloat, filterErr := toFloat64(filterValue)
+
+	if resultErr == nil && filterErr == nil {
+		return resultFloat, filterFloat, nil
+	}
+
+	// If conversion to float64 failed, convert both to strings
+	return fmt.Sprintf("%v", result), fmt.Sprintf("%v", filterValue), nil
+}
+
+func toFloat64(v interface{}) (float64, error) {
+	switch v := v.(type) {
+	case float64:
+		return v, nil
+	case float32:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case int32:
+		return float64(v), nil
+	case int64:
+		return float64(v), nil
+	case string:
+		return strconv.ParseFloat(v, 64)
+	default:
+		return 0, fmt.Errorf("cannot convert %v to float64", v)
+	}
+}
+
+func compareNumbers(a, b float64, operator string) bool {
+	switch operator {
+	case "GREATER_THAN":
+		return a > b
+	case "LESS_THAN":
+		return a < b
+	case "GREATER_THAN_EQUALS":
+		return a >= b
+	case "LESS_THAN_EQUALS":
+		return a <= b
+	default:
+		return false
 	}
 }

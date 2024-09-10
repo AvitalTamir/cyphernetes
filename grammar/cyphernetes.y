@@ -52,7 +52,7 @@ func debugLog(v ...interface{}) {
 %token <strVal> JSONDATA
 %token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS AS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
-%token COUNT SUM
+%token COUNT SUM NOT_EQUALS GREATER_THAN LESS_THAN GREATER_THAN_EQUALS LESS_THAN_EQUALS
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -156,7 +156,22 @@ KeyValuePairs:
 // JSONPathValue represents a JSONPath=Value pair
 KeyValuePair:
     JSONPATH EQUALS Value {
-        $$ = &KeyValuePair{Key: $1, Value: $3}
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "EQUALS"} // ==
+    }
+    | JSONPATH NOT_EQUALS Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "NOT_EQUALS"} // !=
+    }
+    | JSONPATH GREATER_THAN Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "GREATER_THAN"} // >
+    }
+    | JSONPATH LESS_THAN Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "LESS_THAN"} // <
+    }
+    | JSONPATH GREATER_THAN_EQUALS Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "GREATER_THAN_EQUALS"} // >=
+    }
+    | JSONPATH LESS_THAN_EQUALS Value {
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "LESS_THAN_EQUALS"} // <=
     }
 ;
 

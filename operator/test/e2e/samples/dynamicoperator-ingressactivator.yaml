@@ -1,0 +1,15 @@
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: ingress-activator-operator
+  namespace: default
+spec:
+  resourceKind: deployments
+  namespace: default
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";

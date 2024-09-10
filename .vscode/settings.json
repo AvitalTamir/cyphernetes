@@ -1,0 +1,8 @@
+{
+    "makefile.configureOnOpen": false,
+    "go.testEnvVars": {
+        "CGO_ENABLED": "1"
+    },
+    "go.testFlags": ["-v"],
+    "go.testTimeout": "30s"
+}
