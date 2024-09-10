@@ -19,10 +19,10 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
     - name: Login to DockerHub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
     - name: Extract version
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -47,7 +47,7 @@ jobs:
         helm push cyphernetes-operator-*.tgz oci://ghcr.io/${{ github.repository }}/charts
     - name: Build CLI for all platforms
       run: |
-        make build-all-platforms-and-archs
+        make operator-manifests build-all-platforms-and-archs
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -55,7 +55,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        release_name: ${{ github.ref }}
         draft: true
         prerelease: false
 
