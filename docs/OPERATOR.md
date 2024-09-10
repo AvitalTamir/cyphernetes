@@ -35,10 +35,13 @@ The operator can be installed either using helm, or using the Cyphernetes CLI.
 
 To install the operator using helm, run the following command:
 ```bash
-helm upgrade --install cyphernetes-operator cyphernetes/cyphernetes-operator --namespace cyphernetes-operator --create-namespace
+helm pull oci://ghcr.io/avitaltamir/cyphernetes/cyphernetes-operator
+tar -xvf cyphernetes-operator-*.tgz
+cd cyphernetes-operator
+helm upgrade --install cyphernetes-operator . --namespace cyphernetes-operator --create-namespace
 ```
 
-Make sure to visit the values.yaml file to configure the operator's RBAC rules.
+Make sure to edit the values.yaml file and configure the operator's RBAC rules.
 By default, the operator will have no permissions and will not be able to watch any resources.
 
 ### Cyphernetes CLI
