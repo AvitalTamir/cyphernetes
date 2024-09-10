@@ -15,6 +15,8 @@ jobs:
         go-version: '1.22'
     - name: Install goyacc
       run: go install golang.org/x/tools/cmd/goyacc@latest
+    - name: Create the operator manifests
+      run: make operator-manifests
     - name: Run tests
       run: make test
     - name: Run operator tests
