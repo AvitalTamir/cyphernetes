@@ -15,6 +15,8 @@ jobs:
         go-version: '1.22'
     - name: Setup Kind
       uses: engineerd/setup-kind@v0.5.0
+      with:
+        version: "v0.11.1"
     - name: Install Envtest
       run: |
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
