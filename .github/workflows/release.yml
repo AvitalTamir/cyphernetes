@@ -43,7 +43,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         helm package operator/helm/cyphernetes-operator
-        echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+        echo ${{ secrets.PACKAGES_PUSH_TOKEN }} | helm registry login ghcr.io -u avitaltamir --password-stdin
         helm push cyphernetes-operator-*.tgz oci://ghcr.io/avitaltamir/cyphernetes
     - name: Build CLI for all platforms
       run: |
