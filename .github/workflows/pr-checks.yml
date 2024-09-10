@@ -13,15 +13,13 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.22'
-    - name: Setup Envtest
-      uses: kubernetes-sigs/setup-kind@v0.7.0
-      with:
-        version: "v0.20.0"
+    - name: Setup Kind
+      uses: engineerd/setup-kind@v0.5.0
     - name: Install Envtest
       run: |
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-        setup-envtest use 1.30.0
-        echo "KUBEBUILDER_ASSETS=$(setup-envtest use 1.30.0 -p path)" >> $GITHUB_ENV
+        setup-envtest use
+        echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path)" >> $GITHUB_ENV
     - name: Setup KinD
       uses: engineerd/setup-kind@v0.5.0
       with:
