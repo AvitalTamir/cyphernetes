@@ -6,6 +6,7 @@ metadata:
   labels:
     control-plane: controller-manager
     {{- include "cyphernetes-operator.labels" . | nindent 4 }}
+    app: cyphernetes-operator
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -17,6 +18,7 @@ spec:
         kubectl.kubernetes.io/default-container: manager
       labels:
         control-plane: controller-manager
+        app: cyphernetes-operator
     spec:
       securityContext:
         runAsNonRoot: true

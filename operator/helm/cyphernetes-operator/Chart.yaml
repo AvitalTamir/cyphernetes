@@ -9,8 +9,8 @@ keywords:
   - cyphernetes
   - operator
 maintainers:
-  - name: Your Name
-    email: your.email@example.com
+  - name: Avital Tamir
+    email: avital@cyphernet.es
 # Add this line to include the CRD
 dependencies:
   - name: crds
