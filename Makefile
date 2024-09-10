@@ -71,6 +71,7 @@ coverage:
 operator-test:
 	@echo "🤖 Testing operator..."
 	$(MAKE) -C operator test | sed 's/^/   /g'
+	$(MAKE) -C operator test-e2e | sed 's/^/   /g'
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
