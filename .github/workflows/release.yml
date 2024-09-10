@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+    - name: Install goyacc
+      run: go install golang.org/x/tools/cmd/goyacc@latest
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Extract version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    - name: Build and push operator image
+      env:
+        IMG: fatliverfreddy/cyphernetes-operator:${{ steps.get_version.outputs.VERSION }}
+      run: |
+        make -C operator docker-build IMG=$IMG
+        docker push $IMG
+        docker tag $IMG fatliverfreddy/cyphernetes-operator:latest
+        docker push fatliverfreddy/cyphernetes-operator:latest
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.12.0
+    - name: Package and push Helm chart
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        helm package operator/helm/cyphernetes-operator
+        echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+        helm push cyphernetes-operator-*.tgz oci://ghcr.io/${{ github.repository }}/charts
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
