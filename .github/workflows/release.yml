@@ -39,8 +39,6 @@ jobs:
       with:
         version: v3.12.0
     - name: Package and push Helm chart
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         helm package operator/helm/cyphernetes-operator
         echo ${{ secrets.PACKAGES_PUSH_TOKEN }} | helm registry login ghcr.io -u avitaltamir --password-stdin
@@ -52,7 +50,7 @@ jobs:
       id: create_release
       uses: actions/create-release@v1
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
       with:
         tag_name: ${{ github.ref }}
         release_name: ${{ github.ref }}
