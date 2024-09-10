@@ -8,8 +8,6 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
     - uses: actions/checkout@v3
     - name: Set up Go
@@ -58,29 +56,15 @@ jobs:
         release_name: ${{ github.ref }}
         draft: true
         prerelease: false
-
-  upload-assets:
-    needs: release
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - os: darwin
-            arch: amd64
-          - os: darwin
-            arch: arm64
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm64
-    steps:
-    - uses: actions/checkout@v3
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+    - name: Upload Release Assets
       env:
         GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ needs.release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-${{ matrix.os }}-${{ matrix.arch }}
-        asset_name: cyphernetes-${{ matrix.os }}-${{ matrix.arch }}
-        asset_content_type: application/octet-stream
+      run: |
+        for asset in ./dist/cyphernetes-*; do
+          asset_name=$(basename "$asset")
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.PACKAGES_PUSH_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$asset" \
+            "${{ steps.create_release.outputs.upload_url }}?name=$asset_name"
+        done
