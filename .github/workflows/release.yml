@@ -56,15 +56,42 @@ jobs:
         release_name: ${{ github.ref }}
         draft: true
         prerelease: false
-    - name: Upload Release Assets
+    - name: Upload Release Asset - Linux AMD64
+      id: upload-release-asset-linux-amd64
+      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      run: |
-        for asset in ./dist/cyphernetes-*; do
-          asset_name=$(basename "$asset")
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.PACKAGES_PUSH_TOKEN }}" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"$asset" \
-            "${{ steps.create_release.outputs.upload_url }}?name=$asset_name"
-        done
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: ./dist/cyphernetes-linux-amd64
+        asset_name: cyphernetes-linux-amd64
+        asset_content_type: application/octet-stream
+    - name: Upload Release Asset - Linux ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cyphernetes-linux-arm64
+        asset_name: cyphernetes-linux-arm64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - Darwin AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cyphernetes-darwin-amd64
+        asset_name: cyphernetes-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - Darwin ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cyphernetes-darwin-arm64
+        asset_name: cyphernetes-darwin-arm64
+        asset_content_type: application/octet-stream
