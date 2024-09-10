@@ -44,7 +44,7 @@ jobs:
       run: |
         helm package operator/helm/cyphernetes-operator
         echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-        helm push cyphernetes-operator-*.tgz oci://ghcr.io/${{ github.repository }}
+        helm push cyphernetes-operator-*.tgz oci://ghcr.io/avitaltamir/cyphernetes
     - name: Build CLI for all platforms
       run: |
         make operator-manifests build-all-platforms-and-archs
