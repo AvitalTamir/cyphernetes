@@ -29,6 +29,8 @@ jobs:
     - name: Run tests
       run: make test
     - name: Run operator tests
+      env:
+        KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_ASSETS }}
       run: make operator-test
     - name: Build operator docker image
       run: make -C operator docker-build
