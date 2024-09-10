@@ -240,10 +240,17 @@ DELETE d, s;
 
 			By("Creating a sample ExposedDeployment")
 			exposedDeployment := &unstructured.Unstructured{}
-			exposedDeployment.SetAPIVersion("cyphernet.es/v1")
-			exposedDeployment.SetKind("ExposedDeployment")
-			exposedDeployment.SetName("sample-exposeddeployment")
-			exposedDeployment.SetNamespace(DynamicOperatorNamespace)
+			exposedDeployment.Object = map[string]interface{}{
+				"apiVersion": "cyphernet.es/v1",
+				"kind":       "ExposedDeployment",
+				"metadata": map[string]interface{}{
+					"name":      "sample-exposeddeployment",
+					"namespace": DynamicOperatorNamespace,
+				},
+				"spec": map[string]interface{}{
+					"image": "nginx",
+				},
+			}
 			Expect(k8sClient.Create(ctx, exposedDeployment)).Should(Succeed())
 
 			By("Verifying the Deployment is created")
@@ -268,9 +275,8 @@ DELETE d, s;
 				return true
 			}, timeout, interval).Should(BeTrue())
 
-			// By("Verifying the Deployment's image has been templated correctly")
-			// log.Printf("Deployment: %v", deployment)
-			// Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx"))
+			By("Verifying the Deployment's image has been templated correctly")
+			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("nginx"))
 
 			By("Verifying the Deployment has the correct owner reference")
 			Expect(deployment.OwnerReferences).To(HaveLen(1))
