@@ -205,7 +205,7 @@ RETURN p.metadata.name, p.status.phase
 ```
 
 ```graphql
-# Find all zero-scaled deployments and set their related ingresses' ingressClassName to "inactive"
+# Find all deployments scaled above zero and set their related ingresses' ingressClassName to "active"
 MATCH (d:Deployment)->(s:Service)->(i:Ingress)
 WHERE d.spec.replicas >= 1
 SET i.spec.ingressClassName = "active"
@@ -298,8 +298,7 @@ RETURN s.metadata.name, s.spec.ports
 }
 ```
 
-Cyphernetes knows how to find related resources using a set of predefined rules. For example, Cyphernetes knows that a Service exposes a Deployment if the Service's `spec.selector` matches the Deployment's `metadata.labels`.
-
+Cyphernetes knows how to find related resources using a set of predefined rules. For example, Cyphernetes knows that a Service exposes a Deployment if the two resources have matching selectors.
 Similarly, Cyphernetes knows that a Deployment owns a ReplicaSet if the ReplicaSet's `metadata.ownerReferences` contains a reference to the Deployment.
 
 ### Relationships with Multiple Nodes
