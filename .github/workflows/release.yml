@@ -13,7 +13,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.22'
+        go-version-file: go.mod
     - name: Install goyacc
       run: go install golang.org/x/tools/cmd/goyacc@latest
     - name: Set up Docker Buildx
@@ -62,7 +62,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
         asset_path: ./dist/cyphernetes-linux-amd64
         asset_name: cyphernetes-linux-amd64
         asset_content_type: application/octet-stream
