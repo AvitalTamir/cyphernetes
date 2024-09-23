@@ -193,6 +193,7 @@ func runShell(cmd *cobra.Command, args []string) {
 		DisableAutoSaveHistory: true,
 		HistorySearchFold:      true,
 		FuncFilterInputRune:    filterInput,
+		UniqueEditLine:         true,
 	})
 	if err != nil {
 		panic(err)
@@ -227,6 +228,7 @@ func runShell(cmd *cobra.Command, args []string) {
 
 	for {
 		line, err := rl.Readline()
+		fmt.Print("\n")
 		if err != nil {
 			if err == readline.ErrInterrupt {
 				if len(line) == 0 {
