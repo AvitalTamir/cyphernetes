@@ -18,6 +18,7 @@ import (
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
