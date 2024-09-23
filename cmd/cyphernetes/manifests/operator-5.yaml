@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: cyphernetes-operator
+  name: cyphernetes-operator-dynamicoperator-viewer-role
+rules:
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/status
+  verbs:
+  - get
