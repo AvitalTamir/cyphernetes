@@ -28,4 +28,3 @@ y.output
 .DS_Store
 
 .coverage
-cmd/cyphernetes/manifests/*.yaml

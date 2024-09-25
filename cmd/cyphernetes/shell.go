@@ -18,6 +18,7 @@ import (
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -193,6 +194,7 @@ func runShell(cmd *cobra.Command, args []string) {
 		DisableAutoSaveHistory: true,
 		HistorySearchFold:      true,
 		FuncFilterInputRune:    filterInput,
+		UniqueEditLine:         true,
 	})
 	if err != nil {
 		panic(err)
@@ -227,6 +229,7 @@ func runShell(cmd *cobra.Command, args []string) {
 
 	for {
 		line, err := rl.Readline()
+		fmt.Print("\n")
 		if err != nil {
 			if err == readline.ErrInterrupt {
 				if len(line) == 0 {

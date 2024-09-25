@@ -22,7 +22,7 @@ const (
 	CronJobOwnPod                          RelationshipType = "CRONJOB_OWN_POD"
 	CronJobOwnJob                          RelationshipType = "CRONJOB_OWN_JOB"
 	PVBoundPVC                             RelationshipType = "PV_BOUND_PVC"
-	ServiceOwnEndpoints                    RelationshipType = "SERVICE_OWN_ENDPOINTS"
+	ServiceHasEndpoints                    RelationshipType = "SERVICE_HAS_ENDPOINTS"
 	PodUseConfigMap                        RelationshipType = "POD_USE_CONFIGMAP"
 	PodUseSecret                           RelationshipType = "POD_USE_SECRET"
 	NetworkPolicyApplyPod                  RelationshipType = "NETWORKPOLICY_APPLY_POD"
@@ -102,7 +102,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "cronjobs",
-		Relationship: RelationshipType("CRONJOB_OWN_POD"),
+		Relationship: CronJobOwnPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.ownerReferences[].name",
@@ -114,7 +114,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "jobs",
 		KindB:        "cronjobs",
-		Relationship: RelationshipType("CRONJOB_OWN_JOB"),
+		Relationship: CronJobOwnJob,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.ownerReferences[].name",
@@ -126,7 +126,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "persistentvolumeclaims",
 		KindB:        "persistentvolumes",
-		Relationship: RelationshipType("PV_BOUND_PVC"),
+		Relationship: PVBoundPVC,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.spec.volumeName",
@@ -138,10 +138,10 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "endpoints",
 		KindB:        "services",
-		Relationship: RelationshipType("SERVICE_OWN_ENDPOINTS"),
+		Relationship: ServiceHasEndpoints,
 		MatchCriteria: []MatchCriterion{
 			{
-				FieldA:         "$.metadata.ownerReferences[].name",
+				FieldA:         "$.metadata.name",
 				FieldB:         "$.metadata.name",
 				ComparisonType: ExactMatch,
 			},
@@ -150,7 +150,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "configmaps",
 		KindB:        "pods",
-		Relationship: RelationshipType("POD_USE_CONFIGMAP"),
+		Relationship: PodUseConfigMap,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -162,7 +162,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "secrets",
 		KindB:        "pods",
-		Relationship: RelationshipType("POD_USE_SECRET"),
+		Relationship: PodUseSecret,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -174,7 +174,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "networkpolicies",
 		KindB:        "pods",
-		Relationship: RelationshipType("NETWORKPOLICY_APPLY_POD"),
+		Relationship: NetworkPolicyApplyPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.spec.podSelector.matchLabels",
@@ -186,7 +186,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "horizontalpodautoscalers",
 		KindB:        "deployments",
-		Relationship: RelationshipType("HPA_SCALE_DEPLOYMENT"),
+		Relationship: HPAScaleDeployment,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.spec.scaleTargetRef.name",
@@ -358,7 +358,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "pods",
 		KindB:        "nodes",
-		Relationship: RelationshipType("NODE_RUN_POD"),
+		Relationship: NodeRunPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.spec.nodeName",
@@ -370,7 +370,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "serviceaccounts",
 		KindB:        "pods",
-		Relationship: RelationshipType("POD_USE_SERVICEACCOUNT"),
+		Relationship: PodUseServiceAccount,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -382,7 +382,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "roles",
 		KindB:        "rolebindings",
-		Relationship: RelationshipType("ROLEBINDING_REFERENCE_ROLE"),
+		Relationship: RoleBindingReferenceRole,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -394,7 +394,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "clusterroles",
 		KindB:        "clusterrolebindings",
-		Relationship: RelationshipType("CLUSTERROLEBINDING_REFERENCE_CLUSTERROLE"),
+		Relationship: ClusterRoleBindingReferenceClusterRole,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -406,7 +406,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "storageclasses",
 		KindB:        "persistentvolumeclaims",
-		Relationship: RelationshipType("PVC_USE_STORAGECLASS"),
+		Relationship: PVCUseStorageClass,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.metadata.name",
@@ -418,7 +418,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "mutatingwebhookconfigurations",
 		KindB:        "services",
-		Relationship: RelationshipType("MUTATINGWEBHOOK_TARGET_SERVICE"),
+		Relationship: MutatingWebhookTargetService,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.webhooks[].clientConfig.service.name",
@@ -430,7 +430,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "validatingwebhookconfigurations",
 		KindB:        "services",
-		Relationship: RelationshipType("VALIDATINGWEBHOOK_TARGET_SERVICE"),
+		Relationship: ValidatingWebhookTargetService,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.webhooks[].clientConfig.service.name",
@@ -442,7 +442,7 @@ var relationshipRules = []RelationshipRule{
 	{
 		KindA:        "poddisruptionbudgets",
 		KindB:        "pods",
-		Relationship: RelationshipType("PDB_PROTECT_POD"),
+		Relationship: PDBProtectPod,
 		MatchCriteria: []MatchCriterion{
 			{
 				FieldA:         "$.spec.selector.matchLabels",

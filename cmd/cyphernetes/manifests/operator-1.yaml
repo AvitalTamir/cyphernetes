@@ -1,0 +1,101 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: dynamicoperators.cyphernetes-operator.cyphernet.es
+spec:
+  group: cyphernetes-operator.cyphernet.es
+  names:
+    kind: DynamicOperator
+    listKind: DynamicOperatorList
+    plural: dynamicoperators
+    singular: dynamicoperator
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.resourceKind
+      name: ResourceKind
+      type: string
+    - jsonPath: .spec.namespace
+      name: Namespace
+      type: string
+    - jsonPath: .status.activeWatchers
+      name: ActiveWatchers
+      type: integer
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: DynamicOperator is the Schema for the dynamicoperators API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DynamicOperatorSpec defines the desired state of DynamicOperator
+            properties:
+              namespace:
+                description: Namespace specifies the namespace to watch. If empty,
+                  it watches all namespaces
+                type: string
+              onCreate:
+                description: OnCreate is the Cyphernetes query to execute when a resource
+                  is created
+                type: string
+              onDelete:
+                description: OnDelete is the Cyphernetes query to execute when a resource
+                  is deleted
+                type: string
+              onUpdate:
+                description: OnUpdate is the Cyphernetes query to execute when a resource
+                  is updated
+                type: string
+              resourceKind:
+                description: ResourceKind specifies the Kubernetes resource kind to
+                  watch
+                type: string
+            required:
+            - resourceKind
+            type: object
+            x-kubernetes-validations:
+            - message: At least one of onCreate, onUpdate, or onDelete must be specified
+              rule: self.onCreate != "" || self.onUpdate != "" || self.onDelete !=
+                ""
+          status:
+            description: DynamicOperatorStatus defines the observed state of DynamicOperator
+            properties:
+              activeWatchers:
+                description: ActiveWatchers is the number of active watchers for this
+                  DynamicOperator
+                type: integer
+              lastExecutedQuery:
+                description: LastExecutedQuery is the last Cyphernetes query that
+                  was executed
+                type: string
+              lastExecutionTime:
+                description: LastExecutionTime is the timestamp of the last query
+                  execution
+                format: date-time
+                type: string
+            required:
+            - activeWatchers
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
