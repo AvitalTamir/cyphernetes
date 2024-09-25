@@ -141,7 +141,7 @@ Using brew:
 ```bash
 brew install cyphernetes
 ```
-זז
+
 Using go:
 
 ```bash
