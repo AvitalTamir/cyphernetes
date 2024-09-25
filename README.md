@@ -136,6 +136,12 @@ Macro executed in 50.305083ms
 
 ## Get Cyphernetes
 
+Using Homebrew:
+
+```bash
+brew install cyphernetes
+```
+
 Using go:
 
 ```bash
@@ -217,6 +223,7 @@ Cyphernetes is open-sourced under the MIT license. See the [LICENSE](LICENSE) fi
 * Thanks to [Neo4j](https://neo4j.com/) for the inspiration behind the query language.
 * Thanks to [ggerganov](https://github.com/ggerganov) for the [dot-to-ascii](https://github.com/ggerganov/dot-to-ascii) project - it's the webserver that serves the ASCII art on [https://ascii.cyphernet.es](https://ascii.cyphernet.es) in case you want to host your own.
 * Thanks to [shlomif](https://github.com/shlomif) for the [graph-easy](https://github.com/shlomif/graph-easy) project - it's the package that actually converts the dot graphs into ASCII art used by dot-to-ascii.
+* Thanks [anthonybrice](https://github.com/anthonybrice) and [chenrui333](https://github.com/chenrui333) for getting us into Homebrew.
 
 ## Authors
 
