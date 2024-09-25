@@ -136,7 +136,7 @@ Macro executed in 50.305083ms
 
 ## Get Cyphernetes
 
-Using brew:
+Using Homebrew:
 
 ```bash
 brew install cyphernetes
