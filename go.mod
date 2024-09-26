@@ -1,8 +1,6 @@
 module github.com/avitaltamir/cyphernetes
 
-go 1.22.0
-
-toolchain go1.23.0
+go 1.23.0
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
