@@ -14,7 +14,7 @@ build: gen-parser
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/
-	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes-darwin-arm64
+	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes
 
 build-all-platforms-and-archs:
 	@echo "👷 Building ${BINARY_NAME}..."

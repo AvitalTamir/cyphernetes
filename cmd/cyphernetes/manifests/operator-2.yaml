@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: cyphernetes-operator
+  name: cyphernetes-operator-controller-manager
+  namespace: cyphernetes-system

@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cyphernetes-operator-manager-role
+rules:
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cyphernetes-operator.cyphernet.es
+  resources:
+  - dynamicoperators/status
+  verbs:
+  - get
+  - patch
+  - update

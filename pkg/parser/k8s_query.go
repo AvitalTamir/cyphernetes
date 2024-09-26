@@ -150,7 +150,10 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 				if resultMap[nodeId] == nil {
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
-				q.deleteK8sResources(nodeId)
+				err := q.deleteK8sResources(nodeId)
+				if err != nil {
+					return *results, fmt.Errorf("error deleting resource >> %s", err)
+				}
 			}
 
 		case *CreateClause:
@@ -875,8 +878,9 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 			return fmt.Errorf("error finding API resource >> %v", err)
 		}
 		resourceName := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
+		resourceNamespace := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
 
-		err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
+		err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("error deleting resource >> %v", err)
 		}
@@ -905,8 +909,9 @@ func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) err
 			return fmt.Errorf("error finding API resource >> %v", err)
 		}
 		resourceName := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
+		resourceNamespace := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
 
-		_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Patch(context.Background(), resourceName, types.JSONPatchType, []byte(patchStr), metav1.PatchOptions{})
+		_, err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Patch(context.Background(), resourceName, types.JSONPatchType, []byte(patchStr), metav1.PatchOptions{})
 		if err != nil {
 			return fmt.Errorf("error patching resource >> %v", err)
 		}
