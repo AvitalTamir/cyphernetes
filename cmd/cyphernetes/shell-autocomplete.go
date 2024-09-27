@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
@@ -58,17 +59,32 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			identifier := strings.Split(lastWord, ".")[0]
 			kind := getKindForIdentifier(lineStr, identifier)
 			treeStructure, err := fetchResourceTreeStructureForKind(kind)
-			// matched word is last word with identifier replaced by '$':
 			matchedWord := strings.Replace(lastWord, identifier, "$", 1)
-			treeStructure = append(treeStructure, metadataJsonPaths...)
 			if err == nil {
+				currentLevelSuggestions := make(map[string]bool)
 				for _, node := range treeStructure {
+					node = "$." + node
 					if strings.HasPrefix(node, matchedWord) {
-						// Offer each kind as a suggestion
-						// everything from the last word after the colon:
-						suggestion := strings.Replace(string(node), "$", identifier, 1)[len(lastWord):]
-						suggestions = append(suggestions, []rune(suggestion))
+						parts := strings.Split(strings.TrimPrefix(node[len(matchedWord):], "."), ".")
+						if len(parts) > 0 {
+							suggestion := parts[0]
+							if suggestion != "" {
+								currentLevelSuggestions[suggestion] = true
+							}
+						}
 					}
+				}
+
+				// Convert map to sorted slice
+				var sortedSuggestions []string
+				for suggestion := range currentLevelSuggestions {
+					sortedSuggestions = append(sortedSuggestions, suggestion)
+				}
+				sort.Strings(sortedSuggestions)
+
+				// Add sorted and unique suggestions
+				for _, suggestion := range sortedSuggestions {
+					suggestions = append(suggestions, []rune(suggestion))
 				}
 			} else {
 				fmt.Println("Error fetching resource tree structure: ", err)
@@ -122,37 +138,80 @@ func getMacros() []string {
 }
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
-	// first get the full name of the kind from the gvr cache
+	// First, get the full GVR for the kind from the GVR cache
 	gvr, err := parser.FindGVR(executor.Clientset, kind)
-	if err == nil {
-		resourceNormalizedName := strings.ToLower(gvr.Resource)
-		// then get the tree structure from the cache, otherwise fetch it from the api
-		if treeStructure, ok := resourceTreeStructureCache[resourceNormalizedName]; ok {
-			return treeStructure, nil
-		} else {
-			treeStructure, err := fetchResourceAPIDefinition(gvr)
-			if err != nil {
-				return []string{}, err
-			}
-
-			resourceTreeStructureCache[resourceNormalizedName] = treeStructure
-			return treeStructure, nil
-		}
+	if err != nil {
+		return nil, err
 	}
-	return []string{}, nil
+
+	resourceNormalizedName := strings.ToLower(gvr.Resource)
+
+	// Check if the tree structure is already cached
+	if treeStructure, ok := resourceTreeStructureCache[resourceNormalizedName]; ok {
+		return treeStructure, nil
+	}
+
+	// Fetch the API definition (field paths)
+	treeStructure, err := fetchResourceAPIDefinition(gvr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the tree structure for future use
+	resourceTreeStructureCache[resourceNormalizedName] = treeStructure
+
+	return treeStructure, nil
 }
 
 func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, error) {
-
-	results := []string{}
-	// TODO: fetch the resource definition from the api
-
-	// get a count of the number of paths and schemas.
-	if resourceSpecs[gvr.Resource] == nil {
-		return results, nil
+	// Ensure resourceSpecs is initialized
+	if len(resourceSpecs) == 0 {
+		initResourceSpecs()
 	}
-	results = resourceSpecs[gvr.Resource]
-	return results, nil
+
+	// Get the kind associated with the GVR
+	kind, err := getKindFromGVR(gvr)
+	if err != nil {
+		return nil, fmt.Errorf("error getting kind for GVR %v: %v", gvr, err)
+	}
+
+	// Build the schema name as it appears in resourceSpecs
+	schemaName := getSchemaName(gvr.Group, gvr.Version, kind)
+
+	// Retrieve the fields for the schema
+	fields, ok := resourceSpecs[schemaName]
+	if !ok {
+		return nil, fmt.Errorf("resource %s not found in OpenAPI specs", schemaName)
+	}
+
+	return fields, nil
+}
+
+// Helper function to get the kind from GVR
+func getKindFromGVR(gvr schema.GroupVersionResource) (string, error) {
+	discoveryClient := executor.Clientset.Discovery()
+	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+	if err != nil {
+		return "", err
+	}
+
+	for _, apiResource := range apiResourceList.APIResources {
+		if apiResource.Name == gvr.Resource || apiResource.Name == strings.TrimSuffix(gvr.Resource, "s") {
+			return apiResource.Kind, nil
+		}
+	}
+
+	return "", fmt.Errorf("kind not found for GVR %v", gvr)
+}
+
+// Helper function to build the schema name
+func getSchemaName(group, version, kind string) string {
+	groupPath := strings.ReplaceAll(group, ".", "")
+	if groupPath == "" {
+		groupPath = "core"
+	}
+	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", groupPath, version, kind)
+	return schemaName
 }
 
 func getKindForIdentifier(line string, identifier string) string {
