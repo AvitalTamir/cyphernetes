@@ -29,6 +29,13 @@ func TestCyphernetesCompleterDo(t *testing.T) {
 			expected: []string{"ch"},
 			length:   3,
 		},
+		{
+			name:     "JSONPath suggestion",
+			input:    "MATCH (p:Pod) RETURN p.meta",
+			pos:      26,
+			expected: []string{"adata", "adata.name", "adata.namespace", "adata.labels", "adata.annotations", "adata.creationTimestamp", "adata.uid"},
+			length:   5,
+		},
 	}
 
 	for _, tt := range tests {
@@ -142,4 +149,97 @@ func (m *MockMacroManager) LoadMacrosFromFile(filename string) error {
 
 func (m *MockMacroManager) LoadMacrosFromString(name, content string) error {
 	return nil
+}
+
+func TestInitResourceSpecs(t *testing.T) {
+	// Clear the resourceSpecs map before running the test
+	resourceSpecs = make(map[string][]string)
+
+	// Call the function we want to test
+	initResourceSpecs()
+
+	// Define the expected resources
+	expectedResources := []string{
+		"pods",
+		"deployments",
+		"services",
+		"ingresses",
+		"replicasets",
+		"daemonsets",
+		"statefulsets",
+		"jobs",
+		"cronjobs",
+	}
+
+	// Check if all expected resources are present
+	for _, resource := range expectedResources {
+		if specs, ok := resourceSpecs[resource]; !ok {
+			t.Errorf("Expected resource %s not found in resourceSpecs", resource)
+		} else if len(specs) == 0 {
+			t.Errorf("Resource %s has no specs", resource)
+		}
+	}
+
+	// Check a few specific paths for each resource type
+	testCases := []struct {
+		resource string
+		path     string
+	}{
+		{"pods", "$.spec.containers"},
+		{"deployments", "$.spec.replicas"},
+		{"services", "$.spec.clusterIP"},
+		{"ingresses", "$.spec.rules"},
+		{"replicasets", "$.spec.selector"},
+		{"daemonsets", "$.spec.updateStrategy"},
+		{"statefulsets", "$.spec.serviceName"},
+		{"jobs", "$.spec.parallelism"},
+		{"cronjobs", "$.spec.schedule"},
+	}
+
+	for _, tc := range testCases {
+		if specs, ok := resourceSpecs[tc.resource]; ok {
+			found := false
+			for _, spec := range specs {
+				if spec == tc.path {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected path %s not found in resource %s", tc.path, tc.resource)
+			}
+		} else {
+			t.Errorf("Resource %s not found in resourceSpecs", tc.resource)
+		}
+	}
+
+	// Check if metadataJsonPaths are defined
+	if len(metadataJsonPaths) == 0 {
+		t.Error("metadataJsonPaths is empty")
+	}
+
+	// Verify that metadataJsonPaths contains the expected paths
+	expectedMetadataPaths := []string{
+		"$.metadata",
+		"$.metadata.name",
+		"$.metadata.namespace",
+		"$.metadata.labels",
+		"$.metadata.annotations",
+		"$.metadata.creationTimestamp",
+		"$.metadata.uid",
+		"$.status",
+	}
+
+	for _, path := range expectedMetadataPaths {
+		found := false
+		for _, metadataPath := range metadataJsonPaths {
+			if metadataPath == path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected metadata path %s not found in metadataJsonPaths", path)
+		}
+	}
 }
