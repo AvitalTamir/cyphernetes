@@ -22,6 +22,8 @@ import (
 var (
 	executorInstance *QueryExecutor
 	once             sync.Once
+	openAPIDoc       *openapi_v3.Document
+	openAPIDocMutex  sync.RWMutex
 )
 
 func GetQueryExecutorInstance() *QueryExecutor {
@@ -255,17 +257,11 @@ func FetchAndCacheGVRs(clientset *kubernetes.Clientset) error {
 
 var (
 	resourceSpecsCache map[string][]string
-	resourceSpecsMutex sync.RWMutex
+	resourceSpecsMutex sync.Mutex
 )
 
+// GetOpenAPIResourceSpecs initializes and caches the resource specs
 func GetOpenAPIResourceSpecs() (map[string][]string, error) {
-	resourceSpecsMutex.RLock()
-	if resourceSpecsCache != nil {
-		defer resourceSpecsMutex.RUnlock()
-		return resourceSpecsCache, nil
-	}
-	resourceSpecsMutex.RUnlock()
-
 	resourceSpecsMutex.Lock()
 	defer resourceSpecsMutex.Unlock()
 
@@ -282,92 +278,69 @@ func GetOpenAPIResourceSpecs() (map[string][]string, error) {
 	return specs, nil
 }
 
-var openAPIDoc *openapi_v3.Document
-
 // fetchResourceSpecsFromOpenAPI fetches and parses the OpenAPI V3 schemas
 func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
-	// Use the existing clientset from QueryExecutor
-	discoveryClient := executorInstance.Clientset.Discovery()
-
-	// Get OpenAPI V3 client
-	openAPIV3Client := discoveryClient.OpenAPIV3()
-
-	// Get the OpenAPI V3 paths
-	paths, err := openAPIV3Client.Paths()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve OpenAPI paths: %v", err)
-	}
-
+	openAPIDocMutex.Lock()
+	defer openAPIDocMutex.Unlock()
 	specs := make(map[string][]string)
-	visited := make(map[string][]string) // Initialize the visited map
 
-	// Initialize openAPIDoc with empty Components before the loop
-	openAPIDoc = &openapi_v3.Document{
-		Components: &openapi_v3.Components{
-			Schemas: &openapi_v3.SchemasOrReferences{
-				AdditionalProperties: []*openapi_v3.NamedSchemaOrReference{},
+	if openAPIDoc == nil {
+
+		// Use the existing clientset from QueryExecutor
+		discoveryClient := executorInstance.Clientset.Discovery()
+
+		// Get OpenAPI V3 client
+		openAPIV3Client := discoveryClient.OpenAPIV3()
+
+		// Get the OpenAPI V3 paths
+		paths, err := openAPIV3Client.Paths()
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve OpenAPI paths: %v", err)
+		}
+
+		// Initialize openAPIDoc with empty Components before the loop
+		openAPIDoc = &openapi_v3.Document{
+			Components: &openapi_v3.Components{
+				Schemas: &openapi_v3.SchemasOrReferences{
+					AdditionalProperties: []*openapi_v3.NamedSchemaOrReference{},
+				},
 			},
-		},
-	}
-
-	for _, groupVersion := range paths {
-		schemaBytes, err := groupVersion.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
-		if err != nil {
-			fmt.Printf("Error retrieving schema for group version %s: %v\n", groupVersion, err)
-			continue
 		}
 
-		// Unmarshal into a temporary document to prevent overwriting openAPIDoc
-		tempDoc := &openapi_v3.Document{}
-		err = proto.Unmarshal(schemaBytes, tempDoc)
-		if err != nil {
-			fmt.Printf("Error unmarshaling OpenAPI document for group version %s: %v\n", groupVersion, err)
-			continue
-		}
+		for _, groupVersion := range paths {
+			schemaBytes, err := groupVersion.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
+			if err != nil {
+				fmt.Printf("Error retrieving schema for group version %s: %v\n", groupVersion, err)
+				continue
+			}
 
-		// Merge tempDoc.Components.Schemas into openAPIDoc.Components.Schemas
-		if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
-			openAPIDoc.Components.Schemas.AdditionalProperties = append(openAPIDoc.Components.Schemas.AdditionalProperties, tempDoc.Components.Schemas.AdditionalProperties...)
-		}
+			// Unmarshal into a temporary document to prevent overwriting openAPIDoc
+			tempDoc := &openapi_v3.Document{}
+			err = proto.Unmarshal(schemaBytes, tempDoc)
+			if err != nil {
+				fmt.Printf("Error unmarshaling OpenAPI document for group version %s: %v\n", groupVersion, err)
+				continue
+			}
 
-		// Process the schemas from tempDoc
-		if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
-			for _, schemaEntry := range tempDoc.Components.Schemas.AdditionalProperties {
-				resourceName := schemaEntry.Name
-				schema := schemaEntry.Value.GetSchema()
-				if schema != nil {
-					// Pass the visited map to prevent infinite recursion
-					fields := parseSchema(schema, "", visited)
-					specs[resourceName] = fields
+			// Merge tempDoc.Components.Schemas into openAPIDoc.Components.Schemas
+			if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
+				openAPIDoc.Components.Schemas.AdditionalProperties = append(openAPIDoc.Components.Schemas.AdditionalProperties, tempDoc.Components.Schemas.AdditionalProperties...)
+			}
+
+			// Process the schemas from tempDoc
+			if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
+				for _, schemaEntry := range tempDoc.Components.Schemas.AdditionalProperties {
+					resourceName := schemaEntry.Name
+					schema := schemaEntry.Value.GetSchema()
+					if schema != nil {
+						// Pass the visited map to prevent infinite recursion
+						visited := make(map[string][]string) // Initialize the visited map
+						fields := parseSchema(schema, "", visited)
+						specs[resourceName] = fields
+					}
 				}
 			}
 		}
-	}
-
-	// After merging all schemas
-	schemaName := getSchemaName("networking.k8s.io", "v1", "Ingress")
-	found := false
-	for _, schemaEntry := range openAPIDoc.Components.Schemas.AdditionalProperties {
-		if schemaEntry.Name == schemaName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		fmt.Println("Ingress schema is not present in OpenAPI specs")
-	}
-
-	// Check for PodTemplateSpec schema
-	podTemplateSchemaName := getSchemaName("", "v1", "PodTemplateSpec")
-	podTemplateFound := false
-	for _, schemaEntry := range openAPIDoc.Components.Schemas.AdditionalProperties {
-		if schemaEntry.Name == podTemplateSchemaName {
-			podTemplateFound = true
-			break
-		}
-	}
-	if !podTemplateFound {
-		fmt.Println("PodTemplateSpec schema is not present in OpenAPI specs")
 	}
 
 	return specs, nil
@@ -395,11 +368,12 @@ func parseSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]
 }
 
 func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]string) []string {
-	// Define a unique key for the current schema using the schema's pointer address
-	schemaKey := fmt.Sprintf("%p", schema)
+	// Check if the schema has been cached
+	// Create a unique key that includes both the schema pointer and kind
+	uniqueKey := fmt.Sprintf("%p", schema)
 
 	// Check if the schema has been cached
-	if visitedFields, ok := visited[schemaKey]; ok {
+	if visitedFields, ok := visited[uniqueKey]; ok {
 		return visitedFields
 	}
 
@@ -423,7 +397,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			if subSchema != nil {
 				subFields := parseSchema(subSchema, prefix, visited)
 				fields = append(fields, subFields...)
-				visited[schemaKey] = fields
+				visited[uniqueKey] = fields
 			}
 		}
 	}
@@ -437,7 +411,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				fullName = fmt.Sprintf("%s.%s", prefix, fieldName)
 			}
 			fields = append(fields, fullName)
-			visited[schemaKey] = fields
+			visited[uniqueKey] = fields
 
 			var nestedSchema *openapi_v3.Schema
 			if schemaOrRef := prop.Value; schemaOrRef != nil {
@@ -456,7 +430,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				nestedFields := parseSchema(nestedSchema, fullName, visited)
 				if len(nestedFields) > 0 {
 					fields = append(fields, nestedFields...)
-					visited[schemaKey] = fields
+					visited[uniqueKey] = fields
 				}
 			} else {
 				// fmt.Printf("No nested schema for field: %s\n", fullName)
@@ -483,7 +457,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				arrayPrefix := prefix + "[]"
 				nestedFields := parseSchema(itemSchema, arrayPrefix, visited)
 				fields = append(fields, nestedFields...)
-				visited[schemaKey] = fields
+				visited[uniqueKey] = fields
 			} else {
 				// fmt.Printf("No item schema for array at: %s\n", prefix)
 			}
@@ -506,15 +480,15 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			if addPropSchema != nil {
 				addPropPrefix := prefix + "{}"
 				nestedFields := parseSchema(addPropSchema, addPropPrefix, visited)
-				visited[schemaKey] = nestedFields
+				visited[uniqueKey] = nestedFields
 				fields = append(fields, nestedFields...)
 			} else {
 				// fmt.Printf("No schema for additionalProperties at: %s\n", prefix)
 			}
 		}
 	}
-	if visited[schemaKey] == nil {
-		visited[schemaKey] = fields
+	if visited[uniqueKey] == nil {
+		visited[uniqueKey] = fields
 	}
 
 	return fields
@@ -547,17 +521,17 @@ func resolveReference(ref string) *openapi_v3.Schema {
 }
 
 // getSchemaName constructs the schema name based on group, version, and kind
-func getSchemaName(group, version, kind string) string {
-	if group == "" {
-		group = "core"
-	} else {
-		// Remove all dots from the group name
-		group = strings.ReplaceAll(group, ".", "")
-	}
+// func getSchemaName(group, version, kind string) string {
+// 	if group == "" {
+// 		group = "core"
+// 	} else {
+// 		// Remove all dots from the group name
+// 		group = strings.ReplaceAll(group, ".", "")
+// 	}
 
-	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", group, version, kind)
-	return schemaName
-}
+// 	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", group, version, kind)
+// 	return schemaName
+// }
 
 func init() {
 	// Initialize the executorInstance
