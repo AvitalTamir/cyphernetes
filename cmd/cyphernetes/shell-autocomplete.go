@@ -75,12 +75,18 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 				for _, node := range treeStructure {
 					node = "$." + node
 					if strings.HasPrefix(node, matchedWord) {
-						parts := strings.Split(strings.TrimPrefix(node[len(matchedWord):], "."), ".")
+						fullPath := strings.TrimPrefix(node[len(matchedWord):], ".")
+						parts := strings.Split(fullPath, ".")
 						if len(parts) > 0 {
 							suggestion := parts[0]
-							if suggestion != "" {
-								currentLevelSuggestions[suggestion] = true
+							if len(parts) > 1 {
+								suggestion += "."
 							}
+							if suggestion == "" {
+								suggestions = append(suggestions, []rune("."))
+								break
+							}
+							currentLevelSuggestions[suggestion] = true
 						}
 					}
 				}
@@ -91,6 +97,25 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 					sortedSuggestions = append(sortedSuggestions, suggestion)
 				}
 				sort.Strings(sortedSuggestions)
+
+				// Remove entries without a dot if a corresponding entry with a dot exists
+				filteredSuggestions := make([]string, 0, len(sortedSuggestions))
+				suggestionMap := make(map[string]bool)
+
+				for _, suggestion := range sortedSuggestions {
+					if strings.HasSuffix(suggestion, ".") {
+						suggestionMap[strings.TrimSuffix(suggestion, ".")] = true
+					}
+				}
+
+				for _, suggestion := range sortedSuggestions {
+					if !strings.HasSuffix(suggestion, ".") && suggestionMap[suggestion] {
+						continue
+					}
+					filteredSuggestions = append(filteredSuggestions, suggestion)
+				}
+
+				sortedSuggestions = filteredSuggestions
 
 				// Add sorted and unique suggestions
 				for _, suggestion := range sortedSuggestions {
@@ -114,7 +139,7 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			// Handle other autocompletion cases (like keywords)
 
 			// Keywords
-			keywords := []string{"match", "where", "return", "set", "delete", "create"} //, "as"}
+			keywords := []string{"match", "where", "return", "set", "delete", "create", "as", "sum", "count"}
 
 			for _, k := range keywords {
 				if strings.HasPrefix(k, prefix) {
@@ -125,9 +150,6 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			}
 		}
 	}
-
-	// Check if the last word is a resource kind, which means we're after a '(', followed by a word, followed by a colon and we're now directly after the colon
-	// make the check:
 
 	// The length returned should be the length of the last word.
 	return suggestions, len(lastWord)
