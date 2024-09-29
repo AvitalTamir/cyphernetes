@@ -397,7 +397,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			if subSchema != nil {
 				subFields := parseSchema(subSchema, prefix, visited)
 				fields = append(fields, subFields...)
-				visited[uniqueKey] = fields
+				visited[uniqueKey] = subFields
 			}
 		}
 	}
