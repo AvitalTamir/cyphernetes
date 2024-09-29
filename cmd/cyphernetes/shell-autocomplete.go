@@ -106,6 +106,9 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 					if strings.HasSuffix(suggestion, ".") {
 						suggestionMap[strings.TrimSuffix(suggestion, ".")] = true
 					}
+					if strings.HasSuffix(suggestion, "[].") {
+						suggestionMap[strings.TrimSuffix(suggestion, "[].")] = true
+					}
 				}
 
 				for _, suggestion := range sortedSuggestions {
