@@ -511,19 +511,6 @@ func resolveReference(ref string) *openapi_v3.Schema {
 	return nil
 }
 
-// getSchemaName constructs the schema name based on group, version, and kind
-// func getSchemaName(group, version, kind string) string {
-// 	if group == "" {
-// 		group = "core"
-// 	} else {
-// 		// Remove all dots from the group name
-// 		group = strings.ReplaceAll(group, ".", "")
-// 	}
-
-// 	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", group, version, kind)
-// 	return schemaName
-// }
-
 func init() {
 	// Initialize the executorInstance
 	GetQueryExecutorInstance()
