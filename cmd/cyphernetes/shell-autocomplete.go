@@ -185,7 +185,7 @@ func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, erro
 		return nil, fmt.Errorf("error getting kind for GVR %v: %v", gvr, err)
 	}
 
-	// Build the schema name as it appears in resourceSpecs
+	// Get the schema name
 	schemaName := getSchemaName(gvr.Group, gvr.Version, kind)
 
 	// Retrieve the fields for the schema
@@ -216,30 +216,48 @@ func getKindFromGVR(gvr schema.GroupVersionResource) (string, error) {
 
 // Helper function to build the schema name
 func getSchemaName(group, version, kind string) string {
-	groupPath := strings.ReplaceAll(group, ".", "")
-	if groupPath == "" {
-		groupPath = "core"
+	// Ensure resourceSpecs is initialized
+	if len(resourceSpecs) == 0 {
+		initResourceSpecs()
 	}
 
-	// Handle special cases for well-known API groups
-	switch group {
-	case "networking.k8s.io":
-		return fmt.Sprintf("io.k8s.api.networking.v1.%s", kind)
-	case "extensions":
-		return fmt.Sprintf("io.k8s.api.extensions.v1beta1.%s", kind)
-	case "rbac.authorization.k8s.io":
-		return fmt.Sprintf("io.k8s.api.rbac.v1.%s", kind)
+	// First, try to find the schema name in the resourceSpecs
+	for schemaName := range resourceSpecs {
+		if strings.Contains(strings.ToLower(schemaName), strings.ToLower(kind)) {
+			parts := strings.Split(schemaName, ".")
+			if len(parts) >= 4 && strings.EqualFold(parts[len(parts)-1], kind) {
+				return schemaName
+			}
+		}
 	}
 
-	// Handle CRDs and other custom resources
-	if strings.Contains(group, ".") {
-		// This is likely a CRD or custom resource
-		return fmt.Sprintf("%s.%s.%s", group, version, kind)
+	// If not found in resourceSpecs, use the dynamic client to get more information
+	gvr, err := parser.FindGVR(parser.GetQueryExecutorInstance().Clientset, kind)
+	if err == nil {
+		// Construct a potential schema name based on the GVR
+		potentialSchemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", gvr.Group, gvr.Version, kind)
+
+		// Check if this constructed name exists in resourceSpecs
+		if _, ok := resourceSpecs[potentialSchemaName]; ok {
+			return potentialSchemaName
+		}
+
+		// If not found, try variations
+		variations := []string{
+			fmt.Sprintf("io.k8s.api.%s.%s.%s", strings.ReplaceAll(gvr.Group, ".", ""), gvr.Version, kind),
+			fmt.Sprintf("%s.%s.%s", gvr.Group, gvr.Version, kind),
+		}
+
+		for _, variation := range variations {
+			if _, ok := resourceSpecs[variation]; ok {
+				return variation
+			}
+		}
 	}
 
-	// Default case for standard Kubernetes resources
-	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", groupPath, version, kind)
-	return schemaName
+	// If still not found, log a warning and return a best guess
+	fmt.Printf("Warning: No exact schema match found for group=%s, version=%s, kind=%s\n", group, version, kind)
+	return fmt.Sprintf("io.k8s.api.%s.%s.%s", group, version, kind)
 }
 
 func getKindForIdentifier(line string, identifier string) string {
