@@ -432,8 +432,6 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 					fields = append(fields, nestedFields...)
 					visited[uniqueKey] = fields
 				}
-			} else {
-				// fmt.Printf("No nested schema for field: %s\n", fullName)
 			}
 		}
 	}
@@ -458,8 +456,6 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				nestedFields := parseSchema(itemSchema, arrayPrefix, visited)
 				fields = append(fields, nestedFields...)
 				visited[uniqueKey] = fields
-			} else {
-				// fmt.Printf("No item schema for array at: %s\n", prefix)
 			}
 		}
 	}
@@ -470,9 +466,6 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			var addPropSchema *openapi_v3.Schema
 			if ref := addPropSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
 				addPropSchema = resolveReference(ref.XRef)
-				if addPropSchema == nil {
-					// fmt.Printf("Failed to resolve additionalProperties reference at: %s\n", prefix)
-				}
 			} else if nested := addPropSchemaOrRef.GetSchema(); nested != nil {
 				addPropSchema = nested
 			}
@@ -482,8 +475,6 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				nestedFields := parseSchema(addPropSchema, addPropPrefix, visited)
 				visited[uniqueKey] = nestedFields
 				fields = append(fields, nestedFields...)
-			} else {
-				// fmt.Printf("No schema for additionalProperties at: %s\n", prefix)
 			}
 		}
 	}

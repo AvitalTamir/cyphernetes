@@ -86,9 +86,9 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 				for _, suggestion := range sortedSuggestions {
 					suggestions = append(suggestions, []rune(suggestion))
 				}
-			} else {
-				fmt.Println("Error fetching resource tree structure: ", err)
-			}
+			} //	 else {
+			// 	fmt.Println("Error fetching resource tree structure: ", err)
+			// }
 		} else if isMacroContext(lineStr) {
 			// Offer each macro as a suggestion
 			macros := getMacros()
@@ -210,6 +210,24 @@ func getSchemaName(group, version, kind string) string {
 	if groupPath == "" {
 		groupPath = "core"
 	}
+
+	// Handle special cases for well-known API groups
+	switch group {
+	case "networking.k8s.io":
+		return fmt.Sprintf("io.k8s.api.networking.v1.%s", kind)
+	case "extensions":
+		return fmt.Sprintf("io.k8s.api.extensions.v1beta1.%s", kind)
+	case "rbac.authorization.k8s.io":
+		return fmt.Sprintf("io.k8s.api.rbac.v1.%s", kind)
+	}
+
+	// Handle CRDs and other custom resources
+	if strings.Contains(group, ".") {
+		// This is likely a CRD or custom resource
+		return fmt.Sprintf("%s.%s.%s", group, version, kind)
+	}
+
+	// Default case for standard Kubernetes resources
 	schemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", groupPath, version, kind)
 	return schemaName
 }
