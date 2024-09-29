@@ -11,6 +11,16 @@ import (
 )
 
 var resourceTreeStructureCache = make(map[string][]string)
+var resourceSpecs = make(map[string][]string)
+
+func initResourceSpecs() {
+	specs, err := parser.GetOpenAPIResourceSpecs()
+	if err != nil {
+		fmt.Println("Error fetching resource specs:", err)
+		return
+	}
+	resourceSpecs = specs
+}
 
 type CyphernetesCompleter struct {
 	// You can add fields if needed, for example, a reference to your GRV cache
