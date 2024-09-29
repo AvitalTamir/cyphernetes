@@ -377,7 +377,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 		return visitedFields
 	}
 
-	// fmt.Printf("Processing schema: %s\n", schema) // Debug Log
+	// fmt.Printf("Processing schema: %s\n", schema)
 	fields := []string{}
 
 	// Handle allOf, oneOf, anyOf if present
@@ -502,7 +502,7 @@ func resolveReference(ref string) *openapi_v3.Schema {
 
 	for _, schemaEntry := range openAPIDoc.Components.Schemas.AdditionalProperties {
 		if schemaEntry.Name == schemaName {
-			// fmt.Printf("Resolved reference %s to schema %s\n", ref, schemaName) // Debug Log
+			// fmt.Printf("Resolved reference %s to schema %s\n", ref, schemaName)
 			return schemaEntry.Value.GetSchema()
 		}
 	}
