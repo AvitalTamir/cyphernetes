@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
+	github.com/google/gnostic v0.7.0
 	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/cobra v1.8.1
 	github.com/wader/readline v0.0.0-20230307172220-bcb7158e7448
@@ -14,7 +15,6 @@ require (
 
 require (
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/google/gnostic v0.7.0 // indirect
 	github.com/onsi/gomega v1.33.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 )
@@ -51,7 +51,7 @@ require (
 	golang.org/x/term v0.21.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
