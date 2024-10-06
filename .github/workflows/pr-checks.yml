@@ -22,6 +22,8 @@ jobs:
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
         setup-envtest use
         echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path)" >> $GITHUB_ENV
+    - name: Create a link to envtest in operator/bin
+      run: ln -s $(which setup-envtest) operator/bin/setup-envtest
     - name: Install goyacc
       run: go install golang.org/x/tools/cmd/goyacc@latest
     - name: Create the operator manifests
