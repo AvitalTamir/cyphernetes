@@ -19,65 +19,77 @@ func initializeRelationships() {
 	}
 
 	// Regular expression to match fields ending with 'Name', or 'Ref'
-	nameFieldRegex := regexp.MustCompile(`(\w+)(Name|Ref)$`)
+	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
+	refFieldRegex := regexp.MustCompile(`(\w+)(Ref)`)
 
 	for kindA, fields := range ResourceSpecs {
-		kindAName := extractKindFromSchemaName(kindA)
+		kindANameSingular := extractKindFromSchemaName(kindA)
 
 		// Skip if kindAName is empty
-		if kindAName == "" {
+		if kindANameSingular == "" {
 			continue
 		}
 
 		for _, fieldPath := range fields {
 			parts := strings.Split(fieldPath, ".")
 			fieldName := parts[len(parts)-1]
-			if nameFieldRegex.MatchString(fieldName) {
+
+			relatedKindSingular := ""
+			relSpecType := ""
+
+			if nameOrKeyRefFieldRegex.MatchString(fieldName) {
 				// Extract potential KindB
-				relatedKindSingular := nameFieldRegex.ReplaceAllString(fieldName, "$1")
-				relSpecType := nameFieldRegex.ReplaceAllString(fieldName, "$2")
-				// convert relatedKind to lower case plural - find the correct plural form using FindGVR
-				gvr, err := FindGVR(executorInstance.Clientset, relatedKindSingular)
-				if err != nil {
-					continue
-				}
-				relatedKind := gvr.Resource
+				relatedKindSingular = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$1")
+				relSpecType = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$2")
+			} else if refFieldRegex.MatchString(fieldName) {
+				// Extract potential KindB
+				relatedKindSingular = refFieldRegex.ReplaceAllString(fieldName, "$1")
+				relSpecType = refFieldRegex.ReplaceAllString(fieldName, "$2")
+			} else {
+				continue
+			}
 
-				// same converstion for kindA
-				gvr, err = FindGVR(executorInstance.Clientset, kindAName)
-				if err != nil {
-					continue
-				}
-				kindAName := gvr.Resource
+			// convert relatedKind to lower case plural - find the correct plural form using FindGVR
+			gvr, err := FindGVR(executorInstance.Clientset, relatedKindSingular)
+			if err != nil {
+				continue
+			}
+			relatedKind := gvr.Resource
 
-				if relSpecType == "Ref" {
-					fieldPath = fieldPath + ".name"
-				}
-				// Check if relatedKind exists in availableKinds
-				if _, exists := availableKinds[strings.ToLower(relatedKindSingular)]; exists {
-					// Create a new relationship rule if one doesn't already exist between these two kinds.
-					// If it does exist, append the new criterion to the existing rule's match criteria.
-					relType := RelationshipType(fmt.Sprintf("%s_SPEC_%s%s", strings.ToUpper(kindAName), strings.ToUpper(relatedKindSingular), strings.ToUpper(relSpecType)))
-					rule, err := findRuleByKinds(strings.ToLower(kindAName), strings.ToLower(relatedKind))
-					if err == nil {
-						rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
-							FieldA:         "$." + fieldPath,
-							FieldB:         "$.metadata.name",
-							ComparisonType: ExactMatch,
-						})
-					} else {
-						rule = RelationshipRule{
-							KindA:        strings.ToLower(kindAName),
-							KindB:        strings.ToLower(relatedKind),
-							Relationship: relType,
-							MatchCriteria: []MatchCriterion{
-								{
-									FieldA:         "$." + fieldPath,
-									FieldB:         "$.metadata.name",
-									ComparisonType: ExactMatch,
-								},
+			// same converstion for kindA
+			gvr, err = FindGVR(executorInstance.Clientset, kindANameSingular)
+			if err != nil {
+				continue
+			}
+			kindAName := gvr.Resource
+
+			if relSpecType == "Ref" || relSpecType == "KeyRef" {
+				fieldPath = fieldPath + ".name"
+			}
+			// Check if relatedKind exists in availableKinds
+			if _, exists := availableKinds[strings.ToLower(relatedKindSingular)]; exists {
+				// Create a new relationship rule if one doesn't already exist between these two kinds.
+				// If it does exist, append the new criterion to the existing rule's match criteria.
+				relType := RelationshipType(fmt.Sprintf("%s%s_INSPEC_%s", strings.ToUpper(relatedKindSingular), strings.ToUpper(relSpecType), strings.ToUpper(kindANameSingular)))
+				rule, err := findRuleByKinds(strings.ToLower(kindAName), strings.ToLower(relatedKind))
+				if err == nil {
+					rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
+						FieldA:         "$." + fieldPath,
+						FieldB:         "$.metadata.name",
+						ComparisonType: ExactMatch,
+					})
+				} else {
+					rule = RelationshipRule{
+						KindA:        strings.ToLower(kindAName),
+						KindB:        strings.ToLower(relatedKind),
+						Relationship: relType,
+						MatchCriteria: []MatchCriterion{
+							{
+								FieldA:         "$." + fieldPath,
+								FieldB:         "$.metadata.name",
+								ComparisonType: ExactMatch,
 							},
-						}
+						},
 					}
 
 					// Append the new rule to existing relationshipRules
