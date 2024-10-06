@@ -79,7 +79,6 @@ func initializeRelationships() {
 								},
 							},
 						}
-						fmt.Println("*** Creating relationship rule: ", rule)
 					}
 
 					// Append the new rule to existing relationshipRules
