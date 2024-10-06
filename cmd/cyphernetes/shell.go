@@ -237,7 +237,12 @@ func runShell(cmd *cobra.Command, args []string) {
 \__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
    /___/_/ Interactive Shell`)
 	fmt.Println("")
+
 	// Initialize the GRV cache
+	executor = parser.GetQueryExecutorInstance()
+	if executor == nil {
+		os.Exit(1)
+	}
 	parser.FetchAndCacheGVRs(executor.Clientset)
 	parser.InitResourceSpecs()
 	initResourceSpecs()
@@ -603,11 +608,6 @@ func init() {
 		if err := macroManager.LoadMacrosFromFile(userMacrosFile); err != nil {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
-	}
-
-	executor = parser.GetQueryExecutorInstance()
-	if executor == nil {
-		os.Exit(1)
 	}
 
 	// Get the name of the current Kubernetes context

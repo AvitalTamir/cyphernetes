@@ -102,7 +102,7 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 		{
 			name:     "Properties",
 			input:    "MATCH (n:Node {key: \"value\"})",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey\x1b[0m: \x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m\x1b[0m",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m\x1b[0m",
 		},
 		{
 			name:     "Return with JSONPath",
