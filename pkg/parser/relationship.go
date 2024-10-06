@@ -2,10 +2,78 @@ package parser
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/oliveagle/jsonpath"
 )
+
+func initializeRelationships() {
+	// Map to hold available kinds for quick look-up
+	availableKinds := make(map[string]bool)
+	for schemaName := range ResourceSpecs {
+		kind := extractKindFromSchemaName(schemaName)
+		if kind != "" {
+			availableKinds[kind] = true
+		}
+	}
+
+	// Regular expression to match fields ending with 'Name'
+	nameFieldRegex := regexp.MustCompile(`\w+Name$`)
+
+	for kindA, fields := range ResourceSpecs {
+		kindAName := extractKindFromSchemaName(kindA)
+
+		// Skip if kindAName is empty
+		if kindAName == "" {
+			continue
+		}
+
+		for _, fieldPath := range fields {
+			parts := strings.Split(fieldPath, ".")
+			fieldName := parts[len(parts)-1]
+			if nameFieldRegex.MatchString(fieldName) {
+				// Extract potential KindB
+				relatedKindSingular := strings.TrimSuffix(fieldName, "Name")
+
+				// convert relatedKind to lower case plural - find the correct plural form using FindGVR
+				gvr, err := FindGVR(executorInstance.Clientset, relatedKindSingular)
+				if err != nil {
+					continue
+				}
+				relatedKind := gvr.Resource
+
+				// same converstion for kindA
+				gvr, err = FindGVR(executorInstance.Clientset, kindAName)
+				if err != nil {
+					continue
+				}
+				kindAName := gvr.Resource
+
+				// Check if relatedKind exists in availableKinds
+				if _, exists := availableKinds[relatedKindSingular]; exists {
+					// Create a new relationship rule
+					relType := RelationshipType(fmt.Sprintf("%s_SPEC_%sNAME", strings.ToUpper(kindAName), strings.ToUpper(relatedKindSingular)))
+					rule := RelationshipRule{
+						KindA:        strings.ToLower(kindAName),
+						KindB:        strings.ToLower(relatedKind),
+						Relationship: relType,
+						MatchCriteria: []MatchCriterion{
+							{
+								FieldA:         "$." + fieldPath,
+								FieldB:         "$.metadata.name",
+								ComparisonType: ExactMatch,
+							},
+						},
+					}
+
+					// Append the new rule to existing relationshipRules
+					relationshipRules = append(relationshipRules, rule)
+				}
+			}
+		}
+	}
+}
 
 func findRuleByRelationshipType(relationshipType RelationshipType) (RelationshipRule, error) {
 	for _, rule := range relationshipRules {

@@ -74,7 +74,6 @@ type RelationshipRule struct {
 }
 
 var relationshipRules = []RelationshipRule{
-
 	{
 		KindA:        "pods",
 		KindB:        "replicasets",
@@ -464,5 +463,4 @@ var relationshipRules = []RelationshipRule{
 			},
 		},
 	},
-	// Add more rules here...
 }

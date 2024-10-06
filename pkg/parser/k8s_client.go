@@ -26,6 +26,24 @@ var (
 	openAPIDocMutex  sync.RWMutex
 )
 
+// Make resourceSpecs accessible outside the package
+var ResourceSpecs = make(map[string][]string)
+
+func init() {
+	initResourceSpecs()
+}
+
+func initResourceSpecs() {
+	specs, err := GetOpenAPIResourceSpecs()
+	if err != nil {
+		fmt.Println("Error fetching resource specs:", err)
+		return
+	}
+	ResourceSpecs = specs
+	// Initialize relationships after specs are loaded
+	initializeRelationships()
+}
+
 func GetQueryExecutorInstance() *QueryExecutor {
 	once.Do(func() {
 		executor, err := NewQueryExecutor()
@@ -284,6 +302,8 @@ func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 	defer openAPIDocMutex.Unlock()
 	specs := make(map[string][]string)
 
+	executorInstance := GetQueryExecutorInstance()
+
 	if openAPIDoc == nil {
 
 		// Use the existing clientset from QueryExecutor
@@ -509,4 +529,12 @@ func resolveReference(ref string) *openapi_v3.Schema {
 
 	// fmt.Printf("Schema not found for ref: %s\n", ref)
 	return nil
+}
+
+func extractKindFromSchemaName(schemaName string) string {
+	parts := strings.Split(schemaName, ".")
+	if len(parts) > 0 {
+		return strings.ToLower(parts[len(parts)-1])
+	}
+	return ""
 }
