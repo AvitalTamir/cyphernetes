@@ -14,12 +14,7 @@ var resourceTreeStructureCache = make(map[string][]string)
 var resourceSpecs = make(map[string][]string)
 
 func initResourceSpecs() {
-	specs, err := parser.GetOpenAPIResourceSpecs()
-	if err != nil {
-		fmt.Println("Error fetching resource specs:", err)
-		return
-	}
-	resourceSpecs = specs
+	resourceSpecs = parser.ResourceSpecs
 }
 
 type CyphernetesCompleter struct {

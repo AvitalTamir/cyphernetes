@@ -11,6 +11,15 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "CLI:Query",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/cyphernetes",
+            "args": ["query", "MATCH (p:pod) RETURN count{p}"],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "CLI:Test",
             "type": "go",
             "request": "launch",

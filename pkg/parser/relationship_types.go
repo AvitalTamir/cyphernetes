@@ -9,37 +9,27 @@ type ResourceRelationship struct {
 type RelationshipType string
 
 const (
-	DeploymentOwnReplicaset                RelationshipType = "DEPLOYMENT_OWN_REPLICASET"
-	ReplicasetOwnPod                       RelationshipType = "REPLICASET_OWN_POD"
-	StatefulsetOwnPod                      RelationshipType = "STATEFULSET_OWN_POD"
-	DaemonsetOwnPod                        RelationshipType = "DAEMONSET_OWN_POD"
-	JobOwnPod                              RelationshipType = "JOB_OWN_POD"
-	ServiceExposePod                       RelationshipType = "SERVICE_EXPOSE_POD"
-	ServiceExposeDeployment                RelationshipType = "SERVICE_EXPOSE_DEPLOYMENT"
-	ServiceExposeStatefulset               RelationshipType = "SERVICE_EXPOSE_STATEFULSET"
-	ServiceExposeDaemonset                 RelationshipType = "SERVICE_EXPOSE_DAEMONSET"
-	ServiceExposeReplicaset                RelationshipType = "SERVICE_EXPOSE_REPLICASET"
-	CronJobOwnPod                          RelationshipType = "CRONJOB_OWN_POD"
-	CronJobOwnJob                          RelationshipType = "CRONJOB_OWN_JOB"
-	PVBoundPVC                             RelationshipType = "PV_BOUND_PVC"
-	ServiceHasEndpoints                    RelationshipType = "SERVICE_HAS_ENDPOINTS"
-	PodUseConfigMap                        RelationshipType = "POD_USE_CONFIGMAP"
-	PodUseSecret                           RelationshipType = "POD_USE_SECRET"
-	NetworkPolicyApplyPod                  RelationshipType = "NETWORKPOLICY_APPLY_POD"
-	HPAScaleDeployment                     RelationshipType = "HPA_SCALE_DEPLOYMENT"
-	NodeRunPod                             RelationshipType = "NODE_RUN_POD"
-	PodUseServiceAccount                   RelationshipType = "POD_USE_SERVICEACCOUNT"
-	RoleBindingReferenceRole               RelationshipType = "ROLEBINDING_REFERENCE_ROLE"
-	ClusterRoleBindingReferenceClusterRole RelationshipType = "CLUSTERROLEBINDING_REFERENCE_CLUSTERROLE"
-	PVCUseStorageClass                     RelationshipType = "PVC_USE_STORAGECLASS"
-	MutatingWebhookTargetService           RelationshipType = "MUTATINGWEBHOOK_TARGET_SERVICE"
-	ValidatingWebhookTargetService         RelationshipType = "VALIDATINGWEBHOOK_TARGET_SERVICE"
-	PDBProtectPod                          RelationshipType = "PDB_PROTECT_POD"
+	DeploymentOwnReplicaset        RelationshipType = "DEPLOYMENT_OWN_REPLICASET"
+	ReplicasetOwnPod               RelationshipType = "REPLICASET_OWN_POD"
+	StatefulsetOwnPod              RelationshipType = "STATEFULSET_OWN_POD"
+	DaemonsetOwnPod                RelationshipType = "DAEMONSET_OWN_POD"
+	JobOwnPod                      RelationshipType = "JOB_OWN_POD"
+	ServiceExposePod               RelationshipType = "SERVICE_EXPOSE_POD"
+	ServiceExposeDeployment        RelationshipType = "SERVICE_EXPOSE_DEPLOYMENT"
+	ServiceExposeStatefulset       RelationshipType = "SERVICE_EXPOSE_STATEFULSET"
+	ServiceExposeDaemonset         RelationshipType = "SERVICE_EXPOSE_DAEMONSET"
+	ServiceExposeReplicaset        RelationshipType = "SERVICE_EXPOSE_REPLICASET"
+	CronJobOwnPod                  RelationshipType = "CRONJOB_OWN_POD"
+	CronJobOwnJob                  RelationshipType = "CRONJOB_OWN_JOB"
+	ServiceHasEndpoints            RelationshipType = "SERVICE_HAS_ENDPOINTS"
+	NetworkPolicyApplyPod          RelationshipType = "NETWORKPOLICY_APPLY_POD"
+	HPAScaleDeployment             RelationshipType = "HPA_SCALE_DEPLOYMENT"
+	RoleBindingReferenceRole       RelationshipType = "ROLEBINDING_REFERENCE_ROLE"
+	MutatingWebhookTargetService   RelationshipType = "MUTATINGWEBHOOK_TARGET_SERVICE"
+	ValidatingWebhookTargetService RelationshipType = "VALIDATINGWEBHOOK_TARGET_SERVICE"
+	PDBProtectPod                  RelationshipType = "PDB_PROTECT_POD"
 	// ingresses to services
 	Route RelationshipType = "ROUTE"
-
-	// This is for configMaps, Volumes, Secrets in pods
-	Mount RelationshipType = "MOUNT"
 
 	// special relationships
 	NamespaceHasResource RelationshipType = "NAMESPACE_HAS_RESOURCE"
@@ -74,7 +64,6 @@ type RelationshipRule struct {
 }
 
 var relationshipRules = []RelationshipRule{
-
 	{
 		KindA:        "pods",
 		KindB:        "replicasets",
@@ -124,18 +113,6 @@ var relationshipRules = []RelationshipRule{
 		},
 	},
 	{
-		KindA:        "persistentvolumeclaims",
-		KindB:        "persistentvolumes",
-		Relationship: PVBoundPVC,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.spec.volumeName",
-				FieldB:         "$.metadata.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
 		KindA:        "endpoints",
 		KindB:        "services",
 		Relationship: ServiceHasEndpoints,
@@ -143,30 +120,6 @@ var relationshipRules = []RelationshipRule{
 			{
 				FieldA:         "$.metadata.name",
 				FieldB:         "$.metadata.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "configmaps",
-		KindB:        "pods",
-		Relationship: PodUseConfigMap,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.spec.volumes[].configMap.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "secrets",
-		KindB:        "pods",
-		Relationship: PodUseSecret,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.spec.volumes[].secret.secretName",
 				ComparisonType: ExactMatch,
 			},
 		},
@@ -356,66 +309,6 @@ var relationshipRules = []RelationshipRule{
 		},
 	},
 	{
-		KindA:        "pods",
-		KindB:        "nodes",
-		Relationship: NodeRunPod,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.spec.nodeName",
-				FieldB:         "$.metadata.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "serviceaccounts",
-		KindB:        "pods",
-		Relationship: PodUseServiceAccount,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.spec.serviceAccountName",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "roles",
-		KindB:        "rolebindings",
-		Relationship: RoleBindingReferenceRole,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.roleRef.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "clusterroles",
-		KindB:        "clusterrolebindings",
-		Relationship: ClusterRoleBindingReferenceClusterRole,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.roleRef.name",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
-		KindA:        "storageclasses",
-		KindB:        "persistentvolumeclaims",
-		Relationship: PVCUseStorageClass,
-		MatchCriteria: []MatchCriterion{
-			{
-				FieldA:         "$.metadata.name",
-				FieldB:         "$.spec.storageClassName",
-				ComparisonType: ExactMatch,
-			},
-		},
-	},
-	{
 		KindA:        "mutatingwebhookconfigurations",
 		KindB:        "services",
 		Relationship: MutatingWebhookTargetService,
@@ -464,5 +357,4 @@ var relationshipRules = []RelationshipRule{
 			},
 		},
 	},
-	// Add more rules here...
 }

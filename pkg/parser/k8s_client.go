@@ -26,6 +26,24 @@ var (
 	openAPIDocMutex  sync.RWMutex
 )
 
+// Make resourceSpecs accessible outside the package
+var ResourceSpecs = make(map[string][]string)
+
+// func init() {
+// 	initResourceSpecs()
+// }
+
+func InitResourceSpecs() {
+	specs, err := GetOpenAPIResourceSpecs()
+	if err != nil {
+		fmt.Println("Error fetching resource specs:", err)
+		return
+	}
+	ResourceSpecs = specs
+	// Initialize relationships after specs are loaded
+	initializeRelationships()
+}
+
 func GetQueryExecutorInstance() *QueryExecutor {
 	once.Do(func() {
 		executor, err := NewQueryExecutor()
@@ -187,8 +205,8 @@ func FindGVR(clientset *kubernetes.Clientset, resourceId string) (schema.GroupVe
 	GvrCacheMutex.RUnlock()
 
 	// GVR not in cache, find it using discovery
-	discoveryClient := clientset.Discovery()
 	if apiResourceListCache == nil {
+		discoveryClient := clientset.Discovery()
 		apiResourceList, err := discoveryClient.ServerPreferredResources()
 		if err != nil {
 			return schema.GroupVersionResource{}, err
@@ -280,9 +298,14 @@ func GetOpenAPIResourceSpecs() (map[string][]string, error) {
 
 // fetchResourceSpecsFromOpenAPI fetches and parses the OpenAPI V3 schemas
 func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
+	if !CleanOutput {
+		fmt.Print("🔎 fetching resource specs from openapi... ")
+	}
 	openAPIDocMutex.Lock()
 	defer openAPIDocMutex.Unlock()
 	specs := make(map[string][]string)
+
+	executorInstance := GetQueryExecutorInstance()
 
 	if openAPIDoc == nil {
 
@@ -310,6 +333,9 @@ func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 		for _, groupVersion := range paths {
 			schemaBytes, err := groupVersion.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
 			if err != nil {
+				if strings.Contains(err.Error(), "the backend attempted to redirect this request") {
+					continue
+				}
 				fmt.Printf("Error retrieving schema for group version %s: %v\n", groupVersion, err)
 				continue
 			}
@@ -335,39 +361,59 @@ func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 					if schema != nil {
 						// Pass the visited map to prevent infinite recursion
 						visited := make(map[string][]string) // Initialize the visited map
-						fields := parseSchema(schema, "", visited)
+						fields := parseSchema(schema, "", visited, "")
 						specs[resourceName] = fields
 					}
 				}
 			}
 		}
 	}
-
+	if !CleanOutput {
+		fmt.Println("done!")
+	}
 	return specs, nil
 }
 
 // parseSchema recursively extracts field paths from the schema
-func parseSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]string) []string {
+func parseSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]string, parent string) []string {
 	fields := []string{}
 	if schema == nil {
 		return fields
 	}
 
-	// first check if the schema has a "kind" field
-	if prefix == "" && schema.Properties != nil {
-		for _, prop := range schema.Properties.AdditionalProperties {
-			if prop.Name == "kind" {
-				fields = append(fields, processSchema(schema, prefix, visited)...)
+	// Check if the schema has a "kind" field and is a valid GVR
+	if parent == "" && schema.SpecificationExtension != nil {
+		for _, ext := range schema.SpecificationExtension {
+			if ext.Name == "x-kubernetes-group-version-kind" {
+				kindYaml := ext.Value.Yaml
+				kind := ""
+				lines := strings.Split(kindYaml, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "kind:") {
+						kind = strings.Split(line, ":")[1]
+						kind = strings.TrimSpace(kind)
+					}
+				}
+				if kind != "" {
+					gvr, err := FindGVR(executorInstance.Clientset, kind)
+					if err == nil {
+						fields = append(fields, processSchema(schema, prefix, visited, gvr.Resource)...)
+					} else {
+						fields = append(fields, processSchema(schema, prefix, visited, parent)...)
+					}
+				} else {
+					fields = append(fields, processSchema(schema, prefix, visited, parent)...)
+				}
 			}
 		}
 	} else if prefix != "" {
-		fields = append(fields, processSchema(schema, prefix, visited)...)
+		fields = append(fields, processSchema(schema, prefix, visited, parent)...)
 	}
 
 	return fields
 }
 
-func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]string) []string {
+func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string][]string, parent string) []string {
 	// Check if the schema has been cached
 	// Create a unique key that includes both the schema pointer and kind
 	uniqueKey := fmt.Sprintf("%p", schema)
@@ -379,28 +425,6 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 
 	// fmt.Printf("Processing schema: %s\n", schema)
 	fields := []string{}
-
-	// Handle allOf, oneOf, anyOf if present
-	if len(schema.AllOf) > 0 {
-		for _, subSchemaOrRef := range schema.AllOf {
-			var subSchema *openapi_v3.Schema
-			if ref := subSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
-				subSchema = resolveReference(ref.XRef)
-				if subSchema == nil {
-					// fmt.Printf("Failed to resolve reference in allOf: %s\n", ref.XRef)
-					continue
-				}
-			} else if nested := subSchemaOrRef.GetSchema(); nested != nil {
-				subSchema = nested
-			}
-
-			if subSchema != nil {
-				subFields := parseSchema(subSchema, prefix, visited)
-				fields = append(fields, subFields...)
-				visited[uniqueKey] = subFields
-			}
-		}
-	}
 
 	// Handle properties
 	if schema.Properties != nil {
@@ -416,7 +440,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			var nestedSchema *openapi_v3.Schema
 			if schemaOrRef := prop.Value; schemaOrRef != nil {
 				if ref := schemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
-					nestedSchema = resolveReference(ref.XRef)
+					nestedSchema = resolveReference(ref.XRef, parent, fullName)
 					if nestedSchema == nil {
 						// fmt.Printf("Failed to resolve reference for field: %s\n", fullName)
 						continue
@@ -427,11 +451,33 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			}
 
 			if nestedSchema != nil {
-				nestedFields := parseSchema(nestedSchema, fullName, visited)
+				nestedFields := parseSchema(nestedSchema, fullName, visited, parent)
 				if len(nestedFields) > 0 {
 					fields = append(fields, nestedFields...)
 					visited[uniqueKey] = fields
 				}
+			}
+		}
+	}
+
+	// Handle allOf, oneOf, anyOf if present
+	if len(schema.AllOf) > 0 {
+		for _, subSchemaOrRef := range schema.AllOf {
+			var subSchema *openapi_v3.Schema
+			if ref := subSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
+				subSchema = resolveReference(ref.XRef, parent, prefix)
+				if subSchema == nil {
+					// fmt.Printf("Failed to resolve reference in allOf: %s\n", ref.XRef)
+					continue
+				}
+			} else if nested := subSchemaOrRef.GetSchema(); nested != nil {
+				subSchema = nested
+			}
+
+			if subSchema != nil {
+				subFields := parseSchema(subSchema, prefix, visited, parent)
+				fields = append(fields, subFields...)
+				visited[uniqueKey] = subFields
 			}
 		}
 	}
@@ -442,7 +488,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 		if itemSchemaOrRef != nil {
 			var itemSchema *openapi_v3.Schema
 			if ref := itemSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
-				itemSchema = resolveReference(ref.XRef)
+				itemSchema = resolveReference(ref.XRef, parent, prefix)
 				if itemSchema == nil {
 					// fmt.Printf("Failed to resolve reference for array items at: %s\n", prefix)
 					return fields
@@ -453,7 +499,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 
 			if itemSchema != nil {
 				arrayPrefix := prefix + "[]"
-				nestedFields := parseSchema(itemSchema, arrayPrefix, visited)
+				nestedFields := parseSchema(itemSchema, arrayPrefix, visited, parent)
 				fields = append(fields, nestedFields...)
 				visited[uniqueKey] = fields
 			}
@@ -465,14 +511,14 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 		if addPropSchemaOrRef := schema.AdditionalProperties.GetSchemaOrReference(); addPropSchemaOrRef != nil {
 			var addPropSchema *openapi_v3.Schema
 			if ref := addPropSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
-				addPropSchema = resolveReference(ref.XRef)
+				addPropSchema = resolveReference(ref.XRef, parent, prefix)
 			} else if nested := addPropSchemaOrRef.GetSchema(); nested != nil {
 				addPropSchema = nested
 			}
 
 			if addPropSchema != nil {
 				addPropPrefix := prefix + "{}"
-				nestedFields := parseSchema(addPropSchema, addPropPrefix, visited)
+				nestedFields := parseSchema(addPropSchema, addPropPrefix, visited, parent)
 				visited[uniqueKey] = nestedFields
 				fields = append(fields, nestedFields...)
 			}
@@ -486,7 +532,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 }
 
 // resolveReference resolves a $ref string to its corresponding schema
-func resolveReference(ref string) *openapi_v3.Schema {
+func resolveReference(ref string, parent string, path string) *openapi_v3.Schema {
 	// Example ref format: "#/components/schemas/Pod"
 	refParts := strings.Split(ref, "/")
 	if len(refParts) < 4 {
@@ -502,11 +548,61 @@ func resolveReference(ref string) *openapi_v3.Schema {
 
 	for _, schemaEntry := range openAPIDoc.Components.Schemas.AdditionalProperties {
 		if schemaEntry.Name == schemaName {
+			// Check for relationship
+			if parent != "" {
+				kind := extractKindFromSchemaName(schemaName)
+				gvr, err := FindGVR(executorInstance.Clientset, kind)
+				if err == nil {
+					createRelationshipRule(parent, gvr.Resource, path)
+				}
+			}
 			// fmt.Printf("Resolved reference %s to schema %s\n", ref, schemaName)
 			return schemaEntry.Value.GetSchema()
 		}
 	}
 
-	// fmt.Printf("Schema not found for ref: %s\n", ref)
 	return nil
+}
+
+func extractKindFromSchemaName(schemaName string) string {
+	parts := strings.Split(schemaName, ".")
+	if len(parts) > 0 {
+		return strings.ToLower(parts[len(parts)-1])
+	}
+	return ""
+}
+
+func createRelationshipRule(parent string, schemaName string, path string) {
+	// first check if the relationship between the 2 kinds already exists
+	rule, err := findRuleByKinds(schemaName, parent)
+	fieldA := "$." + path + ".metadata.name"
+	fieldB := "$.metadata.name"
+	kindA := schemaName
+	kindB := parent
+	if err != nil {
+		relationshipRule := RelationshipRule{
+			KindA:        kindA,
+			KindB:        kindB,
+			Relationship: RelationshipType(fmt.Sprintf("%s_REFERENCES_%s", kindB, kindA)),
+			MatchCriteria: []MatchCriterion{
+				{
+					FieldA:         fieldA,
+					FieldB:         fieldB,
+					ComparisonType: ExactMatch,
+				},
+			},
+		}
+		relationshipRules = append(relationshipRules, relationshipRule)
+	} else if len(rule.MatchCriteria) > 0 {
+		if rule.KindA == kindB && rule.KindB == kindA {
+			fieldA = "$.metadata.name"
+			fieldB = "$." + path + ".metadata.name"
+		}
+
+		rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
+			FieldA:         fieldA,
+			FieldB:         fieldB,
+			ComparisonType: ExactMatch,
+		})
+	}
 }

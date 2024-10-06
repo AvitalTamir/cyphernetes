@@ -10,6 +10,7 @@ import (
 var Namespace string
 var LogLevel string
 var AllNamespaces bool
+var CleanOutput bool
 
 type Expression struct {
 	Clauses []Clause
