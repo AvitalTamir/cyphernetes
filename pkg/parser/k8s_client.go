@@ -574,7 +574,7 @@ func createRelationshipRule(parent string, schemaName string, path string) {
 			Relationship: RelationshipType(fmt.Sprintf("%s_REFERENCES_%s", parent, schemaName)),
 			MatchCriteria: []MatchCriterion{
 				{
-					FieldA:         "$." + path + ".name",
+					FieldA:         "$." + path + ".metadata.name",
 					FieldB:         "$.metadata.name",
 					ComparisonType: ExactMatch,
 				},
@@ -584,7 +584,7 @@ func createRelationshipRule(parent string, schemaName string, path string) {
 		relationshipRules = append(relationshipRules, relationshipRule)
 	} else if len(rule.MatchCriteria) > 0 {
 		rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
-			FieldA:         "$." + path + ".name",
+			FieldA:         "$." + path + ".metadata.name",
 			FieldB:         "$.metadata.name",
 			ComparisonType: ExactMatch,
 		})
