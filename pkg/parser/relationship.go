@@ -18,8 +18,8 @@ func initializeRelationships() {
 		}
 	}
 
-	// Regular expression to match fields ending with 'Name'
-	nameFieldRegex := regexp.MustCompile(`\w+Name$`)
+	// Regular expression to match fields ending with 'Name', or 'Ref'
+	nameFieldRegex := regexp.MustCompile(`(\w+)(Name|Ref)$`)
 
 	for kindA, fields := range ResourceSpecs {
 		kindAName := extractKindFromSchemaName(kindA)
@@ -34,8 +34,8 @@ func initializeRelationships() {
 			fieldName := parts[len(parts)-1]
 			if nameFieldRegex.MatchString(fieldName) {
 				// Extract potential KindB
-				relatedKindSingular := strings.TrimSuffix(fieldName, "Name")
-
+				relatedKindSingular := nameFieldRegex.ReplaceAllString(fieldName, "$1")
+				relSpecType := nameFieldRegex.ReplaceAllString(fieldName, "$2")
 				// convert relatedKind to lower case plural - find the correct plural form using FindGVR
 				gvr, err := FindGVR(executorInstance.Clientset, relatedKindSingular)
 				if err != nil {
@@ -50,21 +50,36 @@ func initializeRelationships() {
 				}
 				kindAName := gvr.Resource
 
+				if relSpecType == "Ref" {
+					fieldPath = fieldPath + ".name"
+				}
 				// Check if relatedKind exists in availableKinds
-				if _, exists := availableKinds[relatedKindSingular]; exists {
-					// Create a new relationship rule
-					relType := RelationshipType(fmt.Sprintf("%s_SPEC_%sNAME", strings.ToUpper(kindAName), strings.ToUpper(relatedKindSingular)))
-					rule := RelationshipRule{
-						KindA:        strings.ToLower(kindAName),
-						KindB:        strings.ToLower(relatedKind),
-						Relationship: relType,
-						MatchCriteria: []MatchCriterion{
-							{
-								FieldA:         "$." + fieldPath,
-								FieldB:         "$.metadata.name",
-								ComparisonType: ExactMatch,
+				if _, exists := availableKinds[strings.ToLower(relatedKindSingular)]; exists {
+					// Create a new relationship rule if one doesn't already exist between these two kinds.
+					// If it does exist, append the new criterion to the existing rule's match criteria.
+					relType := RelationshipType(fmt.Sprintf("%s_SPEC_%s%s", strings.ToUpper(kindAName), strings.ToUpper(relatedKindSingular), strings.ToUpper(relSpecType)))
+					rule, err := findRuleByKinds(strings.ToLower(kindAName), strings.ToLower(relatedKind))
+					if err == nil {
+						rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
+							FieldA:         "$." + fieldPath,
+							FieldB:         "$.metadata.name",
+							ComparisonType: ExactMatch,
+						})
+						fmt.Println("*** Appending to existing relationship rule: ", rule)
+					} else {
+						rule = RelationshipRule{
+							KindA:        strings.ToLower(kindAName),
+							KindB:        strings.ToLower(relatedKind),
+							Relationship: relType,
+							MatchCriteria: []MatchCriterion{
+								{
+									FieldA:         "$." + fieldPath,
+									FieldB:         "$.metadata.name",
+									ComparisonType: ExactMatch,
+								},
 							},
-						},
+						}
+						fmt.Println("*** Creating relationship rule: ", rule)
 					}
 
 					// Append the new rule to existing relationshipRules
@@ -82,6 +97,15 @@ func findRuleByRelationshipType(relationshipType RelationshipType) (Relationship
 		}
 	}
 	return RelationshipRule{}, fmt.Errorf("rule not found for relationship type: %s", relationshipType)
+}
+
+func findRuleByKinds(kindA, kindB string) (RelationshipRule, error) {
+	for _, rule := range relationshipRules {
+		if rule.KindA == kindA && rule.KindB == kindB {
+			return rule, nil
+		}
+	}
+	return RelationshipRule{}, fmt.Errorf("rule not found for kinds: %s and %s", kindA, kindB)
 }
 
 func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion) bool {
