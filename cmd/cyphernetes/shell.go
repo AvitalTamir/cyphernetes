@@ -63,6 +63,14 @@ func shellPrompt() string {
 	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, ctx, ns)
 }
 
+func multiLinePrompt() string {
+	color := "32"
+
+	// strip the color codes from the shell prompt
+	shellPromptLength := len(regexp.MustCompile(`\033\[[0-9;]*m`).ReplaceAllString(shellPrompt(), ""))
+	return fmt.Sprintf("\033[%sm%s%s", color, strings.Repeat(" ", shellPromptLength-3), "»\033[0m ")
+}
+
 func SetQueryExecutor(exec *parser.QueryExecutor) {
 	executor = exec
 }
@@ -284,13 +292,16 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 			cmds = append(cmds, line)
 			lastLine := rl.Config.Painter.Paint([]rune(line), 0)
-			if len(cmds) > 0 {
-				// delete one line up
-				fmt.Print("\033[A\033[K")
+			// delete one line up
+			fmt.Print("\033[A\033[K")
+			if len(cmds) == 1 {
+				fmt.Print(shellPrompt())
+			} else {
+				fmt.Print(multiLinePrompt())
 			}
 			fmt.Println(string(lastLine))
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
-				rl.SetPrompt(">>> ")
+				rl.SetPrompt(multiLinePrompt())
 				continue
 			}
 			cmd := strings.Join(cmds, " ")
@@ -614,7 +625,6 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 
 	if len(*cmds) == 0 {
 		// If the input is empty, exit the program
-		fmt.Println("\nExiting...")
 		os.Exit(0)
 	}
 
