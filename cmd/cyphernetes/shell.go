@@ -117,7 +117,7 @@ var (
 	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
 	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
-	propertiesRegex     = regexp.MustCompile(`\{([^{}]*(\{[^{}]*\}[^{}]*)*)\}`)
+	propertiesRegex     = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
 	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
 )
@@ -176,12 +176,11 @@ func colorizeProperties(obj string) string {
 	stripped = strings.TrimSuffix(stripped, "}")
 
 	// Colorize properties
-	colored := regexp.MustCompile(`("?\w+"?)(\s*:\s*)("[^"]*"|[^,{}]+|(\{[^{}]*\}))`).ReplaceAllStringFunc(stripped, func(prop string) string {
-		parts := regexp.MustCompile(`("?\w+"?)(\s*:\s*)(.+)`).FindStringSubmatch(prop)
-		if len(parts) == 4 {
+	colored := regexp.MustCompile(`((?:"(?:[^"\\]|\\.)*"|[^:,{}]+)\s*:\s*)("[^"]*"|[^,{}]+|(\{[^{}]*\}))`).ReplaceAllStringFunc(stripped, func(prop string) string {
+		parts := regexp.MustCompile(`((?:"(?:[^"\\]|\\.)*"|[^:,{}]+)\s*:\s*)(.+)`).FindStringSubmatch(prop)
+		if len(parts) == 3 {
 			key := parts[1]
-			spacing := parts[2]
-			value := parts[3]
+			value := parts[2]
 
 			// Check if value is a nested object
 			if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
@@ -190,7 +189,7 @@ func colorizeProperties(obj string) string {
 				value = "\033[36m" + value + "\033[0m" // Cyan for non-object values
 			}
 
-			return fmt.Sprintf("\033[33m%s\033[0m%s%s", key, spacing, value)
+			return fmt.Sprintf("\033[33m%s\033[0m%s", key, value)
 		}
 		return prop
 	})

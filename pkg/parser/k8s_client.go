@@ -152,6 +152,7 @@ func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, label
 }
 
 func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string) (unstructured.UnstructuredList, error) {
+	labelSelector = strings.ReplaceAll(labelSelector, "\"", "")
 	// Use discovery client to find the GVR for the given kind
 	gvr, err := FindGVR(q.Clientset, kind)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 // TestParseQueryWithReturn tests the parsing of a query with a MATCH and RETURN clause.
 func TestParseQueryWithReturn(t *testing.T) {
 	// Define the query to parse.
-	query := `MATCH (d:deploy { service: "foo", app: "bar"}), (s:Service {service: "foo", app: "bar"}) RETURN s.spec.ports, d.metadata.name`
+	query := `MATCH (d:deploy { service: "foo", app: "bar"}), (s:Service {service: "foo", app: "bar", "test.io/test": "foo"}) RETURN s.spec.ports, d.metadata.name`
 
 	// Define the expected AST structure after parsing.
 	expected := &Expression{
@@ -49,6 +49,10 @@ func TestParseQueryWithReturn(t *testing.T) {
 									{
 										Key:   "app",
 										Value: "bar",
+									},
+									{
+										Key:   `"test.io/test"`,
+										Value: "foo",
 									},
 								},
 							},
