@@ -938,7 +938,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 
 	if n.ResourceProperties.Properties != nil {
 		for _, prop := range n.ResourceProperties.Properties.PropertyList {
-			if prop.Key == "name" || prop.Key == "metadata.name" {
+			if prop.Key == "name" || prop.Key == "metadata.name" || prop.Key == `"name"` || prop.Key == `"metadata.name"` {
 				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
 				hasNameSelector = true
 			} else {
