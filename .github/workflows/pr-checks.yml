@@ -30,6 +30,8 @@ jobs:
       run: make operator-manifests
     - name: Run tests
       run: make test
+    - name: Apply operator test CRDs
+      run: kubectl apply -f ./operator/test/e2e/samples/crd-exposeddeployments.yaml
     - name: Run operator tests
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_ASSETS }}
