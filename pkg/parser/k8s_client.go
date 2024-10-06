@@ -566,26 +566,34 @@ func extractKindFromSchemaName(schemaName string) string {
 
 func createRelationshipRule(parent string, schemaName string, path string) {
 	// first check if the relationship between the 2 kinds already exists
-	rule, err := findRuleByKinds(parent, schemaName)
+	rule, err := findRuleByKinds(schemaName, parent)
+	fieldA := "$." + path + ".metadata.name"
+	fieldB := "$.metadata.name"
+	kindA := schemaName
+	kindB := parent
 	if err != nil {
 		relationshipRule := RelationshipRule{
-			KindA:        parent,
-			KindB:        schemaName,
-			Relationship: RelationshipType(fmt.Sprintf("%s_REFERENCES_%s", parent, schemaName)),
+			KindA:        kindA,
+			KindB:        kindB,
+			Relationship: RelationshipType(fmt.Sprintf("%s_REFERENCES_%s", kindB, kindA)),
 			MatchCriteria: []MatchCriterion{
 				{
-					FieldA:         "$." + path + ".metadata.name",
-					FieldB:         "$.metadata.name",
+					FieldA:         fieldA,
+					FieldB:         fieldB,
 					ComparisonType: ExactMatch,
 				},
 			},
 		}
-		fmt.Printf("Creating relationship rule: %v\n", relationshipRule)
 		relationshipRules = append(relationshipRules, relationshipRule)
 	} else if len(rule.MatchCriteria) > 0 {
+		if rule.KindA == kindB && rule.KindB == kindA {
+			fieldA = "$.metadata.name"
+			fieldB = "$." + path + ".metadata.name"
+		}
+
 		rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
-			FieldA:         "$." + path + ".metadata.name",
-			FieldB:         "$.metadata.name",
+			FieldA:         fieldA,
+			FieldB:         fieldB,
 			ComparisonType: ExactMatch,
 		})
 	}

@@ -72,26 +72,33 @@ func initializeRelationships() {
 				// If it does exist, append the new criterion to the existing rule's match criteria.
 				relType := RelationshipType(fmt.Sprintf("%s%s_INSPEC_%s", strings.ToUpper(relatedKindSingular), strings.ToUpper(relSpecType), strings.ToUpper(kindANameSingular)))
 				rule, err := findRuleByKinds(strings.ToLower(kindAName), strings.ToLower(relatedKind))
+				kindA = strings.ToLower(kindAName)
+				kindB := strings.ToLower(relatedKind)
+				fieldA := "$." + fieldPath
+				fieldB := "$.metadata.name"
 				if err == nil {
+					if rule.KindA == kindB && rule.KindB == kindA {
+						fieldA = "$.metadata.name"
+						fieldB = "$." + fieldPath
+					}
 					rule.MatchCriteria = append(rule.MatchCriteria, MatchCriterion{
-						FieldA:         "$." + fieldPath,
-						FieldB:         "$.metadata.name",
+						FieldA:         fieldA,
+						FieldB:         fieldB,
 						ComparisonType: ExactMatch,
 					})
 				} else {
 					rule = RelationshipRule{
-						KindA:        strings.ToLower(kindAName),
-						KindB:        strings.ToLower(relatedKind),
+						KindA:        kindA,
+						KindB:        kindB,
 						Relationship: relType,
 						MatchCriteria: []MatchCriterion{
 							{
-								FieldA:         "$." + fieldPath,
-								FieldB:         "$.metadata.name",
+								FieldA:         fieldA,
+								FieldB:         fieldB,
 								ComparisonType: ExactMatch,
 							},
 						},
 					}
-
 					// Append the new rule to existing relationshipRules
 					relationshipRules = append(relationshipRules, rule)
 				}
@@ -111,7 +118,7 @@ func findRuleByRelationshipType(relationshipType RelationshipType) (Relationship
 
 func findRuleByKinds(kindA, kindB string) (RelationshipRule, error) {
 	for _, rule := range relationshipRules {
-		if rule.KindA == kindA && rule.KindB == kindB {
+		if (rule.KindA == kindA && rule.KindB == kindB) || (rule.KindA == kindB && rule.KindB == kindA) {
 			return rule, nil
 		}
 	}
