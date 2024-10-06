@@ -216,13 +216,22 @@ func runShell(cmd *cobra.Command, args []string) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	fmt.Println("Cyphernetes Interactive Shell")
-	fmt.Println("Type 'exit' or press Ctrl-D to exit")
-	fmt.Println("Type 'help' for information on how to use the shell")
+	fmt.Println(`
+                __                    __        
+ ______ _____  / /  ___ _______  ___ / /____ ___
+/ __/ // / _ \/ _ \/ -_) __/ _ \/ -_) __/ -_|_-<
+\__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
+   /___/_/ Interactive Shell`)
+	fmt.Println("")
 	// Initialize the GRV cache
 	parser.FetchAndCacheGVRs(executor.Clientset)
+	parser.InitResourceSpecs()
 	initResourceSpecs()
 
+	fmt.Println("")
+	fmt.Println("Type 'exit' or press Ctrl-D to exit")
+	fmt.Println("Type 'help' for information on how to use the shell")
+	fmt.Println("")
 	var cmds []string
 	var input string
 	executing := false

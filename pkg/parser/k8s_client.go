@@ -29,11 +29,11 @@ var (
 // Make resourceSpecs accessible outside the package
 var ResourceSpecs = make(map[string][]string)
 
-func init() {
-	initResourceSpecs()
-}
+// func init() {
+// 	initResourceSpecs()
+// }
 
-func initResourceSpecs() {
+func InitResourceSpecs() {
 	specs, err := GetOpenAPIResourceSpecs()
 	if err != nil {
 		fmt.Println("Error fetching resource specs:", err)
@@ -205,8 +205,8 @@ func FindGVR(clientset *kubernetes.Clientset, resourceId string) (schema.GroupVe
 	GvrCacheMutex.RUnlock()
 
 	// GVR not in cache, find it using discovery
-	discoveryClient := clientset.Discovery()
 	if apiResourceListCache == nil {
+		discoveryClient := clientset.Discovery()
 		apiResourceList, err := discoveryClient.ServerPreferredResources()
 		if err != nil {
 			return schema.GroupVersionResource{}, err
@@ -298,6 +298,9 @@ func GetOpenAPIResourceSpecs() (map[string][]string, error) {
 
 // fetchResourceSpecsFromOpenAPI fetches and parses the OpenAPI V3 schemas
 func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
+	if !CleanOutput {
+		fmt.Print("🔎 fetching resource specs from openapi... ")
+	}
 	openAPIDocMutex.Lock()
 	defer openAPIDocMutex.Unlock()
 	specs := make(map[string][]string)
@@ -330,6 +333,9 @@ func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 		for _, groupVersion := range paths {
 			schemaBytes, err := groupVersion.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
 			if err != nil {
+				if strings.Contains(err.Error(), "the backend attempted to redirect this request") {
+					continue
+				}
 				fmt.Printf("Error retrieving schema for group version %s: %v\n", groupVersion, err)
 				continue
 			}
@@ -362,7 +368,9 @@ func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 			}
 		}
 	}
-
+	if !CleanOutput {
+		fmt.Println("done!")
+	}
 	return specs, nil
 }
 
