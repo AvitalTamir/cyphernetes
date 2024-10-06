@@ -510,8 +510,3 @@ func resolveReference(ref string) *openapi_v3.Schema {
 	// fmt.Printf("Schema not found for ref: %s\n", ref)
 	return nil
 }
-
-// func init() {
-// 	// Initialize the executorInstance
-// 	GetQueryExecutorInstance()
-// }
