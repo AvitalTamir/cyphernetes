@@ -283,6 +283,12 @@ func runShell(cmd *cobra.Command, args []string) {
 				continue
 			}
 			cmds = append(cmds, line)
+			lastLine := rl.Config.Painter.Paint([]rune(line), 0)
+			if len(cmds) > 0 {
+				// delete one line up
+				fmt.Print("\033[A\033[K")
+			}
+			fmt.Println(string(lastLine))
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
 				rl.SetPrompt(">>> ")
 				continue
@@ -294,7 +300,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			input = strings.TrimSpace(cmd)
 		} else {
 			input = strings.TrimSpace(line)
+			lastQuery := rl.Config.Painter.Paint([]rune(input), 0)
+			fmt.Println(string(lastQuery))
 		}
+		fmt.Print("\n")
+
 		rl.SaveHistory(input)
 
 		if input == "exit" {
