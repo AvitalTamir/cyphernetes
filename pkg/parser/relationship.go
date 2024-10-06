@@ -65,7 +65,6 @@ func initializeRelationships() {
 							FieldB:         "$.metadata.name",
 							ComparisonType: ExactMatch,
 						})
-						fmt.Println("*** Appending to existing relationship rule: ", rule)
 					} else {
 						rule = RelationshipRule{
 							KindA:        strings.ToLower(kindAName),
