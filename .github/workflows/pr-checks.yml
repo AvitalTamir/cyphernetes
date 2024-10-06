@@ -22,12 +22,16 @@ jobs:
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
         setup-envtest use
         echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path)" >> $GITHUB_ENV
+    - name: Create a link to envtest in operator/bin
+      run: mkdir -p ./operator/bin && ln -s $(which setup-envtest) ./operator/bin/setup-envtest
     - name: Install goyacc
       run: go install golang.org/x/tools/cmd/goyacc@latest
     - name: Create the operator manifests
       run: make operator-manifests
     - name: Run tests
       run: make test
+    - name: Apply operator test CRDs
+      run: kubectl apply -f ./operator/test/e2e/samples/crd-exposeddeployments.yaml
     - name: Run operator tests
       env:
         KUBEBUILDER_ASSETS: ${{ env.KUBEBUILDER_ASSETS }}

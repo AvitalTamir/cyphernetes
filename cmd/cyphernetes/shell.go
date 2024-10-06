@@ -33,7 +33,7 @@ var ShellCmd = &cobra.Command{
 	Run:   runShell,
 }
 
-var executor = parser.GetQueryExecutorInstance()
+var executor *parser.QueryExecutor
 var execTime time.Duration
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
@@ -74,18 +74,24 @@ func getCurrentContext() (string, string, error) {
 }
 
 func getCurrentContextFromConfig() (string, string, error) {
-	// Use the local kubeconfig context
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
-		&clientcmd.ConfigOverrides{
-			CurrentContext: "",
-		}).RawConfig()
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	config, err := kubeConfig.RawConfig()
 	if err != nil {
-		fmt.Println("Error getting current context from kubeconfig")
-		return "", "", err
+		return "", "", fmt.Errorf("error getting current context from kubeconfig: %v", err)
 	}
+
 	currentContextName := config.CurrentContext
-	namespace := config.Contexts[currentContextName].Namespace
+	currentContext, exists := config.Contexts[currentContextName]
+	if !exists {
+		return "", "", fmt.Errorf("current context %s does not exist in kubeconfig", currentContextName)
+	}
+
+	namespace := currentContext.Namespace
+	// We don't set a default namespace here, as it wasn't in the original code
+
 	return currentContextName, namespace, nil
 }
 
@@ -561,6 +567,11 @@ func init() {
 		if err := macroManager.LoadMacrosFromFile(userMacrosFile); err != nil {
 			fmt.Printf("Error loading user macros: %v\n", err)
 		}
+	}
+
+	executor = parser.GetQueryExecutorInstance()
+	if executor == nil {
+		os.Exit(1)
 	}
 
 	// Get the name of the current Kubernetes context

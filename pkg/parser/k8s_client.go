@@ -59,33 +59,33 @@ type apiResponse struct {
 }
 
 func NewQueryExecutor() (*QueryExecutor, error) {
-	// Use the local kubeconfig context
-	// Try to use the in-cluster config first
-	config, err := rest.InClusterConfig()
+	var config *rest.Config
+	var err error
+
+	// First, try to use in-cluster config
+	config, err = rest.InClusterConfig()
 	if err != nil {
-		// If that fails, fall back to kubeconfig
-		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+		// If that fails, use the kubeconfig file(s)
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		configOverrides := &clientcmd.ConfigOverrides{}
+		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+		config, err = kubeConfig.ClientConfig()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create config: %v", err)
+			return nil, fmt.Errorf("failed to create config: not found in $KUBECONFIG, ~/.kube/config, or in-cluster")
 		}
-	}
-	if err != nil {
-		fmt.Println("Error creating in-cluster config")
-		return nil, err
 	}
 
 	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		fmt.Println("Error creating clientset")
-		return nil, err
+		return nil, fmt.Errorf("error creating clientset: %v", err)
 	}
 
 	// Create the dynamic client
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		fmt.Println("Error creating dynamic client")
-		return nil, err
+		return nil, fmt.Errorf("error creating dynamic client: %v", err)
 	}
 
 	// Initialize the semaphore with a desired concurrency level
@@ -509,9 +509,4 @@ func resolveReference(ref string) *openapi_v3.Schema {
 
 	// fmt.Printf("Schema not found for ref: %s\n", ref)
 	return nil
-}
-
-func init() {
-	// Initialize the executorInstance
-	GetQueryExecutorInstance()
 }
