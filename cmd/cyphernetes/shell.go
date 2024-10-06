@@ -54,13 +54,28 @@ func filterInput(r rune) (rune, bool) {
 
 func shellPrompt() string {
 	ns := parser.Namespace
-	color := "32"
+	color := getPromptColor(ns)
 	if ns == "" {
 		ns = "ALL NAMESPACES"
-		color = "31"
 	}
 
 	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, ctx, ns)
+}
+
+func multiLinePrompt() string {
+	ns := parser.Namespace
+	color := getPromptColor(ns)
+
+	// strip the color codes from the shell prompt
+	shellPromptLength := len(regexp.MustCompile(`\033\[[0-9;]*m`).ReplaceAllString(shellPrompt(), ""))
+	return fmt.Sprintf("\033[%sm%s%s", color, strings.Repeat(" ", shellPromptLength-3), "»\033[0m ")
+}
+
+func getPromptColor(ns string) string {
+	if ns == "" {
+		return "31"
+	}
+	return "32"
 }
 
 func SetQueryExecutor(exec *parser.QueryExecutor) {
@@ -283,8 +298,17 @@ func runShell(cmd *cobra.Command, args []string) {
 				continue
 			}
 			cmds = append(cmds, line)
+			lastLine := rl.Config.Painter.Paint([]rune(line), 0)
+			// delete one line up
+			fmt.Print("\033[A\033[K")
+			if len(cmds) == 1 {
+				fmt.Print(shellPrompt())
+			} else {
+				fmt.Print(multiLinePrompt())
+			}
+			fmt.Println(string(lastLine))
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
-				rl.SetPrompt(">>> ")
+				rl.SetPrompt(multiLinePrompt())
 				continue
 			}
 			cmd := strings.Join(cmds, " ")
@@ -294,7 +318,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			input = strings.TrimSpace(cmd)
 		} else {
 			input = strings.TrimSpace(line)
+			lastQuery := rl.Config.Painter.Paint([]rune(input), 0)
+			fmt.Println(string(lastQuery))
 		}
+		fmt.Print("\n")
+
 		rl.SaveHistory(input)
 
 		if input == "exit" {
@@ -604,7 +632,6 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 
 	if len(*cmds) == 0 {
 		// If the input is empty, exit the program
-		fmt.Println("\nExiting...")
 		os.Exit(0)
 	}
 
