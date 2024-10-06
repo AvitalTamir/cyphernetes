@@ -22,6 +22,10 @@ var queryCmd = &cobra.Command{
 	Long:  `Use the 'query' subcommand to execute a single Cypher-inspired query against your Kubernetes resources.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		executor = parser.GetQueryExecutorInstance()
+		if executor == nil {
+			os.Exit(1)
+		}
 		parser.CleanOutput = true
 		parser.InitResourceSpecs()
 		runQuery(args, os.Stdout)
