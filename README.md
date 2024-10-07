@@ -216,7 +216,7 @@ Contributions are welcome! Please feel free to submit pull requests, open issues
 
 ## License
 
-Cyphernetes is open-sourced under the MIT license. See the [LICENSE](LICENSE) file for details.
+Cyphernetes is open-sourced under the Apache 2.0 license. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
