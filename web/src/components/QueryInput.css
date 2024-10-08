@@ -8,7 +8,7 @@
   position: relative;
   flex-grow: 1;
   overflow: hidden;
-  background-color: #282c34; /* Dark background color */
+  background-color: #1e1e1e;
 }
 
 .query-textarea,
@@ -32,7 +32,7 @@
 .query-textarea {
   color: transparent;
   background: transparent;
-  caret-color: #fff; /* White caret color */
+  caret-color: #fff;
   resize: none;
   border: none;
   outline: none;
@@ -43,7 +43,7 @@
   pointer-events: none;
   z-index: 0;
   background-color: transparent;
-  color: #fff; /* Set text color for syntax highlighting */
+  color: #e0e0e0;
 }
 
 .query-editor pre code {
@@ -67,6 +67,6 @@
 }
 
 .submit-button:disabled {
-  background: #cccccc;
+  background: #4a4a4a;
   cursor: not-allowed;
 }

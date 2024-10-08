@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml';
-import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { gruvboxDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import * as jsYaml from 'js-yaml';
 import './ResultsDisplay.css';
 
@@ -44,9 +44,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
         <button onClick={() => setFormat('yaml')} className={format === 'yaml' ? 'active' : ''}>YAML</button>
         <button onClick={() => setFormat('json')} className={format === 'json' ? 'active' : ''}>JSON</button>
       </div>
-      <SyntaxHighlighter language={format} style={docco} customStyle={{fontSize: '14px'}}>
-        {formattedResult}
-      </SyntaxHighlighter>
+      <div className="results-content">
+        {error ? (
+          <div className="error">{error}</div>
+        ) : (
+          <SyntaxHighlighter language={format} style={gruvboxDark} customStyle={{fontSize: '14px'}}>
+            {formattedResult}
+          </SyntaxHighlighter>        )}
+      </div>
     </div>
   );
 };

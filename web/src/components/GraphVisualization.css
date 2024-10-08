@@ -3,13 +3,15 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #282c34;
+  background-color: #2d2d2d;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
 .graph-visualization {
   width: 100%;
   height: 100%;
-  background-color: #000000;
+  overflow: hidden;
 }
 
 .graph-visualization > div {
@@ -23,6 +25,7 @@
   flex-wrap: wrap;
   justify-content: center;
   background-color: rgba(255, 255, 255, 0.1);
+  margin-top: 1rem;
 }
 
 .legend-item {
@@ -39,6 +42,6 @@
 }
 
 .legend-label {
-  color: white;
+  color: #e0e0e0;
   font-size: 14px;
 }

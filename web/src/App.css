@@ -2,6 +2,8 @@ html, body, #root, .App {
   height: 100%;
   margin: 0;
   padding: 0;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
 }
 
 .App {
@@ -10,7 +12,7 @@ html, body, #root, .App {
 }
 
 .left-panel {
-  background-color: #f0f0f0;
+  background-color: #2d2d2d;
   overflow-y: auto;
 }
 
@@ -20,11 +22,11 @@ html, body, #root, .App {
 }
 
 .query-input {
-  background: #efefef;
+  background: #2d2d2d;
   padding: 1rem;
 }
 
 .graph-visualization {
-  background-color: #f0f0f0;
+  background-color: #1e1e1e;
   overflow: auto;
 }
