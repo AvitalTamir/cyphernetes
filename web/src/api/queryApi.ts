@@ -2,7 +2,7 @@
 
 export interface QueryResponse {
   result: string;
-  graph: any; // You might want to define a more specific type for your graph data
+  graph: string; // Change this to string as it should be a JSON string
 }
 
 export async function executeQuery(query: string): Promise<QueryResponse> {
@@ -18,5 +18,8 @@ export async function executeQuery(query: string): Promise<QueryResponse> {
     throw new Error('Failed to execute query');
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log("API response:", data); // Add this line for debugging
+
+  return data;
 }

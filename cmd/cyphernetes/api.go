@@ -50,9 +50,16 @@ func handleQuery(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	resultGraph, err := json.Marshal(result.Graph)
+
+	sanitizedGraph, err := sanitizeGraph(result.Graph, string(resultData))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	resultGraph, err := json.Marshal(sanitizedGraph)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	response := QueryResponse{
