@@ -4,12 +4,52 @@
   height: 100%;
 }
 
-.query-textarea {
+.query-editor {
+  position: relative;
   flex-grow: 1;
-  resize: none;
+  overflow: hidden;
+  background-color: #282c34; /* Dark background color */
+}
+
+.query-textarea,
+.query-editor pre {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: 1rem;
-  font-family: monospace;
+  font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: auto;
+}
+
+.query-textarea {
+  color: transparent;
+  background: transparent;
+  caret-color: #fff; /* White caret color */
+  resize: none;
+  border: none;
+  outline: none;
+  z-index: 1;
+}
+
+.query-editor pre {
+  pointer-events: none;
+  z-index: 0;
+  background-color: transparent;
+  color: #fff; /* Set text color for syntax highlighting */
+}
+
+.query-editor pre code {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
 }
 
 .submit-button {
@@ -19,8 +59,14 @@
   border: none;
   cursor: pointer;
   transition: background 0.3s;
+  margin-top: 1rem;
 }
 
 .submit-button:hover {
   background: linear-gradient(135deg, #ff7a7a, #a375ff);
+}
+
+.submit-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
 }

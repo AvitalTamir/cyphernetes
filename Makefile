@@ -80,6 +80,9 @@ web-build:
 	rm -rf cmd/cyphernetes/web
 	cp -r web/dist cmd/cyphernetes/web
 
+run-web: build
+	./dist/cyphernetes web
+
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
 .SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build
