@@ -1,0 +1,6 @@
+{
+	"dependencies": {
+		"react-force-graph": "^1.44.5",
+		"d3-force": "^3.0.0"
+	}
+}

@@ -1,0 +1,26 @@
+.query-input-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.query-textarea {
+  flex-grow: 1;
+  resize: none;
+  padding: 1rem;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.submit-button {
+  padding: 0.5rem;
+  background: linear-gradient(135deg, #ff5757, #8c52ff);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.submit-button:hover {
+  background: linear-gradient(135deg, #ff7a7a, #a375ff);
+}

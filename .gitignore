@@ -28,3 +28,4 @@ y.output
 .DS_Store
 
 .coverage
+node_modules

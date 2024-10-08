@@ -1,0 +1,30 @@
+html, body, #root, .App {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.App {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+}
+
+.left-panel {
+  background-color: #f0f0f0;
+  overflow-y: auto;
+}
+
+.right-panel {
+  display: grid;
+  grid-template-rows: 1fr 2fr;
+}
+
+.query-input {
+  background: #efefef;
+  padding: 1rem;
+}
+
+.graph-visualization {
+  background-color: #f0f0f0;
+  overflow: auto;
+}
