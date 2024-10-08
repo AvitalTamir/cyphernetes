@@ -2,7 +2,7 @@
   padding: 1rem;
   height: 100%;
   overflow-y: auto;
-  background-color: #2d2d2d;
+  background-color: rgb(43,43,43);
   font-family: 'Courier New', Courier, monospace;
   color: #e0e0e0;
   display: flex;

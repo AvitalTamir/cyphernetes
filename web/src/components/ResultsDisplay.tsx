@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml';
-import { gruvboxDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import * as jsYaml from 'js-yaml';
 import './ResultsDisplay.css';
 
@@ -48,7 +48,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
         {error ? (
           <div className="error">{error}</div>
         ) : (
-          <SyntaxHighlighter language={format} style={gruvboxDark} customStyle={{fontSize: '14px'}}>
+          <SyntaxHighlighter language={format} style={a11yDark} customStyle={{fontSize: '14px'}} height={'100%'}>
             {formattedResult}
           </SyntaxHighlighter>        )}
       </div>
