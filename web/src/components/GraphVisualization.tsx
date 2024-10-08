@@ -51,20 +51,19 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   }, [data]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const label = `${node.kind}: ${node.name}`;
-    const fontSize = 12/globalScale;
+    const label = node.name;
+    const fontSize = 10/globalScale;
     ctx.font = `${fontSize}px Sans-Serif`;
     const textWidth = ctx.measureText(label).width;
-    const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
+    const nodeRadius = 15;
 
+    // Draw circle
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillRect(
-      node.x - bckgDimensions[0] / 2, 
-      node.y - bckgDimensions[1] / 2, 
-      bckgDimensions[0], 
-      bckgDimensions[1]
-    );
+    ctx.fill();
 
+    // Draw text
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = node.color || '#000000';
@@ -77,7 +76,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     <div className="graph-visualization">
       <ForceGraph2D
         graphData={graphData}
-        nodeLabel="id"
+        nodeLabel="name"
         nodeCanvasObject={nodeCanvasObject}
         nodeCanvasObjectMode={() => 'replace'}
         linkLabel="type"
