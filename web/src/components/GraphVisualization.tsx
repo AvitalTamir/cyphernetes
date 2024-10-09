@@ -28,7 +28,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
@@ -119,23 +118,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     }
   }, []);
 
-  const handleMouseMove = useCallback((event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setMousePosition({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    });
-  }, []);
-
-  const paintRing = useCallback((node: any, ctx: CanvasRenderingContext2D) => {
-    // Draw ring around the node instead of filling it
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
-    ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }, [hoverNode]);
-
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     // Draw the node
     ctx.beginPath();
@@ -169,21 +151,19 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
       const boxWidth = textWidth + padding * 2;
       const boxHeight = largerFontSize + padding * 2;
       
-      // Calculate label position relative to the node and mouse
-      const offsetX = (mousePosition.x / globalScale - node.x) * 0.1;
-      const offsetY = (mousePosition.y / globalScale - node.y) * 0.1;
-      const labelX = node.x + offsetX;
-      const labelY = node.y + offsetY - boxHeight / 2 - NODE_R * 1.5;
+      // Position label below the node
+      const labelX = node.x;
+      const labelY = node.y + NODE_R + boxHeight / 2 + 2 / globalScale + 1.5;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(labelX - boxWidth / 2, labelY, boxWidth, boxHeight);
+      ctx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
       ctx.fillStyle = 'white';
-      ctx.fillText(fullLabel, labelX, labelY + boxHeight / 2);
+      ctx.fillText(fullLabel, labelX, labelY);
     }
-  }, [highlightNodes, mousePosition, hoverNode]);
+  }, [highlightNodes, hoverNode]);
 
   return (
-    <div ref={containerRef} className="graph-visualization-container" onMouseMove={handleMouseMove}>
+    <div ref={containerRef} className="graph-visualization-container">
       <div className="graph-visualization">
         <ForceGraph2D
           ref={fgRef}
