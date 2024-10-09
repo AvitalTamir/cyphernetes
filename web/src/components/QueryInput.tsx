@@ -35,6 +35,8 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
         <SyntaxHighlighter
           language="cypher"
           style={dracula}
+          wrapLines={true}
+          wrapLongLines={true}
           customStyle={{
             margin: 0,
             padding: '1rem',
