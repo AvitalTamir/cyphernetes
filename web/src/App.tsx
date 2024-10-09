@@ -17,12 +17,15 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
+      // Reset the graph before setting new query result
+      if (graphRef.current) {
+        graphRef.current.resetGraph();
+      }
       const result = await executeQuery(query);
       setQueryResult(result);
       setFilteredResult(result.result);
     } catch (err) {
-      //@ts-ignore
-      setError('An error occurred while executing the query: ' + err.error);
+      setError('An error occurred while executing the query: ' + err);
       console.error(err);
       // Clear the graph data and reset the graph visualization
       setQueryResult(null);

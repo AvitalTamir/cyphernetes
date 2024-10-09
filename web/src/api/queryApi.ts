@@ -15,12 +15,12 @@ export async function executeQuery(query: string): Promise<QueryResponse> {
     body: JSON.stringify({ query }),
   });
 
-  const data = await response.json();
-
   if (!response.ok) {
+    const data = await response.json();
     throw new Error(data.error);
   }
 
+  const data = await response.json();
   console.log("API response:", data); // Add this line for debugging
 
   return data;
