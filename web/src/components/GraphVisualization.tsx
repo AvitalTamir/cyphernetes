@@ -97,34 +97,63 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
   const [hoverNode, setHoverNode] = useState(null);
+  const [isHighlightLocked, setIsHighlightLocked] = useState(false);
 
   const handleNodeHover = useCallback((node: any) => {
-    let newHighlightNodes;
-    if (node) {
-      newHighlightNodes = new Set([node, ...(node.neighbors || [])]);
-      setHighlightNodes(newHighlightNodes);
-      setHighlightLinks(new Set(node.links || []));
-    } else {
-      newHighlightNodes = new Set();
-      setHighlightNodes(newHighlightNodes);
-      setHighlightLinks(new Set());
+    if (!isHighlightLocked) {
+      let newHighlightNodes;
+      if (node) {
+        newHighlightNodes = new Set([node, ...(node.neighbors || [])]);
+        setHighlightNodes(newHighlightNodes);
+        setHighlightLinks(new Set(node.links || []));
+      } else {
+        newHighlightNodes = new Set();
+        setHighlightNodes(newHighlightNodes);
+        setHighlightLinks(new Set());
+      }
+      setHoverNode(node || null);
+      onNodeHover(newHighlightNodes);
     }
-    setHoverNode(node || null);
-    onNodeHover(newHighlightNodes);
-  }, [onNodeHover]);
+  }, [onNodeHover, isHighlightLocked]);
 
   const handleLinkHover = useCallback((link: any) => {
-    if (link) {
-      const newHighlightNodes = new Set([link.source, link.target]);
+    if (!isHighlightLocked) {
+      if (link) {
+        const newHighlightNodes = new Set([link.source, link.target]);
+        setHighlightNodes(newHighlightNodes);
+        setHighlightLinks(new Set([link]));
+        onNodeHover(newHighlightNodes);
+      } else {
+        setHighlightLinks(new Set());
+        setHighlightNodes(new Set());
+        onNodeHover(new Set());
+      }
+    }
+  }, [onNodeHover, isHighlightLocked]);
+
+  const handleNodeClick = useCallback((node: any, event: any) => {
+    if (node) {
+      const newHighlightNodes = new Set([node, ...(node.neighbors || [])]);
       setHighlightNodes(newHighlightNodes);
-      setHighlightLinks(new Set([link]));
-      onNodeHover(newHighlightNodes);  // Call onNodeHover with the new highlighted nodes
+      setHighlightLinks(new Set(node.links || []));
+      setIsHighlightLocked(true);
+      onNodeHover(newHighlightNodes);
     } else {
-      setHighlightLinks(new Set());
       setHighlightNodes(new Set());
-      onNodeHover(new Set());  // Call onNodeHover with an empty set when unhovering
+      setHighlightLinks(new Set());
+      setIsHighlightLocked(false);
+      onNodeHover(new Set());
     }
   }, [onNodeHover]);
+
+  const handleCanvasClick = useCallback(() => {
+    if (isHighlightLocked) {
+      setHighlightNodes(new Set());
+      setHighlightLinks(new Set());
+      setIsHighlightLocked(false);
+      onNodeHover(new Set());
+    }
+  }, [isHighlightLocked, onNodeHover]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     ctx.save();  // Save the current canvas state
@@ -217,6 +246,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
           nodeCanvasObject={nodeCanvasObject}
           onNodeHover={handleNodeHover}
           onLinkHover={handleLinkHover}
+          onNodeClick={handleNodeClick}
+          onBackgroundClick={handleCanvasClick}
           linkCanvasObject={linkCanvasObject}
           linkCanvasObjectMode={() => 'after'}
           nodeAutoColorBy="kind"
