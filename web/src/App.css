@@ -13,12 +13,13 @@ html, body, #root, .App {
 
 .left-panel {
   background-color: #efefef;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .right-panel {
   display: grid;
   grid-template-rows: 1fr 2fr;
+  overflow: hidden;
 }
 
 .query-input {

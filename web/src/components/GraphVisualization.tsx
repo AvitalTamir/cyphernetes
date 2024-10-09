@@ -33,7 +33,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     if (containerRef.current) {
       setDimensions({
         width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight
+        height: containerRef.current.clientHeight,
       });
     }
   }, []);
