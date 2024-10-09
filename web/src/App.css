@@ -39,7 +39,7 @@ html, body, #root, .App {
 
 .query-input {
   background: #efefef;
-  padding: 1rem;
+  padding: 1rem 1rem 0 1rem;
 }
 
 .graph-visualization {
