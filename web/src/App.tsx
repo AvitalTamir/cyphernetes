@@ -37,31 +37,36 @@ function App() {
       const resultData = JSON.parse(queryResult.result);
       console.log('Parsed result data:', resultData);
 
-      const filteredData: any = {};
+      if (highlightedNodes.size === 0) {
+        setFilteredResult(JSON.stringify(resultData, null, 2));
+      } else {
 
-      for (const [key, value] of Object.entries(resultData)) {
-        console.log(`Processing key: ${key}, value:`, value);
-        filteredData[key] = [];
-        if (Array.isArray(value)) {
-          const highlightedNodesArr = Array.from(highlightedNodes)
-          highlightedNodesArr.map((highlightedNode) => {
-            const includedItems = value.filter((item) => item.name === highlightedNode.name);
-            if (includedItems.length === 0) {
-              return null;
-            } else {
-              filteredData[key] = [...filteredData[key], ...includedItems];
+        const filteredData: any = {};
+
+        for (const [key, value] of Object.entries(resultData)) {
+            console.log(`Processing key: ${key}, value:`, value);
+            filteredData[key] = [];
+            if (Array.isArray(value)) {
+            const highlightedNodesArr = Array.from(highlightedNodes)
+            highlightedNodesArr.map((highlightedNode) => {
+                const includedItems = value.filter((item) => item.name === highlightedNode.name);
+                if (includedItems.length === 0) {
+                return null;
+                } else {
+                filteredData[key] = [...filteredData[key], ...includedItems];
+                }
+            });
+            console.log(`Filtered ${key}:`, filteredData[key]);
+            if (filteredData[key].length === 0) {
+                console.log(`Removing empty key: ${key}`);
+                delete filteredData[key];
             }
-          });
-          console.log(`Filtered ${key}:`, filteredData[key]);
-          if (filteredData[key].length === 0) {
-            console.log(`Removing empty key: ${key}`);
-            delete filteredData[key];
           }
         }
-      }
 
-      console.log('Final filtered data:', filteredData);
-      setFilteredResult(JSON.stringify(filteredData, null, 2));
+        console.log('Final filtered data:', filteredData);
+        setFilteredResult(JSON.stringify(filteredData, null, 2));
+      }
     } catch (err) {
       console.error('Error filtering results:', err);
     }
