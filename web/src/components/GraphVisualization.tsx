@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import './GraphVisualization.css';
 
@@ -25,7 +25,7 @@ interface GraphVisualizationProps {
   onNodeHover: (highlightedNodes: Set<any>) => void;
 }
 
-const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHover }) => {
+const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualizationProps>(({ data, onNodeHover }, ref) => {
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -247,6 +247,21 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
     ctx.restore();  // Restore the canvas state
   }, [highlightLinks]);
 
+  const resetGraph = useCallback(() => {
+    setHighlightNodes(new Set());
+    setHighlightLinks(new Set());
+    setHoverNode(null);
+    setIsHighlightLocked(false);
+    if (fgRef.current) {
+      fgRef.current.centerAt();
+      fgRef.current.zoom(1, 1000);
+    }
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    resetGraph
+  }));
+
   return (
     <div ref={containerRef} className="graph-visualization-container">
       <div className="graph-visualization">
@@ -276,6 +291,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
       </div>
     </div>
   );
-};
+});
 
 export default GraphVisualization;

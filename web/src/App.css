@@ -11,6 +11,10 @@ html, body, #root, .App {
   grid-template-columns: 1fr 2fr;
 }
 
+.App.left-sidebar-closed {
+  grid-template-columns: 0 2fr !important;
+}
+
 .left-panel {
   background-color: #efefef;
   overflow-y: hidden;
@@ -37,12 +41,45 @@ html, body, #root, .App {
   z-index: 1;
 }
 
+.App.left-sidebar-closed .right-panel {
+  display: block;
+  height: 100%;
+}
+
 .query-input {
   background: #efefef;
   padding: 1rem 1rem 0 1rem;
 }
 
+.App.left-sidebar-closed .query-input {
+  position: absolute;
+  height: 16rem;
+  width: 39rem;
+  z-index: 10000;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0);
+}
+
 .graph-visualization {
   background-color: #1e1e1e;
   overflow: auto;
+}
+
+.left-panel.closed {
+  width: 0;
+  overflow: hidden;
+}
+
+.toggle-button {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 2rem;
+  height: 2rem;
+  background: linear-gradient(135deg, #ff5757, #8c52ff);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s;
+  z-index: 10000;
 }

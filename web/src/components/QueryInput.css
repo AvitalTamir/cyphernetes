@@ -45,6 +45,11 @@
   z-index: 0;
   background-color: transparent;
   color: #e0e0e0;
+  transition: background-color 0.6s ease-in-out;
+}
+
+.App.left-sidebar-closed .query-editor {
+  background-color: rgba(30, 30, 30, 0.6)
 }
 
 .query-editor pre code {

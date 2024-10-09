@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import QueryInput from './components/QueryInput';
 import ResultsDisplay from './components/ResultsDisplay';
 import GraphVisualization from './components/GraphVisualization';
@@ -10,6 +10,8 @@ function App() {
   const [filteredResult, setFilteredResult] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const graphRef = useRef<{ resetGraph: () => void } | null>(null);
 
   const handleQuerySubmit = async (query: string) => {
     setIsLoading(true);
@@ -19,8 +21,14 @@ function App() {
       setQueryResult(result);
       setFilteredResult(result.result);
     } catch (err) {
-      setError('An error occurred while executing the query.');
+      //@ts-ignore
+      setError('An error occurred while executing the query: ' + err.error);
       console.error(err);
+      // Clear the graph data and reset the graph visualization
+      setQueryResult(null);
+      if (graphRef.current) {
+        graphRef.current.resetGraph();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -75,9 +83,17 @@ function App() {
   }, [queryResult]);
 
   return (
-    <div className="App">
-      <div className="left-panel">
-        <ResultsDisplay result={filteredResult} error={error} />
+    <div className={`App ${!isPanelOpen ? 'left-sidebar-closed' : ''}`}>
+      <button className="toggle-button" onClick={() => {
+        setIsPanelOpen(!isPanelOpen);
+        setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+        }, 10);
+      }}>
+        {isPanelOpen ? '×' : '→'}
+      </button>
+      <div className={`left-panel ${!isPanelOpen ? 'closed' : ''}`}>
+        {isPanelOpen && <ResultsDisplay result={filteredResult} error={error} />}
       </div>
       <div className="right-panel">
         <div className="query-input">
@@ -85,6 +101,7 @@ function App() {
         </div>
         <div className="graph-visualization">
           <GraphVisualization 
+            ref={graphRef}
             data={queryResult?.graph ?? null} 
             onNodeHover={handleNodeHover}
           />

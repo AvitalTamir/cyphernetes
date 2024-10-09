@@ -2,7 +2,8 @@
 
 export interface QueryResponse {
   result: string;
-  graph: string; // Change this to string as it should be a JSON string
+  graph: string;
+  error?: string;
 }
 
 export async function executeQuery(query: string): Promise<QueryResponse> {
@@ -14,11 +15,12 @@ export async function executeQuery(query: string): Promise<QueryResponse> {
     body: JSON.stringify({ query }),
   });
 
+  const data = await response.json();
+
   if (!response.ok) {
-    throw new Error('Failed to execute query');
+    throw new Error(data.error);
   }
 
-  const data = await response.json();
   console.log("API response:", data); // Add this line for debugging
 
   return data;
