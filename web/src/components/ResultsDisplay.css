@@ -37,7 +37,7 @@
 .results-content {
   flex-grow: 1;
   overflow-y: auto;
-  padding-bottom: 1rem;
+  margin-bottom: -0.25rem;
 }
 
 .results-display pre {
