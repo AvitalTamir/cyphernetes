@@ -22,9 +22,10 @@ interface GraphData {
 
 interface GraphVisualizationProps {
   data: string | null;
+  onNodeHover: (highlightedNodes: Set<any>) => void;
 }
 
-const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
+const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHover }) => {
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -98,15 +99,19 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   const [hoverNode, setHoverNode] = useState(null);
 
   const handleNodeHover = useCallback((node: any) => {
+    let newHighlightNodes;
     if (node) {
-      setHighlightNodes(new Set([node, ...(node.neighbors || [])]));
+      newHighlightNodes = new Set([node, ...(node.neighbors || [])]);
+      setHighlightNodes(newHighlightNodes);
       setHighlightLinks(new Set(node.links || []));
     } else {
-      setHighlightNodes(new Set());
+      newHighlightNodes = new Set();
+      setHighlightNodes(newHighlightNodes);
       setHighlightLinks(new Set());
     }
     setHoverNode(node || null);
-  }, []);
+    onNodeHover(newHighlightNodes);
+  }, [onNodeHover]);
 
   const handleLinkHover = useCallback((link: any) => {
     if (link) {
