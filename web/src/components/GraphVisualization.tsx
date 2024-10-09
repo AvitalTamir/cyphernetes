@@ -138,13 +138,20 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
       setHighlightLinks(new Set(node.links || []));
       setIsHighlightLocked(true);
       onNodeHover(newHighlightNodes);
+
+      // Zoom in on the clicked node
+      const distance = 40;
+      const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+
+      fgRef.current.centerAt(node.x, node.y, 1000);
+      fgRef.current.zoom(5, 1000);
     } else {
       setHighlightNodes(new Set());
       setHighlightLinks(new Set());
       setIsHighlightLocked(false);
       onNodeHover(new Set());
     }
-  }, [onNodeHover]);
+  }, [onNodeHover, fgRef]);
 
   const handleCanvasClick = useCallback(() => {
     if (isHighlightLocked) {
@@ -152,8 +159,12 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
       setHighlightLinks(new Set());
       setIsHighlightLocked(false);
       onNodeHover(new Set());
+
+      // Reset zoom and center
+      fgRef.current.centerAt();
+      fgRef.current.zoom(1, 1000);
     }
-  }, [isHighlightLocked, onNodeHover]);
+  }, [isHighlightLocked, onNodeHover, fgRef]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     ctx.save();  // Save the current canvas state
@@ -173,8 +184,13 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
     if (highlightNodes.has(node)) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
-      ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
-      ctx.lineWidth = 2;
+      if (isHighlightLocked) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";  // Almost black for locked highlights
+        ctx.lineWidth = 3;  // Slightly thicker line for locked highlights
+      } else {
+        ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
+        ctx.lineWidth = 2;
+      }
       ctx.stroke();
     }
 
@@ -210,7 +226,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
 
     ctx.restore();  // Restore the canvas state
     
-  }, [highlightNodes, hoverNode]);
+  }, [highlightNodes, hoverNode, isHighlightLocked]);
 
   const linkCanvasObject = useCallback((link: any, ctx: CanvasRenderingContext2D) => {
     ctx.save();  // Save the current canvas state
