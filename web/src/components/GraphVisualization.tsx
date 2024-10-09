@@ -128,16 +128,28 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   }, []);
 
   const paintRing = useCallback((node: any, ctx: CanvasRenderingContext2D) => {
-    // add ring just for highlighted nodes
+    // Draw ring around the node instead of filling it
     ctx.beginPath();
     ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
-    ctx.fillStyle = node === hoverNode ? 'red' : 'orange';
-    ctx.fill();
+    ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }, [hoverNode]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    // Draw the node
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
+    ctx.fillStyle = node.__color;  // Use the color assigned by nodeAutoColorBy
+    ctx.fill();
+
     if (highlightNodes.has(node)) {
-      paintRing(node, ctx);
+      // Draw ring around the node
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
+      ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     const label = node.kind.replace(/[^A-Z]/g, '');
@@ -158,17 +170,17 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
       const boxHeight = largerFontSize + padding * 2;
       
       // Calculate label position relative to the node and mouse
-      const offsetX = (mousePosition.x / globalScale - node.x) * 0.3;
-      const offsetY = (mousePosition.y / globalScale - node.y) * 0.3;
+      const offsetX = (mousePosition.x / globalScale - node.x) * 0.1;
+      const offsetY = (mousePosition.y / globalScale - node.y) * 0.1;
       const labelX = node.x + offsetX;
-      const labelY = node.y + offsetY - boxHeight - NODE_R; // Position above the node
+      const labelY = node.y + offsetY - boxHeight / 2 - NODE_R * 1.5;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(labelX - boxWidth / 2, labelY, boxWidth, boxHeight);
       ctx.fillStyle = 'white';
       ctx.fillText(fullLabel, labelX, labelY + boxHeight / 2);
     }
-  }, [highlightNodes, mousePosition, hoverNode, paintRing]);
+  }, [highlightNodes, mousePosition, hoverNode]);
 
   return (
     <div ref={containerRef} className="graph-visualization-container" onMouseMove={handleMouseMove}>
