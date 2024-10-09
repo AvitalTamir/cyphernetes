@@ -115,13 +115,16 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data, onNodeHov
 
   const handleLinkHover = useCallback((link: any) => {
     if (link) {
+      const newHighlightNodes = new Set([link.source, link.target]);
+      setHighlightNodes(newHighlightNodes);
       setHighlightLinks(new Set([link]));
-      setHighlightNodes(new Set([link.source, link.target]));
+      onNodeHover(newHighlightNodes);  // Call onNodeHover with the new highlighted nodes
     } else {
       setHighlightLinks(new Set());
       setHighlightNodes(new Set());
+      onNodeHover(new Set());  // Call onNodeHover with an empty set when unhovering
     }
-  }, []);
+  }, [onNodeHover]);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     ctx.save();  // Save the current canvas state
