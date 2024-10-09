@@ -1,6 +1,6 @@
 .graph-visualization-container {
   width: 100%;
-  height: calc(100% - 3rem);
+  height: calc(100% - 2rem);
   display: flex;
   flex-direction: column;
   background-color: #efefef;

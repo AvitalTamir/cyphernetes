@@ -119,14 +119,21 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   }, []);
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    ctx.save();  // Save the current canvas state
+    
+    // Set global alpha based on highlight state
+    ctx.globalAlpha = highlightNodes.size > 0
+      ? (highlightNodes.has(node) ? 1 : 0.05)
+      : 0.8;
+
     // Draw the node
     ctx.beginPath();
     ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
-    ctx.fillStyle = node.__color;  // Use the color assigned by nodeAutoColorBy
+    ctx.fillStyle = node.__color;
     ctx.fill();
 
+    // Draw highlight ring if needed
     if (highlightNodes.has(node)) {
-      // Draw ring around the node
       ctx.beginPath();
       ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
       ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
@@ -134,33 +141,58 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
       ctx.stroke();
     }
 
+    // Draw node label
     const label = node.kind.replace(/[^A-Z]/g, '');
-    const fontSize = 5; // Increased from 4
-    ctx.font = `${fontSize}px Sans-Serif`;
+    ctx.font = '5px Sans-Serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'white';
     ctx.fillText(label, node.x, node.y);
 
+    // Draw full label if highlighted
     if (highlightNodes.has(node)) {
       const fullLabel = `(${node.kind}) ${node.name}`;
-      const largerFontSize = 14 / globalScale; // Increased from 12
+      const largerFontSize = 14 / globalScale;
       ctx.font = `${largerFontSize}px Sans-Serif`;
       const textWidth = ctx.measureText(fullLabel).width;
-      const padding = 6 / globalScale; // Increased from 4
+      const padding = 6 / globalScale;
       const boxWidth = textWidth + padding * 2;
       const boxHeight = largerFontSize + padding * 2;
       
-      // Position label below the node
       const labelX = node.x;
-      const labelY = node.y + NODE_R + boxHeight / 2 + 3 / globalScale + 1.5; // Increased from 2
+      const labelY = node.y + NODE_R + boxHeight / 2 + 3 / globalScale + 1.5;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
       ctx.fillStyle = 'white';
       ctx.fillText(fullLabel, labelX, labelY);
+      ctx.globalAlpha = 1;
+    } else {
+        ctx.globalAlpha = 0.05;
     }
+
+    ctx.restore();  // Restore the canvas state
+    
   }, [highlightNodes, hoverNode]);
+
+  const linkCanvasObject = useCallback((link: any, ctx: CanvasRenderingContext2D) => {
+    ctx.save();  // Save the current canvas state
+
+    ctx.beginPath();
+    ctx.moveTo(link.source.x, link.source.y);
+    ctx.lineTo(link.target.x, link.target.y);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = 1;
+    
+    // Set global alpha based on highlight state
+    ctx.globalAlpha = highlightLinks.size > 0
+      ? (highlightLinks.has(link) ? 0.45 : 0.01)
+      : 0.45;
+
+    ctx.stroke();
+
+    ctx.restore();  // Restore the canvas state
+  }, [highlightLinks]);
 
   return (
     <div ref={containerRef} className="graph-visualization-container">
@@ -177,6 +209,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
           nodeCanvasObject={nodeCanvasObject}
           onNodeHover={handleNodeHover}
           onLinkHover={handleLinkHover}
+          linkCanvasObject={linkCanvasObject}
+          linkCanvasObjectMode={() => 'after'}
           nodeAutoColorBy="kind"
           height={dimensions.height}
           width={dimensions.width}
