@@ -1,6 +1,5 @@
 import React, { useRef, useCallback, useMemo, useState, useEffect } from 'react';
-import ForceGraph3D from 'react-force-graph-3d';
-import SpriteText from 'three-spritetext';
+import ForceGraph2D from 'react-force-graph-2d';
 import './GraphVisualization.css';
 
 interface Node {
@@ -29,12 +28,13 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
       setDimensions({
         width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight - 10
+        height: containerRef.current.clientHeight
       });
     }
   }, []);
@@ -45,6 +45,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     return () => window.removeEventListener('resize', updateDimensions);
   }, [updateDimensions]);
 
+  const NODE_R = 8;
   const graphData: GraphData = useMemo(() => {
     if (!data) return { nodes: [], links: [] };
 
@@ -62,6 +63,27 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
         target: edge.To,
         type: edge.Type
       }));
+      // Add neighbors and links to nodes
+      //@ts-ignore
+      nodes.forEach(node => {
+        node.neighbors = [];
+        node.links = [];
+      });
+
+      //@ts-ignore
+      links.forEach(link => {
+        //@ts-ignore
+        const sourceNode = nodes.find(node => `${node.kind}/${node.name}` === link.source);
+        //@ts-ignore
+        const targetNode = nodes.find(node => `${node.kind}/${node.name}` === link.target);
+
+        if (sourceNode && targetNode) {
+          sourceNode.neighbors.push(targetNode);
+          targetNode.neighbors.push(sourceNode);
+          sourceNode.links.push(link);
+          targetNode.links.push(link);
+        }
+      });
 
       console.log(nodes, links);
 
@@ -72,39 +94,103 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     }
   }, [data]);
 
-  //@ts-ignore
-  const handleClick = useCallback((node) => {
-    const distance = 40;
-    const distRatio = 1 + distance/Math.hypot(node.x || 0, node.y || 0, node.z || 0);
+  const [highlightNodes, setHighlightNodes] = useState(new Set());
+  const [highlightLinks, setHighlightLinks] = useState(new Set());
+  const [hoverNode, setHoverNode] = useState(null);
 
-    fgRef.current.cameraPosition(
-      { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
-      node,
-      3000
-    );
-  }, [fgRef]);
+  const handleNodeHover = useCallback((node: any) => {
+    if (node) {
+      setHighlightNodes(new Set([node, ...(node.neighbors || [])]));
+      setHighlightLinks(new Set(node.links || []));
+    } else {
+      setHighlightNodes(new Set());
+      setHighlightLinks(new Set());
+    }
+    setHoverNode(node || null);
+  }, []);
+
+  const handleLinkHover = useCallback((link: any) => {
+    if (link) {
+      setHighlightLinks(new Set([link]));
+      setHighlightNodes(new Set([link.source, link.target]));
+    } else {
+      setHighlightLinks(new Set());
+      setHighlightNodes(new Set());
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMousePosition({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    });
+  }, []);
+
+  const paintRing = useCallback((node: any, ctx: CanvasRenderingContext2D) => {
+    // add ring just for highlighted nodes
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
+    ctx.fillStyle = node === hoverNode ? 'red' : 'orange';
+    ctx.fill();
+  }, [hoverNode]);
+
+  const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    if (highlightNodes.has(node)) {
+      paintRing(node, ctx);
+    }
+
+    const label = node.kind.replace(/[^A-Z]/g, '');
+    const fontSize = 4;
+    ctx.font = `${fontSize}px Sans-Serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText(label, node.x, node.y);
+
+    if (highlightNodes.has(node)) {
+      const fullLabel = `${node.kind}: ${node.name}`;
+      const largerFontSize = 12 / globalScale;
+      ctx.font = `${largerFontSize}px Sans-Serif`;
+      const textWidth = ctx.measureText(fullLabel).width;
+      const padding = 4 / globalScale;
+      const boxWidth = textWidth + padding * 2;
+      const boxHeight = largerFontSize + padding * 2;
+      
+      // Calculate label position relative to the node and mouse
+      const offsetX = (mousePosition.x / globalScale - node.x) * 0.3;
+      const offsetY = (mousePosition.y / globalScale - node.y) * 0.3;
+      const labelX = node.x + offsetX;
+      const labelY = node.y + offsetY - boxHeight - NODE_R; // Position above the node
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(labelX - boxWidth / 2, labelY, boxWidth, boxHeight);
+      ctx.fillStyle = 'white';
+      ctx.fillText(fullLabel, labelX, labelY + boxHeight / 2);
+    }
+  }, [highlightNodes, mousePosition, hoverNode, paintRing]);
 
   return (
-    <div ref={containerRef} className="graph-visualization-container">
+    <div ref={containerRef} className="graph-visualization-container" onMouseMove={handleMouseMove}>
       <div className="graph-visualization">
-        <ForceGraph3D
+        <ForceGraph2D
           ref={fgRef}
           graphData={graphData}
-          nodeLabel="id"
+          nodeRelSize={NODE_R}
+          autoPauseRedraw={false}
+          linkWidth={link => highlightLinks.has(link) ? 5 : 1}
+          linkDirectionalParticles={4}
+          linkDirectionalParticleWidth={link => highlightLinks.has(link) ? 4 : 0}
+          nodeCanvasObjectMode={() => 'after'}
+          nodeCanvasObject={nodeCanvasObject}
+          onNodeHover={handleNodeHover}
+          onLinkHover={handleLinkHover}
           nodeAutoColorBy="kind"
-          onNodeClick={handleClick}
-          linkAutoColorBy="type"
-          dagLevelDistance={100}
+          height={dimensions.height}
           width={dimensions.width}
-          height={dimensions.height - 10}
-          backgroundColor="#2d2d2d"
-          nodeThreeObjectExtend={true}
-          nodeThreeObject={(node: any) => {
-            const sprite = new SpriteText(node.name);
-            sprite.color = '#ffffff';
-            sprite.textHeight = 1.5;
-            return sprite;
-          }}
+          linkColor="#ffffff"
+          backgroundColor="#efefef"
+          nodeLabel={""}
         />
       </div>
     </div>

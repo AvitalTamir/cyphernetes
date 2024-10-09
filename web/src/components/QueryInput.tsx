@@ -51,7 +51,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
           className="query-textarea"
           value={query}
           onChange={handleChange}
-          placeholder="Enter your Cypher query here..."
+          placeholder="Your Cyphernetes query here..."
           spellCheck={false}
         />
       </div>

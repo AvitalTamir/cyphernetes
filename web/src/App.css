@@ -12,7 +12,7 @@ html, body, #root, .App {
 }
 
 .left-panel {
-  background-color: #2d2d2d;
+  background-color: #efefef;
   overflow-y: auto;
 }
 
@@ -22,7 +22,7 @@ html, body, #root, .App {
 }
 
 .query-input {
-  background: #2d2d2d;
+  background: #efefef;
   padding: 1rem;
 }
 
