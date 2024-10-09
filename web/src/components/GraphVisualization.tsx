@@ -135,7 +135,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     }
 
     const label = node.kind.replace(/[^A-Z]/g, '');
-    const fontSize = 4;
+    const fontSize = 5; // Increased from 4
     ctx.font = `${fontSize}px Sans-Serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -143,17 +143,17 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({ data }) => {
     ctx.fillText(label, node.x, node.y);
 
     if (highlightNodes.has(node)) {
-      const fullLabel = `${node.kind}: ${node.name}`;
-      const largerFontSize = 12 / globalScale;
+      const fullLabel = `(${node.kind}) ${node.name}`;
+      const largerFontSize = 14 / globalScale; // Increased from 12
       ctx.font = `${largerFontSize}px Sans-Serif`;
       const textWidth = ctx.measureText(fullLabel).width;
-      const padding = 4 / globalScale;
+      const padding = 6 / globalScale; // Increased from 4
       const boxWidth = textWidth + padding * 2;
       const boxHeight = largerFontSize + padding * 2;
       
       // Position label below the node
       const labelX = node.x;
-      const labelY = node.y + NODE_R + boxHeight / 2 + 2 / globalScale + 1.5;
+      const labelY = node.y + NODE_R + boxHeight / 2 + 3 / globalScale + 1.5; // Increased from 2
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
