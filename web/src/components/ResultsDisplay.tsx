@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml';
-import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { gradientDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import * as jsYaml from 'js-yaml';
 import './ResultsDisplay.css';
 
@@ -35,8 +35,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
     }
   }, [result, format]);
 
-  if (error) return <div className="results-display error">{error}</div>;
-  if (!result) return <div className="results-display">No results yet</div>;
+  if (error) return <div className="results-display error results-empty">{error}</div>;
+  if (!result) return <div className="results-display results-empty">No results yet</div>;
 
   return (
     <div className="results-display">
@@ -48,7 +48,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
         {error ? (
           <div className="error">{error}</div>
         ) : (
-          <SyntaxHighlighter language={format} style={a11yDark} customStyle={{fontSize: '14px'}} height={'100%'}>
+          <SyntaxHighlighter language={format} style={gradientDark} customStyle={{fontSize: '14px'}} height={'100%'}>
             {formattedResult}
           </SyntaxHighlighter>        )}
       </div>

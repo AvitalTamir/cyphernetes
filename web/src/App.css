@@ -14,12 +14,27 @@ html, body, #root, .App {
 .left-panel {
   background-color: #efefef;
   overflow-y: hidden;
+  position: relative;
+}
+
+.left-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+  pointer-events: none;
 }
 
 .right-panel {
   display: grid;
   grid-template-rows: 1fr 2fr;
   overflow: hidden;
+  box-shadow: -5px 0 10px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
 }
 
 .query-input {

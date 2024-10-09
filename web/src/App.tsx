@@ -49,11 +49,13 @@ function App() {
             if (Array.isArray(value)) {
             const highlightedNodesArr = Array.from(highlightedNodes)
             highlightedNodesArr.map((highlightedNode) => {
-                const includedItems = value.filter((item) => item.name === highlightedNode.name);
-                if (includedItems.length === 0) {
-                return null;
-                } else {
-                filteredData[key] = [...filteredData[key], ...includedItems];
+                if (highlightedNode.dataRefId === key) {
+                    const includedItems = value.filter((item) => item.name === highlightedNode.name);
+                    if (includedItems.length === 0) {
+                        return null;
+                    } else {
+                        filteredData[key] = [...filteredData[key], ...includedItems];
+                    }
                 }
             });
             console.log(`Filtered ${key}:`, filteredData[key]);

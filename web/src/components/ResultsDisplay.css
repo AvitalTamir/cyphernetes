@@ -1,8 +1,7 @@
 .results-display {
-  padding: 1rem;
-  height: calc(100% - 2rem);
+  height: 100%;
   overflow-y: auto;
-  background-color: rgb(43,43,43);
+  background-color: rgb(64, 64, 64);
   font-family: 'Courier New', Courier, monospace;
   color: #e0e0e0;
   display: flex;
@@ -13,6 +12,10 @@
   display: flex;
   justify-content: flex-end;
   margin-bottom: 1rem;
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  animation: fadeInOutLater 0.8s ease-in-out;
 }
 
 .results-header button {
@@ -34,6 +37,18 @@
   background-color: #4d4d4d;
 }
 
+@keyframes fadeInOutLater {
+    0% {
+        opacity: 0;
+    }
+    75% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
 .results-content {
   flex-grow: 1;
   overflow-y: auto;
@@ -44,11 +59,26 @@
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
-  max-height: 100%;
+  height: 100%;
   overflow-y: auto;
+  padding: 4rem 0 0 1rem !important;
+  animation: fadeInOut 0.5s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .error {
   color: #ff6b6b;
   font-weight: bold;
+}
+
+.results-empty {
+  padding: 2rem 1rem !important;
 }
