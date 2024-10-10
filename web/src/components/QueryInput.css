@@ -86,7 +86,7 @@
   border: 1px solid #444;
   max-height: 200px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 99999999;
   font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);

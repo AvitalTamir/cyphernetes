@@ -63,10 +63,10 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
   const debouncedFetchSuggestions = useCallback(
     debounce(async (query: string, position: number) => {
       try {
-        console.log('Fetching suggestions for:', query, 'at position:', position);
         const fetchedSuggestions = await fetchAutocompleteSuggestions(query, position);
-        console.log('Fetched suggestions:', fetchedSuggestions);
-        setSuggestions(fetchedSuggestions);
+        // Ensure suggestions are unique
+        const uniqueSuggestions = Array.from(new Set(fetchedSuggestions));
+        setSuggestions(uniqueSuggestions);
       } catch (error) {
         console.error('Failed to fetch suggestions:', error);
       }
@@ -75,23 +75,18 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
   );
 
   useEffect(() => {
-    console.log('Current query:', query);
-    console.log('Current cursor position:', cursorPosition);
     debouncedFetchSuggestions(query, cursorPosition);
   }, [query, cursorPosition, debouncedFetchSuggestions]);
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newQuery = e.target.value;
     const newPosition = e.target.selectionStart;
-    console.log('Query changed to:', newQuery);
-    console.log('Cursor position changed to:', newPosition);
     setQuery(newQuery);
     setCursorPosition(newPosition);
   };
 
   const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const newPosition = e.currentTarget.selectionStart;
-    console.log('Cursor position changed to:', newPosition);
     setCursorPosition(newPosition);
   };
 
@@ -126,7 +121,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
           className="query-textarea"
           spellCheck="false"
         />
-        {suggestions.length > 0 && (
+        {suggestions.length > 0 && suggestions[0] !== "" && (
           <div 
             className="suggestions" 
             style={{ 
@@ -136,7 +131,6 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
           >
             {suggestions.map((suggestion, index) => (
               <div key={index} className="suggestion-item" onClick={() => {
-                console.log('Suggestion clicked:', suggestion);
                 const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition);
                 setQuery(newQuery);
                 setCursorPosition(cursorPosition + suggestion.length);
