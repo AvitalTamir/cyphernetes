@@ -15,6 +15,7 @@ interface QueryInputProps {
   } | null;
   isHistoryModalOpen: boolean;
   setIsHistoryModalOpen: (isOpen: boolean) => void;
+  isPanelOpen: boolean;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({ 
@@ -22,7 +23,8 @@ const QueryInput: React.FC<QueryInputProps> = ({
   isLoading, 
   queryStatus, 
   isHistoryModalOpen, 
-  setIsHistoryModalOpen 
+  setIsHistoryModalOpen,
+  isPanelOpen
 }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -169,7 +171,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   return (
-    <form className="query-input-form" onSubmit={handleSubmit}>
+    <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
       <div className="query-editor">
         <SyntaxHighlighter
           language="cypher"

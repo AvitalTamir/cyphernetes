@@ -55,7 +55,12 @@
 }
 
 .App.left-sidebar-closed .query-editor {
-  background-color: rgba(30, 30, 30, 0.6)
+  background-color: rgba(30, 30, 30, 0.6);
+  transition: background-color 0.3s ease;
+}
+
+.App.left-sidebar-closed .query-input-form.focused .query-editor {
+  background-color: rgba(30, 30, 30, 1);
 }
 
 .query-editor pre code {
@@ -166,4 +171,13 @@
 
 .history-button:hover {
   color: #fff;
+}
+
+.query-input-form.panel-closed .query-editor {
+  background-color: rgba(30, 30, 30, 0.6);
+  transition: background-color 0.3s ease;
+}
+
+.query-input-form.panel-closed.focused .query-editor {
+  background-color: rgba(30, 30, 30, 1);
 }

@@ -291,6 +291,7 @@ function App() {
             queryStatus={queryStatus}
             isHistoryModalOpen={isHistoryModalOpen}
             setIsHistoryModalOpen={setIsHistoryModalOpen}
+            isPanelOpen={isPanelOpen}
           />
         </div>
         <div className="graph-visualization">
