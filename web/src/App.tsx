@@ -15,6 +15,10 @@ interface QueryStatus {
   time: number;
 }
 
+interface AggregateResult {
+  [key: string]: any;
+}
+
 function App() {
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
   const [filteredResult, setFilteredResult] = useState<string | null>(null);
@@ -24,6 +28,7 @@ function App() {
   const [queryStatus, setQueryStatus] = useState<QueryStatus | null>(null);
   const graphRef = useRef<{ resetGraph: () => void } | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [aggregateResults, setAggregateResults] = useState<AggregateResult>({});
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -58,16 +63,23 @@ function App() {
 
       const results: QueryResponse[] = [];
       const uniqueResults = new Set<string>();
+      let newAggregateResults: AggregateResult = {};
 
       for (const singleQuery of queries) {
         const result = await executeQuery(singleQuery);
         results.push(result);
 
-        // Prevent duplicates when merging results
         if (result.result) {
           const parsedResult = JSON.parse(result.result);
           for (const [key, value] of Object.entries(parsedResult)) {
-            if (Array.isArray(value)) {
+            if (key === 'aggregate') {
+              // Merge aggregate results
+              if (typeof value === 'object' && value !== null) {
+                newAggregateResults = { ...newAggregateResults, ...value };
+              } else {
+                console.warn(`Unexpected aggregate value type: ${typeof value}`);
+              }
+            } else if (Array.isArray(value)) {
               for (const item of value) {
                 uniqueResults.add(JSON.stringify({ [key]: item }));
               }
@@ -76,16 +88,21 @@ function App() {
         }
       }
 
+      setAggregateResults(newAggregateResults);
+
       // Merge results
       const mergedResult: QueryResponse = {
         result: JSON.stringify(
-          Array.from(uniqueResults).reduce((acc: AccumulatedResult, curr) => {
-            const parsed = JSON.parse(curr);
-            const key = Object.keys(parsed)[0];
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(parsed[key]);
-            return acc;
-          }, {}),
+          {
+            ...Array.from(uniqueResults).reduce((acc: AccumulatedResult, curr) => {
+              const parsed = JSON.parse(curr);
+              const key = Object.keys(parsed)[0];
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(parsed[key]);
+              return acc;
+            }, {}),
+            ...(Object.keys(newAggregateResults).length > 0 ? { aggregate: newAggregateResults } : {})
+          },
           null,
           2
         ),
@@ -134,46 +151,37 @@ function App() {
   };
 
   const handleNodeHover = useCallback((highlightedNodes: Set<any>) => {
-    console.log('handleNodeHover called with:', highlightedNodes);
     if (!queryResult || !queryResult.result) {
-      console.log('No query result available');
       return;
     }
 
     try {
       const resultData = JSON.parse(queryResult.result);
-      console.log('Parsed result data:', resultData);
 
       if (highlightedNodes.size === 0) {
+        // Show all results, including aggregate, when no nodes are highlighted
         setFilteredResult(JSON.stringify(resultData, null, 2));
       } else {
-
         const filteredData: any = {};
 
         for (const [key, value] of Object.entries(resultData)) {
-            console.log(`Processing key: ${key}, value:`, value);
+          if (key !== 'aggregate' && Array.isArray(value)) {
             filteredData[key] = [];
-            if (Array.isArray(value)) {
-            const highlightedNodesArr = Array.from(highlightedNodes)
-            highlightedNodesArr.map((highlightedNode) => {
-                if (highlightedNode.dataRefId === key) {
-                    const includedItems = value.filter((item) => item.name === highlightedNode.name);
-                    if (includedItems.length === 0) {
-                        return null;
-                    } else {
-                        filteredData[key] = [...filteredData[key], ...includedItems];
-                    }
+            const highlightedNodesArr = Array.from(highlightedNodes);
+            highlightedNodesArr.forEach((highlightedNode) => {
+              if (highlightedNode.dataRefId === key) {
+                const includedItems = value.filter((item) => item.name === highlightedNode.name);
+                if (includedItems.length > 0) {
+                  filteredData[key] = [...filteredData[key], ...includedItems];
                 }
+              }
             });
-            console.log(`Filtered ${key}:`, filteredData[key]);
             if (filteredData[key].length === 0) {
-                console.log(`Removing empty key: ${key}`);
-                delete filteredData[key];
+              delete filteredData[key];
             }
           }
         }
 
-        console.log('Final filtered data:', filteredData);
         setFilteredResult(JSON.stringify(filteredData, null, 2));
       }
     } catch (err) {
