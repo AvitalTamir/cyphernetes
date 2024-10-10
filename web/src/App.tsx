@@ -3,10 +3,16 @@ import QueryInput from './components/QueryInput';
 import ResultsDisplay from './components/ResultsDisplay';
 import GraphVisualization from './components/GraphVisualization';
 import { executeQuery, QueryResponse } from './api/queryApi';
-import './App.css'; // We'll create this file for styling
+import './App.css';
 
 interface AccumulatedResult {
   [key: string]: any[];
+}
+
+interface QueryStatus {
+  numQueries: number;
+  status: 'succeeded' | 'failed';
+  time: number;
 }
 
 function App() {
@@ -15,20 +21,20 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [queryStatus, setQueryStatus] = useState<QueryStatus | null>(null);
   const graphRef = useRef<{ resetGraph: () => void } | null>(null);
 
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
     setIsLoading(true);
     setError(null);
+    const startTime = performance.now();
     try {
       if (graphRef.current) {
         graphRef.current.resetGraph();
       }
 
       let textToExecute = selectedText || query;
-      console.log(textToExecute);
       textToExecute = textToExecute.replace(/\n/g, ' ');
-      console.log(textToExecute);
       const queries = textToExecute
         .split(';')
         .map(q => q.trim())
@@ -85,6 +91,13 @@ function App() {
       };
       setQueryResult(mergedResult);
       setFilteredResult(mergedResult.result);
+
+      const endTime = performance.now();
+      setQueryStatus({
+        numQueries: queries.length,
+        status: 'succeeded',
+        time: (endTime - startTime) / 1000,
+      });
     } catch (err) {
       setError('An error occurred while executing the query: ' + err);
       console.error(err);
@@ -92,6 +105,13 @@ function App() {
       if (graphRef.current) {
         graphRef.current.resetGraph();
       }
+
+      const endTime = performance.now();
+      setQueryStatus({
+        numQueries: 1,
+        status: 'failed',
+        time: (endTime - startTime) / 1000,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -160,12 +180,11 @@ function App() {
       </div>
       <div className="right-panel">
         <div className="query-input">
-          <QueryInput onSubmit={handleQuerySubmit} isLoading={isLoading} />
+          <QueryInput onSubmit={handleQuerySubmit} isLoading={isLoading} queryStatus={queryStatus} />
         </div>
         <div className="graph-visualization">
           <GraphVisualization 
             ref={graphRef}
-            // @ts-ignore
             data={queryResult?.graph ?? null} 
             onNodeHover={handleNodeHover}
           />

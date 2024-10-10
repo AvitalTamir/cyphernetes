@@ -7,9 +7,14 @@ import './QueryInput.css';
 interface QueryInputProps {
   onSubmit: (query: string, selectedText: string | null) => void;
   isLoading: boolean;
+  queryStatus: {
+    numQueries: number;
+    status: 'succeeded' | 'failed';
+    time: number;
+  } | null;
 }
 
-const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
+const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatus }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
@@ -178,6 +183,13 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
         <button type="submit" className="submit-button" disabled={isLoading}>
           {isLoading ? 'Executing...' : 'Execute Query'}
         </button>
+        {queryStatus && (
+          <div className="query-status">
+            <span className="query-status-count">{queryStatus.numQueries}</span> {queryStatus.numQueries === 1 ? 'query' : 'queries'} 
+            <span className={`query-status-result ${queryStatus.status}`}>{queryStatus.status}</span> in 
+            <span className="query-status-time">{queryStatus.time.toFixed(2)}s</span>
+          </div>
+        )}
       </div>
     </form>
   );

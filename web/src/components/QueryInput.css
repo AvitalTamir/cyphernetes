@@ -114,3 +114,38 @@
 .suggestion-item.highlighted {
   background-color: #4a4a4a;
 }
+
+.query-status {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  font-size: 12px;
+  color: #e0e0e0;
+  z-index: 10000;
+  font-family: 'Arial', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.query-status-count {
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.query-status-result {
+  font-weight: bold;
+}
+
+.query-status-result.succeeded {
+  color: #4caf50;
+}
+
+.query-status-result.failed {
+  color: #f44336;
+}
+
+.query-status-time {
+  font-weight: bold;
+  color: #03a9f4;
+}
