@@ -85,8 +85,6 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
         }
       });
 
-      console.log(nodes, links);
-
       return { nodes, links };
     } catch (error) {
       console.error("Failed to parse graph data:", error);

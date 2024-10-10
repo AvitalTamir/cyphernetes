@@ -20,7 +20,7 @@ interface AggregateResult {
 }
 
 function App() {
-  const [queryResult, setQueryResult] = useState<QueryResponse | null>(null);
+  const [originalQueryResult, setOriginalQueryResult] = useState<QueryResponse | null>(null);
   const [filteredResult, setFilteredResult] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +29,7 @@ function App() {
   const graphRef = useRef<{ resetGraph: () => void } | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [aggregateResults, setAggregateResults] = useState<AggregateResult>({});
+  const [filterManagedFields, setFilterManagedFields] = useState(true);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,6 +45,14 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    if (originalQueryResult && originalQueryResult.result) {
+      const resultData = JSON.parse(originalQueryResult.result);
+      const filteredData = filterResults(resultData);
+      setFilteredResult(JSON.stringify(filteredData, null, 2));
+    }
+  }, [filterManagedFields, originalQueryResult]);
 
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
     setIsLoading(true);
@@ -122,8 +131,10 @@ function App() {
           return acc;
         }, ''),
       };
-      setQueryResult(mergedResult);
-      setFilteredResult(mergedResult.result);
+
+      setOriginalQueryResult(mergedResult);
+      const filteredData = filterResults(JSON.parse(mergedResult.result));
+      setFilteredResult(JSON.stringify(filteredData, null, 2));
 
       const endTime = performance.now();
       setQueryStatus({
@@ -134,7 +145,7 @@ function App() {
     } catch (err) {
       setError('An error occurred while executing the query: ' + err);
       console.error(err);
-      setQueryResult(null);
+      setOriginalQueryResult(null);
       if (graphRef.current) {
         graphRef.current.resetGraph();
       }
@@ -150,20 +161,52 @@ function App() {
     }
   };
 
+  const filterResults = useCallback((results: any) => {
+    if (!filterManagedFields) {
+      return results;
+    }
+
+    const filtered = JSON.parse(JSON.stringify(results)); // Deep clone
+
+    for (const key in filtered) {
+      if (Array.isArray(filtered[key])) {
+        filtered[key] = filtered[key].map((item: any) => {
+          if (item && typeof item === 'object') {
+            const newItem = { ...item };
+            
+            // Check for <keyname>.metadata.managedFields
+            if (newItem[key] && newItem[key].metadata && newItem[key].metadata.managedFields) {
+              delete newItem[key].metadata.managedFields;
+            }
+            
+            // Check for .metadata.managedFields
+            if (newItem.metadata && newItem.metadata.managedFields) {
+              delete newItem.metadata.managedFields;
+            }
+            
+            return newItem;
+          }
+          return item;
+        });
+      }
+    }
+
+    return filtered;
+  }, [filterManagedFields]);
+
   const handleNodeHover = useCallback((highlightedNodes: Set<any>) => {
-    if (!queryResult || !queryResult.result) {
+    if (!originalQueryResult || !originalQueryResult.result) {
       return;
     }
 
     try {
-      const resultData = JSON.parse(queryResult.result);
+      const resultData = JSON.parse(originalQueryResult.result);
+      let filteredData: any;
 
       if (highlightedNodes.size === 0) {
-        // Show all results, including aggregate, when no nodes are highlighted
-        setFilteredResult(JSON.stringify(resultData, null, 2));
+        filteredData = resultData;
       } else {
-        const filteredData: any = {};
-
+        filteredData = {};
         for (const [key, value] of Object.entries(resultData)) {
           if (key !== 'aggregate' && Array.isArray(value)) {
             filteredData[key] = [];
@@ -181,13 +224,16 @@ function App() {
             }
           }
         }
-
-        setFilteredResult(JSON.stringify(filteredData, null, 2));
       }
+
+      const finalFilteredData = filterResults(filteredData);
+      setFilteredResult(JSON.stringify(finalFilteredData, null, 2));
     } catch (err) {
       console.error('Error filtering results:', err);
     }
-  }, [queryResult]);
+  }, [originalQueryResult, filterResults]);
+
+  const hasResults = originalQueryResult && originalQueryResult.result && Object.keys(JSON.parse(originalQueryResult.result)).length > 0;
 
   return (
     <div className={`App ${!isPanelOpen ? 'left-sidebar-closed' : ''}`}>
@@ -199,8 +245,25 @@ function App() {
       }}>
         {"×"}
       </button>
-      <div className={`left-panel ${!isPanelOpen ? 'closed' : ''}`}>
-        {isPanelOpen && <ResultsDisplay result={filteredResult} error={error} />}
+      <div className={`left-panel ${!isPanelOpen ? 'closed' : ''} ${hasResults ? 'has-results' : ''}`}>
+        {isPanelOpen && (
+          <>
+            <ResultsDisplay result={filteredResult} error={error} />
+            {hasResults && (
+              <div className="filter-checkbox-container">
+                <label className="custom-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={filterManagedFields}
+                    onChange={(e) => setFilterManagedFields(e.target.checked)}
+                  />
+                  <span className="checkmark"></span>
+                  Filter Managed Fields
+                </label>
+              </div>
+            )}
+          </>
+        )}
       </div>
       <div className="right-panel">
         <button className="toggle-button right-toggle" onClick={() => {
@@ -223,7 +286,7 @@ function App() {
         <div className="graph-visualization">
           <GraphVisualization 
             ref={graphRef}
-            data={queryResult?.graph ?? null} 
+            data={originalQueryResult?.graph ?? null} 
             onNodeHover={handleNodeHover}
           />
         </div>

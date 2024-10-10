@@ -61,7 +61,7 @@
   word-wrap: break-word;
   height: 100%;
   overflow-y: auto;
-  padding: 4rem 0 0 1rem !important;
+  padding: 4rem 0 4rem 1rem !important;
   animation: fadeInOut 0.5s ease-in-out;
 }
 

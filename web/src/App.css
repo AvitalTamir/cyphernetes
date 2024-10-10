@@ -24,12 +24,58 @@ html, body, #root, .App {
 .left-panel::after {
   content: '';
   position: absolute;
-  top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  width: 10px;
-  background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+  height: 4rem;
+  z-index: 2;
   pointer-events: none;
+  width: 100%;
+  backdrop-filter: blur(5px);
+}
+
+.filter-checkbox-container {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  color: #333;
+}
+
+.filter-checkbox-container input {
+  margin-right: 0.5rem;
+}
+
+/* Add blur effect to top and bottom of left panel */
+.left-panel::before,
+.left-panel::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4rem;
+  z-index: 0;
+  pointer-events: none;
+  width: 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.left-panel.has-results::before,
+.left-panel.has-results::after {
+  opacity: 1;
+}
+
+.left-panel::before {
+  top: 0;
+  backdrop-filter: blur(5px);
+}
+
+.left-panel::after {
+  bottom: 0;
+  backdrop-filter: blur(5px);
 }
 
 .right-panel {
@@ -90,4 +136,61 @@ html, body, #root, .App {
 
 .App.left-sidebar-closed .right-panel .toggle-button {
   display: block;
+}
+
+/* Custom checkbox styles */
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding-left: 35px;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+  color: #ffffff;
+}
+
+.custom-checkbox input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  height: 25px;
+  width: 25px;
+  background-color: #eee;
+  border-radius: 4px;
+}
+
+.custom-checkbox:hover input ~ .checkmark {
+  background-color: #ccc;
+}
+
+.custom-checkbox input:checked ~ .checkmark {
+  background-color: #f35669;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.custom-checkbox input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.custom-checkbox .checkmark:after {
+  left: 9px;
+  top: 5px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
 }
