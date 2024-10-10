@@ -60,12 +60,26 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
       setSelectedSuggestionIndex((prevIndex) =>
         prevIndex < suggestions.length - 1 ? prevIndex + 1 : prevIndex
       );
+      scrollSuggestionIntoView(selectedSuggestionIndex + 1);
     } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
       e.preventDefault();
       setSelectedSuggestionIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0));
+      scrollSuggestionIntoView(selectedSuggestionIndex - 1);
     } else if (e.key === 'Enter' && selectedSuggestionIndex !== -1) {
       e.preventDefault();
       insertSuggestion(suggestions[selectedSuggestionIndex]);
+    }
+  };
+
+  const scrollSuggestionIntoView = (index: number) => {
+    if (suggestionsRef.current) {
+      const suggestionItems = suggestionsRef.current.getElementsByClassName('suggestion-item');
+      if (suggestionItems[index]) {
+        suggestionItems[index].scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
     }
   };
 
@@ -108,6 +122,8 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
     setCursorPosition(newPosition);
   };
 
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
   return (
     <form className="query-input-form" onSubmit={handleSubmit}>
       <div className="query-editor">
@@ -141,6 +157,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
         />
         {suggestions.length > 0 && suggestions[0] !== "" && (
           <div 
+            ref={suggestionsRef}
             className="suggestions" 
             style={{ 
               top: `${suggestionsPosition.top}px`, 
