@@ -75,7 +75,8 @@
 }
 
 .error {
-  color: #ff6b6b;
+  background-color: #ff6b6b;
+  color: #ffffff;
   font-weight: bold;
 }
 
