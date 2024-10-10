@@ -1,38 +1,34 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useRef, KeyboardEvent } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import './QueryInput.css';
 
 interface QueryInputProps {
-  onSubmit: (query: string) => void;
+  onSubmit: (query: string, selectedText: string | null) => void;
   isLoading: boolean;
 }
 
 const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
   const [query, setQuery] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const highlighterRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(query);
+    const selectedText = window.getSelection()?.toString() || null;
+    onSubmit(query, selectedText);
   };
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setQuery(e.target.value);
-  }, []);
-
-  useEffect(() => {
-    if (textareaRef.current && highlighterRef.current) {
-      highlighterRef.current.scrollTop = textareaRef.current.scrollTop;
-      highlighterRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
     }
-  }, [query]);
+  };
 
   return (
     <form className="query-input-form" onSubmit={handleSubmit}>
-      <div className="query-editor" ref={highlighterRef}>
-        <SyntaxHighlighter
+         <div className="query-editor">
+            <SyntaxHighlighter
           language="cypher"
           style={dracula}
           wrapLines={true}
@@ -47,19 +43,23 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
           }}
         >
           {query}
-        </SyntaxHighlighter>
-        <textarea
-          ref={textareaRef}
-          className="query-textarea"
-          value={query}
-          onChange={handleChange}
-          placeholder="Your Cyphernetes query here..."
-          spellCheck={false}
-        />
-      </div>
+      </SyntaxHighlighter>
+      <textarea
+        ref={textareaRef}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Your Cyphernetes query here..."
+        rows={5}
+        disabled={isLoading}
+        className="query-textarea"
+        spellCheck="false"
+
+      />
       <button type="submit" className="submit-button" disabled={isLoading}>
         {isLoading ? 'Executing...' : 'Execute Query'}
       </button>
+    </div>
     </form>
   );
 };
