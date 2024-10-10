@@ -79,3 +79,28 @@
   background: #4a4a4a;
   cursor: not-allowed;
 }
+
+.suggestions {
+  position: absolute;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+  
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #e0e0e0;
+  transition: background-color 0.2s, color 0.2s;
+}
+  
+.suggestion-item:hover {
+  background-color: #3a3a3a;
+  color: #ffffff;
+}

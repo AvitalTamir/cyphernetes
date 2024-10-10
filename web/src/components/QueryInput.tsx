@@ -1,6 +1,7 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { fetchAutocompleteSuggestions } from '../api/queryApi';
 import './QueryInput.css';
 
 interface QueryInputProps {
@@ -10,7 +11,33 @@ interface QueryInputProps {
 
 const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
   const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0 });
+
+  const updateSuggestionsPosition = () => {
+    if (textareaRef.current) {
+      const cursorPosition = textareaRef.current.selectionEnd;
+      const textBeforeCursor = textareaRef.current.value.substring(0, cursorPosition);
+      const lines = textBeforeCursor.split('\n');
+      const currentLineNumber = lines.length;
+      const currentLineText = lines[lines.length - 1];
+
+      const lineHeight = 21; // Adjust this value based on your font size and line height
+      const charWidth = 8.4; // Adjust this value based on your font size
+
+      const top = (currentLineNumber * lineHeight) + 16; // 16px for padding
+      const left = (currentLineText.length * charWidth) + 16; // 16px for padding
+
+      setSuggestionsPosition({ top, left });
+    }
+  };
+
+  useEffect(() => {
+    updateSuggestionsPosition();
+  }, [cursorPosition]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,13 +49,56 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        const newQuery = query.slice(0, cursorPosition) + suggestions[0] + query.slice(cursorPosition);
+        setQuery(newQuery);
+        setCursorPosition(cursorPosition + suggestions[0].length);
+        setSuggestions([]);
+      }
     }
+  };
+
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (query: string, position: number) => {
+      try {
+        console.log('Fetching suggestions for:', query, 'at position:', position);
+        const fetchedSuggestions = await fetchAutocompleteSuggestions(query, position);
+        console.log('Fetched suggestions:', fetchedSuggestions);
+        setSuggestions(fetchedSuggestions);
+      } catch (error) {
+        console.error('Failed to fetch suggestions:', error);
+      }
+    }, 300),
+    []
+  );
+
+  useEffect(() => {
+    console.log('Current query:', query);
+    console.log('Current cursor position:', cursorPosition);
+    debouncedFetchSuggestions(query, cursorPosition);
+  }, [query, cursorPosition, debouncedFetchSuggestions]);
+
+  const handleQueryChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newQuery = e.target.value;
+    const newPosition = e.target.selectionStart;
+    console.log('Query changed to:', newQuery);
+    console.log('Cursor position changed to:', newPosition);
+    setQuery(newQuery);
+    setCursorPosition(newPosition);
+  };
+
+  const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const newPosition = e.currentTarget.selectionStart;
+    console.log('Cursor position changed to:', newPosition);
+    setCursorPosition(newPosition);
   };
 
   return (
     <form className="query-input-form" onSubmit={handleSubmit}>
-         <div className="query-editor">
-            <SyntaxHighlighter
+      <div className="query-editor">
+        <SyntaxHighlighter
           language="cypher"
           style={dracula}
           wrapLines={true}
@@ -43,25 +113,57 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
           }}
         >
           {query}
-      </SyntaxHighlighter>
-      <textarea
-        ref={textareaRef}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Your Cyphernetes query here..."
-        rows={5}
-        disabled={isLoading}
-        className="query-textarea"
-        spellCheck="false"
-
-      />
-      <button type="submit" className="submit-button" disabled={isLoading}>
-        {isLoading ? 'Executing...' : 'Execute Query'}
-      </button>
-    </div>
+        </SyntaxHighlighter>
+        <textarea
+          ref={textareaRef}
+          value={query}
+          onChange={handleQueryChange}
+          onKeyDown={handleKeyDown}
+          onSelect={handleCursorChange}
+          placeholder="Your Cyphernetes query here..."
+          rows={5}
+          disabled={isLoading}
+          className="query-textarea"
+          spellCheck="false"
+        />
+        {suggestions.length > 0 && (
+          <div 
+            className="suggestions" 
+            style={{ 
+              top: `${suggestionsPosition.top}px`, 
+              left: `${suggestionsPosition.left}px` 
+            }}
+          >
+            {suggestions.map((suggestion, index) => (
+              <div key={index} className="suggestion-item" onClick={() => {
+                console.log('Suggestion clicked:', suggestion);
+                const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition);
+                setQuery(newQuery);
+                setCursorPosition(cursorPosition + suggestion.length);
+                setSuggestions([]);
+              }}>
+                {suggestion}
+              </div>
+            ))}
+          </div>
+        )}
+        <button type="submit" className="submit-button" disabled={isLoading}>
+          {isLoading ? 'Executing...' : 'Execute Query'}
+        </button>
+      </div>
     </form>
   );
 };
+
+// Debounce function
+function debounce<F extends (...args: any[]) => any>(func: F, wait: number): (...args: Parameters<F>) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<F>) => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => func(...args), wait);
+  };
+}
 
 export default QueryInput;

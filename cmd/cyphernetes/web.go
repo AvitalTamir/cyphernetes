@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +24,13 @@ func runWeb(cmd *cobra.Command, args []string) {
 	port := "8080"
 	url := fmt.Sprintf("http://localhost:%s", port)
 
+	parser.InitResourceSpecs()
+	resourceSpecs = parser.ResourceSpecs
+
 	router := gin.Default()
+
+	// Setup API routes first
+	setupAPIRoutes(router)
 
 	// Serve embedded files from the 'web' directory
 	webContent, err := fs.Sub(webFS, "web")
@@ -31,10 +38,7 @@ func runWeb(cmd *cobra.Command, args []string) {
 		fmt.Printf("Error accessing embedded web files: %v\n", err)
 		return
 	}
-	router.StaticFS("/", http.FS(webContent))
-
-	// Setup API routes
-	setupAPIRoutes(router)
+	router.NoRoute(gin.WrapH(http.FileServer(http.FS(webContent))))
 
 	// Start the server
 	fmt.Printf("Starting Cyphernetes web interface at %s\n", url)
