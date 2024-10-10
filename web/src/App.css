@@ -81,5 +81,13 @@ html, body, #root, .App {
   border: none;
   cursor: pointer;
   transition: background 0.3s;
-  z-index: 10000;
+  z-index: 1;
+}
+
+.App .right-panel .toggle-button {
+  display: none;
+}
+
+.App.left-sidebar-closed .right-panel .toggle-button {
+  display: block;
 }

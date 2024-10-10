@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import QueryInput from './components/QueryInput';
 import ResultsDisplay from './components/ResultsDisplay';
 import GraphVisualization from './components/GraphVisualization';
@@ -23,6 +23,22 @@ function App() {
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [queryStatus, setQueryStatus] = useState<QueryStatus | null>(null);
   const graphRef = useRef<{ resetGraph: () => void } | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'h') {
+        e.preventDefault();
+        setIsHistoryModalOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
     setIsLoading(true);
@@ -173,14 +189,28 @@ function App() {
           window.dispatchEvent(new Event('resize'));
         }, 10);
       }}>
-        {isPanelOpen ? '×' : '→'}
+        {"×"}
       </button>
       <div className={`left-panel ${!isPanelOpen ? 'closed' : ''}`}>
         {isPanelOpen && <ResultsDisplay result={filteredResult} error={error} />}
       </div>
       <div className="right-panel">
+        <button className="toggle-button right-toggle" onClick={() => {
+            setIsPanelOpen(!isPanelOpen);
+            setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+            }, 10);
+        }}>
+            {"→"}
+        </button>
         <div className="query-input">
-          <QueryInput onSubmit={handleQuerySubmit} isLoading={isLoading} queryStatus={queryStatus} />
+          <QueryInput
+            onSubmit={handleQuerySubmit}
+            isLoading={isLoading}
+            queryStatus={queryStatus}
+            isHistoryModalOpen={isHistoryModalOpen}
+            setIsHistoryModalOpen={setIsHistoryModalOpen}
+          />
         </div>
         <div className="graph-visualization">
           <GraphVisualization 

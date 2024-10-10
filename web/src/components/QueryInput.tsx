@@ -2,6 +2,7 @@ import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from '
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { fetchAutocompleteSuggestions } from '../api/queryApi';
+import HistoryModal from './HistoryModal';
 import './QueryInput.css';
 
 interface QueryInputProps {
@@ -12,16 +13,40 @@ interface QueryInputProps {
     status: 'succeeded' | 'failed';
     time: number;
   } | null;
+  isHistoryModalOpen: boolean;
+  setIsHistoryModalOpen: (isOpen: boolean) => void;
 }
 
-const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatus }) => {
+const QueryInput: React.FC<QueryInputProps> = ({ 
+  onSubmit, 
+  isLoading, 
+  queryStatus, 
+  isHistoryModalOpen, 
+  setIsHistoryModalOpen 
+}) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0 });
+
+  const [queryHistory, setQueryHistory] = useState<string[]>([]);
+
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('queryHistory');
+    if (savedHistory) {
+      setQueryHistory(JSON.parse(savedHistory));
+    }
+  }, []);
+
+  const saveQueryToHistory = (newQuery: string) => {
+    const updatedHistory = [newQuery, ...queryHistory.filter(q => q !== newQuery)].slice(0, 1000);
+    setQueryHistory(updatedHistory);
+    localStorage.setItem('queryHistory', JSON.stringify(updatedHistory));
+  };
 
   const updateSuggestionsPosition = () => {
     if (textareaRef.current) {
@@ -48,6 +73,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const selectedText = window.getSelection()?.toString() || null;
+    saveQueryToHistory(query);
     onSubmit(query, selectedText);
   };
 
@@ -74,6 +100,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
       e.preventDefault();
       insertSuggestion(suggestions[selectedSuggestionIndex]);
     }
+    // Removed the Cmd/Ctrl+H handler from here
   };
 
   const scrollSuggestionIntoView = (index: number) => {
@@ -127,6 +154,18 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
     setCursorPosition(newPosition);
   };
 
+  const isEndOfLine = () => {
+    if (textareaRef.current) {
+      const lines = query.split('\n');
+      const currentLineIndex = query.substr(0, cursorPosition).split('\n').length - 1;
+      const currentLine = lines[currentLineIndex];
+      return cursorPosition === query.length || 
+             (currentLineIndex < lines.length - 1 && 
+              cursorPosition === query.indexOf('\n', query.indexOf(currentLine)) - 1);
+    }
+    return false;
+  };
+
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -154,13 +193,15 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
           onChange={handleQueryChange}
           onKeyDown={handleKeyDown}
           onSelect={handleCursorChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder="Your Cyphernetes query here..."
           rows={5}
           disabled={isLoading}
           className="query-textarea"
           spellCheck="false"
         />
-        {suggestions.length > 0 && suggestions[0] !== "" && (
+        {isFocused && isEndOfLine() && suggestions.length > 0 && suggestions[0] !== "" && (
           <div 
             ref={suggestionsRef}
             className="suggestions" 
@@ -183,6 +224,13 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
         <button type="submit" className="submit-button" disabled={isLoading}>
           {isLoading ? 'Executing...' : 'Execute Query'}
         </button>
+        <button
+          type="button"
+          className="history-button"
+          onClick={() => setIsHistoryModalOpen(true)}
+        >
+          History ({navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+H)
+        </button>
         {queryStatus && (
           <div className="query-status">
             <span className="query-status-count">{queryStatus.numQueries}</span> {queryStatus.numQueries === 1 ? 'query' : 'queries'} 
@@ -191,6 +239,15 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading, queryStatu
           </div>
         )}
       </div>
+      <HistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        history={queryHistory}
+        onSelectQuery={(selectedQuery) => {
+          setQuery(selectedQuery);
+          setCursorPosition(selectedQuery.length);
+        }}
+      />
     </form>
   );
 };
