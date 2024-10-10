@@ -203,6 +203,11 @@ type Listener interface {
 }
 
 func runShell(cmd *cobra.Command, args []string) {
+	if parser.AllNamespaces {
+		parser.Namespace = ""
+		parser.AllNamespaces = false
+	}
+
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:                 shellPrompt(),

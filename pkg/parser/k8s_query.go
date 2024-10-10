@@ -45,7 +45,10 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
-	if namespace != "" {
+	if AllNamespaces {
+		Namespace = ""
+		AllNamespaces = false // to reset value
+	} else if namespace != "" {
 		Namespace = namespace
 	}
 	results := &QueryResult{
