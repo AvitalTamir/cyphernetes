@@ -143,10 +143,15 @@ html, body, #root, .App {
   display: flex;
   align-items: center;
   position: relative;
-  padding-left: 35px;
+  padding-left: 28px;
   cursor: pointer;
   font-family: Arial, sans-serif;
   color: #ffffff;
+}
+
+.custom-checkbox.small {
+  font-size: 12px;
+  padding-left: 24px;
 }
 
 .custom-checkbox input {
@@ -159,12 +164,18 @@ html, body, #root, .App {
 
 .checkmark {
   position: absolute;
-  top: -3px;
+  top: -1px;
   left: 0;
-  height: 25px;
-  width: 25px;
+  height: 20px;
+  width: 20px;
   background-color: #eee;
   border-radius: 4px;
+}
+
+.custom-checkbox.small .checkmark {
+  height: 16px;
+  width: 16px;
+  top: 0;
 }
 
 .custom-checkbox:hover input ~ .checkmark {
@@ -186,11 +197,28 @@ html, body, #root, .App {
 }
 
 .custom-checkbox .checkmark:after {
-  left: 9px;
-  top: 5px;
-  width: 5px;
-  height: 10px;
+  left: 7px;
+  top: 3px;
+  width: 4px;
+  height: 8px;
   border: solid white;
-  border-width: 0 3px 3px 0;
+  border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+.custom-checkbox.small .checkmark:after {
+  left: 5px;
+  top: 2px;
+  width: 3px;
+  height: 7px;
+}
+
+.filter-options-container {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }

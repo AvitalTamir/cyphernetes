@@ -30,6 +30,7 @@ function App() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [aggregateResults, setAggregateResults] = useState<AggregateResult>({});
   const [filterManagedFields, setFilterManagedFields] = useState(true);
+  const [darkTheme, setDarkTheme] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -248,10 +249,10 @@ function App() {
       <div className={`left-panel ${!isPanelOpen ? 'closed' : ''} ${hasResults ? 'has-results' : ''}`}>
         {isPanelOpen && (
           <>
-            <ResultsDisplay result={filteredResult} error={error} />
+            <ResultsDisplay result={filteredResult} error={error} darkTheme={darkTheme} />
             {hasResults && (
-              <div className="filter-checkbox-container">
-                <label className="custom-checkbox">
+              <div className="filter-options-container">
+                <label className="custom-checkbox small">
                   <input
                     type="checkbox"
                     checked={filterManagedFields}
@@ -259,6 +260,15 @@ function App() {
                   />
                   <span className="checkmark"></span>
                   Filter Managed Fields
+                </label>
+                <label className="custom-checkbox small">
+                  <input
+                    type="checkbox"
+                    checked={darkTheme}
+                    onChange={(e) => setDarkTheme(e.target.checked)}
+                  />
+                  <span className="checkmark"></span>
+                  Dark Theme
                 </label>
               </div>
             )}

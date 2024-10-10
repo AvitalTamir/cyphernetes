@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml';
-import { gradientDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { gradientDark, qtcreatorDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import * as jsYaml from 'js-yaml';
 import './ResultsDisplay.css';
 
@@ -12,9 +12,10 @@ SyntaxHighlighter.registerLanguage('yaml', yaml);
 interface ResultsDisplayProps {
   result: string | null;
   error: string | null;
+  darkTheme: boolean;
 }
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkTheme }) => {
   const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
   const [formattedResult, setFormattedResult] = useState<string>('');
 
@@ -35,6 +36,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
     }
   }, [result, format]);
 
+  const theme = darkTheme ? qtcreatorDark : gradientDark;
+
   if (error) return <div className="results-display error results-empty">{error}</div>;
   if (!result) return <div className="results-display results-empty">No results yet</div>;
 
@@ -48,9 +51,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
         {error ? (
           <div className="error">{error}</div>
         ) : (
-          <SyntaxHighlighter language={format} style={gradientDark} customStyle={{fontSize: '14px'}} height={'100%'}>
+          <SyntaxHighlighter language={format} style={theme} customStyle={{fontSize: '14px'}} height={'100%'}>
             {formattedResult}
-          </SyntaxHighlighter>        )}
+          </SyntaxHighlighter>
+        )}
       </div>
     </div>
   );
