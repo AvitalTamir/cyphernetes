@@ -175,9 +175,6 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 		return emptyList, err
 	}
 
-	if AllNamespaces {
-		Namespace = ""
-	}
 	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
 		FieldSelector: fieldSelector,
 		LabelSelector: labelMap.String(),
