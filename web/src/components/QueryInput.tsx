@@ -13,6 +13,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0 });
@@ -52,12 +53,28 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
     } else if (e.key === 'Tab') {
       e.preventDefault();
       if (suggestions.length > 0) {
-        const newQuery = query.slice(0, cursorPosition) + suggestions[0] + query.slice(cursorPosition);
-        setQuery(newQuery);
-        setCursorPosition(cursorPosition + suggestions[0].length);
-        setSuggestions([]);
+        insertSuggestion(suggestions[selectedSuggestionIndex !== -1 ? selectedSuggestionIndex : 0]);
       }
+    } else if (e.key === 'ArrowDown' && suggestions.length > 0) {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prevIndex) =>
+        prevIndex < suggestions.length - 1 ? prevIndex + 1 : prevIndex
+      );
+    } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0));
+    } else if (e.key === 'Enter' && selectedSuggestionIndex !== -1) {
+      e.preventDefault();
+      insertSuggestion(suggestions[selectedSuggestionIndex]);
     }
+  };
+
+  const insertSuggestion = (suggestion: string) => {
+    const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition);
+    setQuery(newQuery);
+    setCursorPosition(cursorPosition + suggestion.length);
+    setSuggestions([]);
+    setSelectedSuggestionIndex(-1);
   };
 
   const debouncedFetchSuggestions = useCallback(
@@ -67,6 +84,7 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
         // Ensure suggestions are unique
         const uniqueSuggestions = Array.from(new Set(fetchedSuggestions));
         setSuggestions(uniqueSuggestions);
+        setSelectedSuggestionIndex(-1);
       } catch (error) {
         console.error('Failed to fetch suggestions:', error);
       }
@@ -130,12 +148,11 @@ const QueryInput: React.FC<QueryInputProps> = ({ onSubmit, isLoading }) => {
             }}
           >
             {suggestions.map((suggestion, index) => (
-              <div key={index} className="suggestion-item" onClick={() => {
-                const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition);
-                setQuery(newQuery);
-                setCursorPosition(cursorPosition + suggestion.length);
-                setSuggestions([]);
-              }}>
+              <div
+                key={index}
+                className={`suggestion-item ${index === selectedSuggestionIndex ? 'highlighted' : ''}`}
+                onClick={() => insertSuggestion(suggestion)}
+              >
                 {suggestion}
               </div>
             ))}

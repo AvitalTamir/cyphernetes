@@ -99,8 +99,13 @@
   color: #e0e0e0;
   transition: background-color 0.2s, color 0.2s;
 }
-  
-.suggestion-item:hover {
+
+.suggestion-item:hover,
+.suggestion-item.highlighted {
   background-color: #3a3a3a;
   color: #ffffff;
+}
+
+.suggestion-item.highlighted {
+  background-color: #4a4a4a;
 }
