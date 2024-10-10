@@ -38,6 +38,8 @@
   border: none;
   outline: none;
   z-index: 1;
+  max-height: calc(100% - 3rem);
+  overflow-y: auto;
 }
 
 .query-editor pre {
@@ -46,6 +48,8 @@
   background-color: transparent;
   color: #e0e0e0;
   transition: background-color 0.6s ease-in-out;
+  max-height: calc(100% - 3rem);
+  overflow-y: auto;
 }
 
 .App.left-sidebar-closed .query-editor {
