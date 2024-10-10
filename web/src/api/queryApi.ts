@@ -21,7 +21,6 @@ export async function executeQuery(query: string): Promise<QueryResponse> {
   }
 
   const data = await response.json();
-  console.log("API response:", data); // Add this line for debugging
 
   return data;
 }
@@ -45,8 +44,6 @@ export async function convertResourceName(name: string): Promise<string> {
 
 // Update the fetchAutocompleteSuggestions function
 export async function fetchAutocompleteSuggestions(query: string, position: number): Promise<string[]> {
-  console.log('Sending autocomplete request:', { query, position });
-  
   // Convert resource names in the query
   const convertedQuery = await convertQueryResourceNames(query);
   
@@ -62,7 +59,6 @@ export async function fetchAutocompleteSuggestions(query: string, position: numb
   }
 
   const data = await response.json();
-  console.log('Received autocomplete response:', data);
   return data.suggestions;
 }
 

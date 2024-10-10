@@ -25,7 +25,10 @@ function App() {
         graphRef.current.resetGraph();
       }
 
-      const textToExecute = selectedText || query;
+      let textToExecute = selectedText || query;
+      console.log(textToExecute);
+      textToExecute = textToExecute.replace(/\n/g, ' ');
+      console.log(textToExecute);
       const queries = textToExecute
         .split(';')
         .map(q => q.trim())
