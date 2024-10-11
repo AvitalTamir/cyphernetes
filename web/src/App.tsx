@@ -65,11 +65,13 @@ function App() {
       }
 
       let textToExecute = selectedText || query;
+      textToExecute = textToExecute.replaceAll(/\/\/.*\n/g, '');
       textToExecute = textToExecute.replace(/\n/g, ' ');
+      
       const queries = textToExecute
+        .replace(/;$/, '')
         .split(';')
         .map(q => q.trim())
-        .filter(q => q && !q.startsWith('//'));
 
       const results: QueryResponse[] = [];
       const uniqueResults = new Set<string>();
