@@ -17,6 +17,9 @@ importers:
       react-force-graph:
         specifier: ^1.44.5
         version: 1.44.5(react@18.3.1)(three@0.169.0)
+      react-force-graph-2d:
+        specifier: ^1.25.6
+        version: 1.25.6(react@18.3.1)
       react-force-graph-3d:
         specifier: ^1.24.4
         version: 1.24.4(react@18.3.1)
@@ -510,6 +513,12 @@ packages:
 
   quad-indices@2.0.1:
     resolution: {integrity: sha512-6jtmCsEbGAh5npThXrBaubbTjPcF0rMbn57XCJVI7LkW8PUT56V+uIrRCCWCn85PSgJC9v8Pm5tnJDwmOBewvA==}
+
+  react-force-graph-2d@1.25.6:
+    resolution: {integrity: sha512-qFarXF1pazVtGUoJul7cecqVGdfLoMQiX/98mewULM9YXDXesDfVExBaLkoz9KHN/guWdoSfH2sTUHQA9hpmDw==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      react: '*'
 
   react-force-graph-3d@1.24.4:
     resolution: {integrity: sha512-7EK1L5DvRk3mqevi3lo6xKXhnFK8FlYgSR2drUuB4hD5xDrco3IyB2TRJuewEdW+lRP5lxcxWX5UQgNASZtkTQ==}
@@ -1167,6 +1176,13 @@ snapshots:
       an-array: 1.0.0
       dtype: 2.0.0
       is-buffer: 1.1.6
+
+  react-force-graph-2d@1.25.6(react@18.3.1):
+    dependencies:
+      force-graph: 1.44.1
+      prop-types: 15.8.1
+      react: 18.3.1
+      react-kapsule: 2.4.1(react@18.3.1)
 
   react-force-graph-3d@1.24.4(react@18.3.1):
     dependencies:

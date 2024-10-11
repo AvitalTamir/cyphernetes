@@ -262,15 +262,15 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
 
   return (
     <div ref={containerRef} className="graph-visualization-container">
-      <div className="graph-visualization">
+      <div className="graph-visualization" data-testid="graph-container">
         <ForceGraph2D
           ref={fgRef}
           graphData={graphData}
           nodeRelSize={NODE_R}
           autoPauseRedraw={false}
-          linkWidth={link => highlightLinks.has(link) ? 5 : 1}
+          linkWidth={(link: Link) => highlightLinks.has(link) ? 5 : 1}
           linkDirectionalParticles={4}
-          linkDirectionalParticleWidth={link => highlightLinks.has(link) ? 4 : 0}
+          linkDirectionalParticleWidth={(link: Link) => highlightLinks.has(link) ? 4 : 0}
           nodeCanvasObjectMode={() => 'after'}
           nodeCanvasObject={nodeCanvasObject}
           onNodeHover={handleNodeHover}

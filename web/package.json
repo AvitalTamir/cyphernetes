@@ -6,24 +6,34 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "dependencies": {
+    "@testing-library/react": "^16.0.1",
     "@types/js-yaml": "^4.0.9",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitest/ui": "^2.1.2",
     "js-yaml": "^4.1.0",
+    "jsdom": "^25.0.1",
     "path": "^0.12.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-force-graph-2d": "^1.25.6",
+    "react-force-graph-3d": "^1.23.0",
     "react-syntax-highlighter": "^15.5.0",
-    "react-force-graph-3d": "^1.23.0"
+    "vitest": "^2.1.2"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^3.1.0",
     "typescript": "^4.9.3",
-    "vite": "^4.2.0"
+    "vite": "^4.2.0",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@types/testing-library__jest-dom": "^5.14.5",
+    "vitest-canvas-mock": "^0.3.1"
   },
   "packageManager": "pnpm@9.11.0"
 }

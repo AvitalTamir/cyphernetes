@@ -56,11 +56,12 @@ function App() {
   }, [filterManagedFields, originalQueryResult]);
 
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
+    console.log('App: handleQuerySubmit called');
     setIsLoading(true);
     setError(null);
     const startTime = performance.now();
     try {
-      if (graphRef.current) {
+      if (graphRef.current && typeof graphRef.current.resetGraph === 'function') {
         graphRef.current.resetGraph();
       }
 
@@ -79,13 +80,12 @@ function App() {
 
       for (const singleQuery of queries) {
         const result = await executeQuery(singleQuery);
-        results.push(result);
+        if (result && result.result) {
+          results.push(result);
 
-        if (result.result) {
           const parsedResult = JSON.parse(result.result);
           for (const [key, value] of Object.entries(parsedResult)) {
             if (key === 'aggregate') {
-              // Merge aggregate results
               if (typeof value === 'object' && value !== null) {
                 newAggregateResults = { ...newAggregateResults, ...value };
               } else {
@@ -135,9 +135,15 @@ function App() {
         }, ''),
       };
 
+      console.log('App: Query executed, setting results');
       setOriginalQueryResult(mergedResult);
-      const filteredData = filterResults(JSON.parse(mergedResult.result));
-      setFilteredResult(JSON.stringify(filteredData, null, 2));
+      const parsedResult = JSON.parse(mergedResult.result);
+      console.log('App: Parsed result:', parsedResult);  // Add this log
+      const filteredData = filterResults(parsedResult);
+      const stringifiedFilteredData = JSON.stringify(filteredData, null, 2);
+      console.log('App: Filtered result:', stringifiedFilteredData);
+      setFilteredResult(stringifiedFilteredData);
+      console.log('App: Results set');
 
       const endTime = performance.now();
       setQueryStatus({
@@ -146,10 +152,12 @@ function App() {
         time: (endTime - startTime) / 1000,
       });
     } catch (err) {
+      console.error('App: Error occurred', err);
       setError('An error occurred while executing the query: ' + err);
       console.error(err);
       setOriginalQueryResult(null);
-      if (graphRef.current) {
+      setFilteredResult(null);
+      if (graphRef.current && typeof graphRef.current.resetGraph === 'function') {
         graphRef.current.resetGraph();
       }
 
@@ -161,6 +169,7 @@ function App() {
       });
     } finally {
       setIsLoading(false);
+      console.log('App: Query submission completed');
     }
   };
 
@@ -169,31 +178,29 @@ function App() {
       return results;
     }
 
-    const filtered = JSON.parse(JSON.stringify(results)); // Deep clone
+    console.log('App: Filtering results:', results);
 
-    for (const key in filtered) {
-      if (Array.isArray(filtered[key])) {
-        filtered[key] = filtered[key].map((item: any) => {
-          if (item && typeof item === 'object') {
-            const newItem = { ...item };
-            
-            // Check for <keyname>.metadata.managedFields
-            if (newItem[key] && newItem[key].metadata && newItem[key].metadata.managedFields) {
-              delete newItem[key].metadata.managedFields;
-            }
-            
-            // Check for .metadata.managedFields
-            if (newItem.metadata && newItem.metadata.managedFields) {
-              delete newItem.metadata.managedFields;
-            }
-            
-            return newItem;
+    const filterObject = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(filterObject);
+      } else if (obj && typeof obj === 'object') {
+        const newObj: any = {};
+        for (const key in obj) {
+          if (key === 'metadata') {
+            newObj[key] = { ...obj[key] };
+            delete newObj[key].managedFields;
+          } else {
+            newObj[key] = filterObject(obj[key]);
           }
-          return item;
-        });
+        }
+        return newObj;
       }
-    }
+      return obj;
+    };
 
+    const filtered = filterObject(results);
+
+    console.log('App: Filtered results:', filtered);
     return filtered;
   }, [filterManagedFields]);
 
