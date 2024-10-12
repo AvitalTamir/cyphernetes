@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -90,60 +89,30 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			}
 
 		case *SetClause:
-			// Execute a Kubernetes update operation based on the SetClause.
-			// ...
 			for _, kvp := range c.KeyValuePairs {
 				resultMapKey := strings.Split(kvp.Key, ".")[0]
 				path := strings.Split(kvp.Key, ".")[1:]
 
-				patch := make(map[string]interface{})
-				// Drill down to create nested map structure
-				for i, part := range path {
-					if i == len(path)-1 {
-						// Last part: assign the result
-						patch[part] = kvp.Value
-					} else {
-						// Intermediate parts: create nested maps
-						if patch[part] == nil {
-							patch[part] = make(map[string]interface{})
-						}
-						patch = patch[part].(map[string]interface{})
+				resources := resultMap[resultMapKey].([]map[string]interface{})
+				for _, resource := range resources {
+					// Create a single patch that works with the existing structure
+					patches := createCompatiblePatch(resource, path, kvp.Value)
+
+					// Marshal the patches to JSON
+					patchJSON, err := json.Marshal(patches)
+					if err != nil {
+						return *results, fmt.Errorf("error marshalling patches: %s", err)
 					}
-				}
 
-				// Patch should be in this format: [{"op": "replace", "path": "/spec/replicas", "value": $value}],
-				// this means we need to join the path parts with '/' and add the value
-				pathStr := "/" + strings.Join(path, "/")
-				patchJson, err := json.Marshal([]map[string]interface{}{{"op": "replace", "path": pathStr, "value": kvp.Value}})
-				if err != nil {
-					return *results, fmt.Errorf("error marshalling patch to JSON >> %s", err)
-				}
-
-				// Apply the patch to the resources
-				err = q.patchK8sResources(resultMapKey, patchJson)
-				if err != nil {
-					return *results, fmt.Errorf("error patching resource >> %s", err)
-				}
-
-				// Retrieve the slice of maps for the resultMapKey
-				if resources, ok := resultMap[resultMapKey].([]map[string]interface{}); ok {
-					for idx, resource := range resources {
-						// Check if the idx is within bounds
-						if idx >= 0 && idx < len(resources) {
-							fullPath := strings.Join(path, ".") // Construct the full path
-							patchResultMap(resource, fullPath, kvp.Value)
-							resources[idx] = resource // Update the specific entry in the slice
-						} else {
-							fmt.Printf("Index out of range for key: %s, Index: %d, Length: %d\n", resultMapKey, idx, len(resources))
-							// Handle index out of range
-						}
+					// Apply the patches to the resource
+					err = q.patchK8sResource(resultMapKey, resource, patchJSON)
+					if err != nil {
+						return *results, fmt.Errorf("error patching resource: %s", err)
 					}
-				} else {
-					// Handle the case where the resultMap entry isn't a slice of maps
-					fmt.Printf("Failed to assert type for key: %s, Expected: []map[string]interface{}, Actual: %T\n", resultMapKey, resultMap[resultMapKey])
-					// You may want to handle this case according to your application's needs
-				}
 
+					// Update the resultMap
+					updateResultMap(resource, path, kvp.Value)
+				}
 			}
 
 		case *DeleteClause:
@@ -895,34 +864,6 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 	return nil
 }
 
-func (q *QueryExecutor) patchK8sResources(resultMapKey string, patch []byte) error {
-	resources := resultMap[resultMapKey].([]map[string]interface{})
-
-	// in patch, replace regex \[\d+\] with \/$1\/
-	// this is to support patching arrays
-	patchStr := string(patch)
-	// now the regex replace
-	re := regexp.MustCompile(`\[(\d+)\]`)
-	patchStr = re.ReplaceAllString(patchStr, "/$1")
-
-	for i := range resources {
-		// Look up the resource kind and name in the cache
-		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
-		if err != nil {
-			return fmt.Errorf("error finding API resource >> %v", err)
-		}
-		resourceName := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
-		resourceNamespace := resultMap[resultMapKey].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
-
-		_, err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Patch(context.Background(), resourceName, types.JSONPatchType, []byte(patchStr), metav1.PatchOptions{})
-		if err != nil {
-			return fmt.Errorf("error patching resource >> %v", err)
-		}
-		fmt.Printf("Patched %s/%s\n", gvr.Resource, resourceName)
-	}
-	return nil
-}
-
 func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
 	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
 		for i, prop := range n.ResourceProperties.Properties.PropertyList {
@@ -1094,50 +1035,6 @@ func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 	return fmt.Sprintf("%s_%s_%s", ns, gvr.Resource, joinedPairs)
 }
 
-func patchResultMap(result map[string]interface{}, fullPath string, newValue interface{}) {
-	parts := strings.Split(fullPath, ".") // Split the path into parts
-
-	if len(parts) == 1 {
-		// If we're at the end of the path, set the value directly
-		result[parts[0]] = newValue
-		return
-	}
-
-	// If we're not at the end, move down one level in the path
-	nextLevel := parts[0]
-	remainingPath := strings.Join(parts[1:], ".")
-
-	// Check if the nextLevel contains the regex for an array index
-	re := regexp.MustCompile(`\[(\d+)\]`)
-	if re.MatchString(nextLevel) {
-		// If the next level is an array index, we want to recurse into the array
-		index := re.FindStringSubmatch(nextLevel)[1]
-		idx, err := strconv.Atoi(index)
-		if err != nil {
-			fmt.Println("Error converting index to int: ", err)
-			return
-		}
-		nextLevel = strings.TrimSuffix(nextLevel, "["+index+"]")
-		// If the next level is an array, continue patching
-		if nextArray, ok := result[nextLevel].([]interface{}); ok {
-			patchResultMap(nextArray[idx].(map[string]interface{}), remainingPath, newValue)
-		} else {
-			// If the next level is not an array, it needs to be created
-			newArray := make([]interface{}, 0)
-			result[nextLevel] = newArray
-			patchResultMap(newArray[idx].(map[string]interface{}), remainingPath, newValue)
-		}
-	} else if nextMap, ok := result[nextLevel].(map[string]interface{}); ok {
-		// If the next level is a map, continue patching
-		patchResultMap(nextMap, remainingPath, newValue)
-	} else {
-		// If the next level is not a map, it needs to be created
-		newMap := make(map[string]interface{})
-		result[nextLevel] = newMap
-		patchResultMap(newMap, remainingPath, newValue)
-	}
-}
-
 func convertToComparableTypes(result, filterValue interface{}) (interface{}, interface{}, error) {
 	// If both are already the same type, return them as is
 	if reflect.TypeOf(result) == reflect.TypeOf(filterValue) {
@@ -1188,4 +1085,95 @@ func compareNumbers(a, b float64, operator string) bool {
 	default:
 		return false
 	}
+}
+
+func createCompatiblePatch(resource map[string]interface{}, path []string, value interface{}) []map[string]interface{} {
+	var patches []map[string]interface{}
+	currentPath := ""
+	current := resource
+
+	for i, segment := range path {
+		if currentPath == "" {
+			currentPath = "/" + segment
+		} else {
+			currentPath = currentPath + "/" + segment
+		}
+
+		if i == len(path)-1 {
+			// This is the final segment, so we set the value
+			patches = append(patches, map[string]interface{}{
+				"op":    "add",
+				"path":  currentPath,
+				"value": value,
+			})
+		} else {
+			// Check if this path exists
+			if _, exists := getNestedValue(current, []string{segment}); !exists {
+				// This is an intermediate segment that doesn't exist, so we ensure it exists
+				patches = append(patches, map[string]interface{}{
+					"op":    "add",
+					"path":  currentPath,
+					"value": map[string]interface{}{},
+				})
+			}
+			if next, ok := current[segment].(map[string]interface{}); ok {
+				current = next
+			} else {
+				current[segment] = make(map[string]interface{})
+				current = current[segment].(map[string]interface{})
+			}
+		}
+	}
+
+	return patches
+}
+
+func getNestedValue(resource map[string]interface{}, path []string) (interface{}, bool) {
+	current := resource
+	for _, key := range path {
+		if next, ok := current[key].(map[string]interface{}); ok {
+			current = next
+		} else if value, exists := current[key]; exists {
+			return value, true
+		} else {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func updateResultMap(resource map[string]interface{}, path []string, value interface{}) {
+	current := resource
+	for i, key := range path {
+		if i == len(path)-1 {
+			current[key] = value
+			return
+		}
+		if _, ok := current[key]; !ok {
+			current[key] = make(map[string]interface{})
+		}
+		current = current[key].(map[string]interface{})
+	}
+}
+
+func (q *QueryExecutor) patchK8sResource(resultMapKey string, resource map[string]interface{}, patchesJSON []byte) error {
+	gvr, err := FindGVR(q.Clientset, resource["kind"].(string))
+	if err != nil {
+		return fmt.Errorf("error finding API resource: %v", err)
+	}
+	resourceName := resource["metadata"].(map[string]interface{})["name"].(string)
+	resourceNamespace := resource["metadata"].(map[string]interface{})["namespace"].(string)
+
+	_, err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Patch(
+		context.Background(),
+		resourceName,
+		types.JSONPatchType,
+		patchesJSON,
+		metav1.PatchOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("error patching resource: %v", err)
+	}
+
+	return nil
 }
