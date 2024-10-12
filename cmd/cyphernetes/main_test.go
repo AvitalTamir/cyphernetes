@@ -119,5 +119,5 @@ func TestCyphernetesShellWithNamespaceFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellWithLogLevelFlag(t *testing.T) {
-	// TODO: see issue-XXXX
+	// TODO: complete this test func as part of issue-111
 }
