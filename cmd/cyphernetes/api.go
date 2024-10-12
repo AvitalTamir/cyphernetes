@@ -23,7 +23,7 @@ func setupAPIRoutes(router *gin.Engine) {
 	{
 		api.POST("/query", handleQuery)
 		api.GET("/autocomplete", handleAutocomplete)
-		api.GET("/convert-resource-name", handleConvertResourceName) // Add this line
+		api.GET("/convert-resource-name", handleConvertResourceName)
 	}
 }
 
