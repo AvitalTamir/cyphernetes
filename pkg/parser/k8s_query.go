@@ -105,7 +105,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 					}
 
 					// Apply the patches to the resource
-					err = q.patchK8sResource(resultMapKey, resource, patchJSON)
+					err = q.patchK8sResource(resource, patchJSON)
 					if err != nil {
 						return *results, fmt.Errorf("error patching resource: %s", err)
 					}
@@ -1156,7 +1156,7 @@ func updateResultMap(resource map[string]interface{}, path []string, value inter
 	}
 }
 
-func (q *QueryExecutor) patchK8sResource(resultMapKey string, resource map[string]interface{}, patchesJSON []byte) error {
+func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patchesJSON []byte) error {
 	gvr, err := FindGVR(q.Clientset, resource["kind"].(string))
 	if err != nil {
 		return fmt.Errorf("error finding API resource: %v", err)
