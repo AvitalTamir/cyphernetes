@@ -1,0 +1,65 @@
+.history-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10001; /* Increased z-index to be above other elements */
+}
+
+.history-modal {
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  padding: 20px;
+  width: 80%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-modal h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #e0e0e0;
+  font-family: Arial, sans-serif;
+}
+
+.history-search-input {
+  width: calc(100% - 16px);
+  padding: 8px;
+  margin-bottom: 10px;
+  background-color: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  color: #e0e0e0;
+  border-radius: 4px;
+}
+
+.history-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.history-list li {
+  padding: 0;
+  cursor: pointer;
+  color: #e0e0e0;
+  transition: background-color 0.2s;
+}
+
+.history-list li:hover,
+.history-list li.selected {
+  background-color: #3a3a3a;
+}
+
+.history-list li pre {
+  margin: 0 !important;
+}

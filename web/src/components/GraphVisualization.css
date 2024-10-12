@@ -1,0 +1,47 @@
+.graph-visualization-container {
+  width: 100%;
+  height: calc(100% - 2rem);
+  display: flex;
+  flex-direction: column;
+  background-color: #efefef;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.graph-visualization {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.graph-visualization > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.graph-legend {
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  margin-top: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin: 5px 10px;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.legend-label {
+  color: #e0e0e0;
+  font-size: 14px;
+}
