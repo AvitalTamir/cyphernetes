@@ -10,7 +10,7 @@ all: operator-manifests bt
 bt: build test
 
 # Define how to build the project
-build: gen-parser
+build: gen-parser web-build
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/
@@ -73,9 +73,23 @@ operator-test:
 	$(MAKE) -C operator test | sed 's/^/   /g'
 	$(MAKE) -C operator test-e2e | sed 's/^/   /g'
 
+web-build:
+	@echo "🌐 Building web interface..."
+	cd web && pnpm install && pnpm run build
+	@echo "📦 Copying web files to cmd/cyphernetes..."
+	rm -rf cmd/cyphernetes/web
+	cp -r web/dist cmd/cyphernetes/web
+
+web-test:
+	@echo "🧪 Running web tests..."
+	cd web && pnpm install && pnpm test
+
+web-run: build
+	./dist/cyphernetes web
+
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
-.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push
+.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
 
 # Add a help command to list available targets
 help:

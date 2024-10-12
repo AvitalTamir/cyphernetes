@@ -22,6 +22,14 @@ jobs:
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
         setup-envtest use
         echo "KUBEBUILDER_ASSETS=$(setup-envtest use -p path)" >> $GITHUB_ENV
+    - name: Setup node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
     - name: Create a link to envtest in operator/bin
       run: mkdir -p ./operator/bin && ln -s $(which setup-envtest) ./operator/bin/setup-envtest
     - name: Install goyacc
@@ -30,6 +38,8 @@ jobs:
       run: make operator-manifests
     - name: Run tests
       run: make test
+    - name: Run web tests
+      run: make web-test
     - name: Apply operator test CRDs
       run: kubectl apply -f ./operator/test/e2e/samples/crd-exposeddeployments.yaml
     - name: Run operator tests

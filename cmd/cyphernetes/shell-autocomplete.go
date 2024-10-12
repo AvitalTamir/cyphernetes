@@ -168,6 +168,7 @@ func getMacros() []string {
 }
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
+	executor := parser.GetQueryExecutorInstance()
 	// First, get the full GVR for the kind from the GVR cache
 	gvr, err := parser.FindGVR(executor.Clientset, kind)
 	if err != nil {
@@ -219,7 +220,7 @@ func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, erro
 
 // Helper function to get the kind from GVR
 func getKindFromGVR(gvr schema.GroupVersionResource) (string, error) {
-	discoveryClient := executor.Clientset.Discovery()
+	discoveryClient := parser.GetQueryExecutorInstance().Clientset.Discovery()
 	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
 		return "", err
