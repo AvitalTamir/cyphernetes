@@ -61,8 +61,8 @@ const QueryInput: React.FC<QueryInputProps> = ({
       const lineHeight = 21; // Adjust this value based on your font size and line height
       const charWidth = 8.4; // Adjust this value based on your font size
 
-      const top = (currentLineNumber * lineHeight) + 16; // 16px for padding
-      const left = (currentLineText.length * charWidth) + 16; // 16px for padding
+      const top = (currentLineNumber * lineHeight) + 15; // 16px for padding
+      const left = (currentLineText.length * charWidth) + 6;
 
       setSuggestionsPosition({ top, left });
     }
@@ -118,11 +118,33 @@ const QueryInput: React.FC<QueryInputProps> = ({
   };
 
   const insertSuggestion = (suggestion: string) => {
+    console.log('insertSuggestion called with:', suggestion);
+    console.log('Current query:', query);
+    console.log('Current cursor position:', cursorPosition);
+
     const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition);
+    console.log('New query:', newQuery);
+
+    const newCursorPosition = cursorPosition + suggestion.length;
+    console.log('New cursor position:', newCursorPosition);
+
     setQuery(newQuery);
-    setCursorPosition(cursorPosition + suggestion.length);
+    setCursorPosition(newCursorPosition);
     setSuggestions([]);
     setSelectedSuggestionIndex(-1);
+
+    console.log('State updated, now updating textarea');
+
+    // Update the cursor position in the textarea
+    if (textareaRef.current) {
+      console.log('Textarea ref exists, setting selection range');
+      textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+      console.log('Selection range set');
+    } else {
+      console.log('Textarea ref does not exist');
+    }
+
+    console.log('insertSuggestion completed');
   };
 
   const debouncedFetchSuggestions = useCallback(
@@ -170,6 +192,19 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
+  const handleSuggestionClick = (e: React.MouseEvent, suggestion: string) => {
+    console.log('handleSuggestionClick called');
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Suggestion clicked:', suggestion);
+    insertSuggestion(suggestion);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  console.log('Rendering QueryInput, suggestions:', suggestions);
+
   return (
     <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
       <div className="query-editor">
@@ -209,14 +244,25 @@ const QueryInput: React.FC<QueryInputProps> = ({
             className="suggestions" 
             style={{ 
               top: `${suggestionsPosition.top}px`, 
-              left: `${suggestionsPosition.left}px` 
+              left: `${suggestionsPosition.left}px`,
+            //   position: 'absolute',
+            //   zIndex: 1000,
+            //   backgroundColor: '#fff',
+            //   border: '1px solid #ccc',
+            //   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             }}
           >
             {suggestions.map((suggestion, index) => (
               <div
                 key={index}
                 className={`suggestion-item ${index === selectedSuggestionIndex ? 'highlighted' : ''}`}
-                onClick={() => insertSuggestion(suggestion)}
+                onClick={(e) => handleSuggestionClick(e, suggestion)}
+                onMouseDown={(e) => e.preventDefault()} // Prevent blur on click
+                style={{
+                  padding: '5px 10px',
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent',
+                }}
               >
                 {suggestion}
               </div>

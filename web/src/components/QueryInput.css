@@ -93,33 +93,30 @@
 
 .suggestions {
   position: absolute;
-  background-color: #2a2a2a;
-  border: 1px solid #444;
+  /* border: 1px solid #444; */
   max-height: 200px;
   overflow-y: auto;
   z-index: 99999999;
   font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
+  /* box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); */
   scroll-behavior: smooth;
 }
 
 .suggestion-item {
-  padding: 8px 12px;
+  padding: 0;
   cursor: pointer;
-  color: #e0e0e0;
+  color: #8f8f8f;
   transition: background-color 0.2s, color 0.2s;
 }
 
 .suggestion-item:hover,
 .suggestion-item.highlighted {
-  background-color: #3a3a3a;
   color: #ffffff;
 }
 
 .suggestion-item.highlighted {
-  background-color: #4a4a4a;
+  color: #ffffff;
 }
 
 .query-status {
