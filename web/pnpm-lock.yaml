@@ -38,9 +38,6 @@ importers:
       react-force-graph-2d:
         specifier: ^1.25.6
         version: 1.25.6(react@18.3.1)
-      react-force-graph-3d:
-        specifier: ^1.23.0
-        version: 1.24.4(react@18.3.1)
       react-syntax-highlighter:
         specifier: ^15.5.0
         version: 15.5.0(react@18.3.1)
@@ -74,10 +71,6 @@ importers:
         version: 0.3.3(vitest@2.1.2(@types/node@22.7.5)(@vitest/ui@2.1.2)(jsdom@25.0.1))
 
 packages:
-
-  3d-force-graph@1.73.4:
-    resolution: {integrity: sha512-eMHZ1LVzh9APLv+An0AXz2dVPwasJlqAnJ61ABlb1qaO6DYuqIUTTErh0DN/24nIWJu1jCim2WiVujzz7slnWQ==}
-    engines: {node: '>=12'}
 
   '@adobe/css-tools@4.4.0':
     resolution: {integrity: sha512-Ff9+ksdQQB3rMncgqDK78uLznstjyfIf2Arnh22pW8kBpLs6rpKDwgnZT46hin5Hl1WzazzK64DOrhSwYpS7bQ==}
@@ -889,10 +882,6 @@ packages:
     resolution: {integrity: sha512-b8AmV3kfQaqWAuacbPuNbL6vahnOJflOhexLzMMNLga62+/nh0JzvJ0aO/5a5MVgUFGS7Hu1P9P03o3fJkDCyw==}
     engines: {node: '>=12'}
 
-  data-joint@1.3.1:
-    resolution: {integrity: sha512-tMK0m4OVGqiA3zkn8JmO6YAqD8UwJqIAx4AAwFl1SKTtKAqcXePuT+n2aayiX9uITtlN3DFtKKTOxJRUc2+HvQ==}
-    engines: {node: '>=12'}
-
   data-urls@5.0.0:
     resolution: {integrity: sha512-ZYP5VBHshaDAiVZxjbRVcFJpc+4xGgT0bK3vzy1HLN8jTO975HEbuYzZJcHoQEY5K1a0z8YayJkyVETa08eNTg==}
     engines: {node: '>=18'}
@@ -1201,21 +1190,6 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  ngraph.events@1.2.2:
-    resolution: {integrity: sha512-JsUbEOzANskax+WSYiAPETemLWYXmixuPAlmZmhIbIj6FH/WDgEGCGnRwUQBK0GjOnVm8Ui+e5IJ+5VZ4e32eQ==}
-
-  ngraph.forcelayout@3.3.1:
-    resolution: {integrity: sha512-MKBuEh1wujyQHFTW57y5vd/uuEOK0XfXYxm3lC7kktjJLRdt/KEKEknyOlc6tjXflqBKEuYBBcu7Ax5VY+S6aw==}
-
-  ngraph.graph@20.0.1:
-    resolution: {integrity: sha512-VFsQ+EMkT+7lcJO1QP8Ik3w64WbHJl27Q53EO9hiFU9CRyxJ8HfcXtfWz/U8okuoYKDctbciL6pX3vG5dt1rYA==}
-
-  ngraph.merge@1.0.0:
-    resolution: {integrity: sha512-5J8YjGITUJeapsomtTALYsw7rFveYkM+lBj3QiYZ79EymQcuri65Nw3knQtFxQBU1r5iOaVRXrSwMENUPK62Vg==}
-
-  ngraph.random@1.1.0:
-    resolution: {integrity: sha512-h25UdUN/g8U7y29TzQtRm/GvGr70lK37yQPvPKXXuVfs7gCm82WipYFZcksQfeKumtOemAzBIcT7lzzyK/edLw==}
-
   node-releases@2.0.18:
     resolution: {integrity: sha512-d9VeXT4SJ7ZeOqGX6R5EM022wpL+eWPooLI+5UpWn2jCT1aosUQEhQP214x33Wkwx3JQMvIm+tIoVOdodFS40g==}
 
@@ -1252,10 +1226,6 @@ packages:
   picomatch@4.0.2:
     resolution: {integrity: sha512-M7BAV6Rlcy5u+m6oPhAPFgJTzAioX/6B0DxyvDlo9l8+T3nLKbrczg2WLUyzd45L8RqfUMyGPzekbMvX2Ldkwg==}
     engines: {node: '>=12'}
-
-  polished@4.3.1:
-    resolution: {integrity: sha512-OBatVyC/N7SCW/FaDHrSd+vn0o5cS855TOmYi4OkdWUMSJCET/xip//ch8xGUvtr3i44X9LVyWwQlRMTN3pwSA==}
-    engines: {node: '>=10'}
 
   postcss@8.4.47:
     resolution: {integrity: sha512-56rxCq7G/XfB4EkXq9Egn5GCqugWvDFjafDOThIdMBsI15iqPqR5r15TfSr1YPYeEI19YeaXMCbY6u88Y76GLQ==}
@@ -1298,12 +1268,6 @@ packages:
 
   react-force-graph-2d@1.25.6:
     resolution: {integrity: sha512-qFarXF1pazVtGUoJul7cecqVGdfLoMQiX/98mewULM9YXDXesDfVExBaLkoz9KHN/guWdoSfH2sTUHQA9hpmDw==}
-    engines: {node: '>=12'}
-    peerDependencies:
-      react: '*'
-
-  react-force-graph-3d@1.24.4:
-    resolution: {integrity: sha512-7EK1L5DvRk3mqevi3lo6xKXhnFK8FlYgSR2drUuB4hD5xDrco3IyB2TRJuewEdW+lRP5lxcxWX5UQgNASZtkTQ==}
     engines: {node: '>=12'}
     peerDependencies:
       react: '*'
@@ -1415,21 +1379,6 @@ packages:
 
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
-
-  three-forcegraph@1.41.14:
-    resolution: {integrity: sha512-W/cZElLXO0l6ffdMmDakh4bUGSYuSv/YxInOHMN9KAQgDwJ8904SOBh8qkTnGu7UPsi0mAsrUgkfViW8heloTA==}
-    engines: {node: '>=12'}
-    peerDependencies:
-      three: '>=0.118.3'
-
-  three-render-objects@1.29.5:
-    resolution: {integrity: sha512-OLtETrjF184NuaaI/vpRlIP9FxVNAgBBCgWYXhGFUDnPdl/2iX8rialUPGA1gEXvOTiKyepArVgm1LUkJw15rQ==}
-    engines: {node: '>=12'}
-    peerDependencies:
-      three: '*'
-
-  three@0.169.0:
-    resolution: {integrity: sha512-Ed906MA3dR4TS5riErd4QBsRGPcx+HBDX2O5yYE5GqJeFQTPU+M56Va/f/Oph9X7uZo3W3o4l2ZhBZ6f6qUv0w==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -1646,14 +1595,6 @@ packages:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
 snapshots:
-
-  3d-force-graph@1.73.4:
-    dependencies:
-      accessor-fn: 1.5.1
-      kapsule: 1.14.6
-      three: 0.169.0
-      three-forcegraph: 1.41.14(three@0.169.0)
-      three-render-objects: 1.29.5(three@0.169.0)
 
   '@adobe/css-tools@4.4.0': {}
 
@@ -2358,10 +2299,6 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  data-joint@1.3.1:
-    dependencies:
-      index-array-by: 1.4.2
-
   data-urls@5.0.0:
     dependencies:
       whatwg-mimetype: 4.0.0
@@ -2707,22 +2644,6 @@ snapshots:
 
   nanoid@3.3.7: {}
 
-  ngraph.events@1.2.2: {}
-
-  ngraph.forcelayout@3.3.1:
-    dependencies:
-      ngraph.events: 1.2.2
-      ngraph.merge: 1.0.0
-      ngraph.random: 1.1.0
-
-  ngraph.graph@20.0.1:
-    dependencies:
-      ngraph.events: 1.2.2
-
-  ngraph.merge@1.0.0: {}
-
-  ngraph.random@1.1.0: {}
-
   node-releases@2.0.18: {}
 
   nwsapi@2.2.13: {}
@@ -2756,10 +2677,6 @@ snapshots:
   picomatch@2.3.1: {}
 
   picomatch@4.0.2: {}
-
-  polished@4.3.1:
-    dependencies:
-      '@babel/runtime': 7.25.7
 
   postcss@8.4.47:
     dependencies:
@@ -2806,13 +2723,6 @@ snapshots:
   react-force-graph-2d@1.25.6(react@18.3.1):
     dependencies:
       force-graph: 1.44.2
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-kapsule: 2.4.1(react@18.3.1)
-
-  react-force-graph-3d@1.24.4(react@18.3.1):
-    dependencies:
-      3d-force-graph: 1.73.4
       prop-types: 15.8.1
       react: 18.3.1
       react-kapsule: 2.4.1(react@18.3.1)
@@ -2932,30 +2842,6 @@ snapshots:
       has-flag: 4.0.0
 
   symbol-tree@3.2.4: {}
-
-  three-forcegraph@1.41.14(three@0.169.0):
-    dependencies:
-      accessor-fn: 1.5.1
-      d3-array: 3.2.4
-      d3-force-3d: 3.0.5
-      d3-scale: 4.0.2
-      d3-scale-chromatic: 3.1.0
-      data-joint: 1.3.1
-      kapsule: 1.14.6
-      ngraph.forcelayout: 3.3.1
-      ngraph.graph: 20.0.1
-      three: 0.169.0
-      tinycolor2: 1.6.0
-
-  three-render-objects@1.29.5(three@0.169.0):
-    dependencies:
-      '@tweenjs/tween.js': 25.0.0
-      accessor-fn: 1.5.1
-      kapsule: 1.14.6
-      polished: 4.3.1
-      three: 0.169.0
-
-  three@0.169.0: {}
 
   tinybench@2.9.0: {}
 
