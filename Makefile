@@ -75,8 +75,8 @@ operator-test:
 
 web-build:
 	@echo "🌐 Building web interface..."
-	cd web && pnpm install && pnpm run build
-	@echo "📦 Copying web files to cmd/cyphernetes..."
+	cd web && pnpm install > /dev/null && pnpm run build > /dev/null
+	@echo "📦 Copying web artifacts..."
 	rm -rf cmd/cyphernetes/web
 	cp -r web/dist cmd/cyphernetes/web
 
