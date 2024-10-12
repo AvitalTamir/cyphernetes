@@ -80,12 +80,16 @@ web-build:
 	rm -rf cmd/cyphernetes/web
 	cp -r web/dist cmd/cyphernetes/web
 
-run-web: build
+web-test:
+	@echo "🧪 Running web tests..."
+	cd web && pnpm install && pnpm test
+
+web-run: build
 	./dist/cyphernetes web
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean
-.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build
+.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
 
 # Add a help command to list available targets
 help:
