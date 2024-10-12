@@ -82,7 +82,7 @@ func TestCyphernetesShellWithHelpFlag(t *testing.T) {
 	output := runTestCommand(t, "TestCyphernetesShellWithHelpFlagHelper", "TEST_SHELL_HELP")
 	expectedContent := `Launch an interactive shell
 
-Usage:f
+Usage:
   cyphernetes shell [flags]
 
 Flags:
