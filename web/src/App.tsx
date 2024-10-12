@@ -56,7 +56,6 @@ function App() {
   }, [filterManagedFields, originalQueryResult]);
 
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
-    console.log('App: handleQuerySubmit called');
     setIsLoading(true);
     setError(null);
     const startTime = performance.now();
@@ -135,15 +134,11 @@ function App() {
         }, ''),
       };
 
-      console.log('App: Query executed, setting results');
       setOriginalQueryResult(mergedResult);
       const parsedResult = JSON.parse(mergedResult.result);
-      console.log('App: Parsed result:', parsedResult);  // Add this log
       const filteredData = filterResults(parsedResult);
       const stringifiedFilteredData = JSON.stringify(filteredData, null, 2);
-      console.log('App: Filtered result:', stringifiedFilteredData);
       setFilteredResult(stringifiedFilteredData);
-      console.log('App: Results set');
 
       const endTime = performance.now();
       setQueryStatus({
@@ -169,7 +164,6 @@ function App() {
       });
     } finally {
       setIsLoading(false);
-      console.log('App: Query submission completed');
     }
   };
 
@@ -177,8 +171,6 @@ function App() {
     if (!filterManagedFields) {
       return results;
     }
-
-    console.log('App: Filtering results:', results);
 
     const filterObject = (obj: any): any => {
       if (Array.isArray(obj)) {
@@ -200,7 +192,6 @@ function App() {
 
     const filtered = filterObject(results);
 
-    console.log('App: Filtered results:', filtered);
     return filtered;
   }, [filterManagedFields]);
 
