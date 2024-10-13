@@ -3,7 +3,7 @@ module github.com/avitaltamir/cyphernetes
 go 1.23.0
 
 require (
-	github.com/AvitalTamir/jsonpath v0.0.0-20241013201133-f5b5a3549a10
+	github.com/AvitalTamir/jsonpath v0.0.0-20241013204606-2f0b3ae8866e
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/gnostic v0.7.0
