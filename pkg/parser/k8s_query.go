@@ -1029,10 +1029,8 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) {
 			compiledPath.Steps[i] = step
 			if i+2 < len(compiledPath.Steps) {
 				compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
-				fmt.Println("Debug: fixed compiled path", compiledPath.Steps)
 			} else {
 				compiledPath.Steps = compiledPath.Steps[:i+1]
-				fmt.Println("Debug: fixed compiled path", compiledPath.Steps)
 			}
 		}
 	}
