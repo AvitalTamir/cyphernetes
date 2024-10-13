@@ -36,7 +36,7 @@ This node contains a _variable_ (in this example it's called `k`), followed by a
 
 We assign variable names to nodes so we can refer to them later in the query. Labels are used to specify the node's Kubernetes resource kind.
 
-When specifying the label we can use the the resource's singular name, plural name or shortname, just like in kubectl.
+When specifying the label we can use the resource's singular name, plural name or shortname, just like in kubectl.
 Unlike kubectl, labels in Cyphernetes are case-insensitive, so `(p:Pod)`, `(p:POD)`, `(p:pod)`, `(p:pods)`, `(p:po)` etc. are all legal and mean the same.
 
 This document adheres to a convention of using minified, lowercase variable names and CamelCase, singular-name labels i.e. `(d:Deployment)`, `(rs:ReplicaSet)` - however this is completely up to the user.
