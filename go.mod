@@ -3,9 +3,10 @@ module github.com/avitaltamir/cyphernetes
 go 1.23.0
 
 require (
+	github.com/AvitalTamir/jsonpath v0.0.0-20241013201133-f5b5a3549a10
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
+	github.com/gin-gonic/gin v1.10.0
 	github.com/google/gnostic v0.7.0
-	github.com/oliveagle/jsonpath v0.0.0-20180606110733-2e52cf6e6852
 	github.com/spf13/cobra v1.8.1
 	github.com/wader/readline v0.0.0-20230307172220-bcb7158e7448
 	k8s.io/apiextensions-apiserver v0.31.0
@@ -21,7 +22,6 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/gin-gonic/gin v1.10.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect

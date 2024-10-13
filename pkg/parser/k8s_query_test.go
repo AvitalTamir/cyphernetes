@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/oliveagle/jsonpath"
+	"github.com/AvitalTamir/jsonpath"
 )
 
 func TestJsonPath(t *testing.T) {
