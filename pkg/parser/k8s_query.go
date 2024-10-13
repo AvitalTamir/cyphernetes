@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/oliveagle/jsonpath"
+	"github.com/AvitalTamir/jsonpath"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -91,7 +91,16 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		case *SetClause:
 			for _, kvp := range c.KeyValuePairs {
 				resultMapKey := strings.Split(kvp.Key, ".")[0]
-				path := strings.Split(kvp.Key, ".")[1:]
+				path := []string{}
+				parts := strings.Split(kvp.Key, ".")
+				for i := 1; i < len(parts); i++ {
+					if i > 1 && strings.HasSuffix(parts[i-1], "\\") {
+						// Combine this part with the previous one, removing the backslash
+						path[len(path)-1] = path[len(path)-1][:len(path[len(path)-1])-1] + "." + strings.ReplaceAll(parts[i], "/", "~1")
+					} else {
+						path = append(path, strings.ReplaceAll(parts[i], "/", "~1"))
+					}
+				}
 
 				resources := resultMap[resultMapKey].([]map[string]interface{})
 				for _, resource := range resources {
@@ -913,21 +922,48 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	// Apply extra filters
 	for _, filter := range extraFilters {
 		// The first part of the key is the node name
-		resultMapKey := strings.Split(filter.Key, ".")[0]
+		var resultMapKey string
+		dotIndex := strings.Index(filter.Key, ".")
+		if dotIndex != -1 {
+			resultMapKey = filter.Key[:dotIndex]
+		} else {
+			resultMapKey = filter.Key
+		}
+		// Handle escaped dots
+		for strings.HasSuffix(resultMapKey, "\\") {
+			// remove one backslash
+			nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
+			if nextDotIndex == -1 {
+				resultMapKey = filter.Key
+				break
+			}
+			resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
+		}
 		if resultMap[resultMapKey] == nil {
 			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
 		} else if resultMapKey == n.ResourceProperties.Name {
-			// The rest of the key is the JSONPath
-			path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
-			// Ensure the JSONPath starts with '$'
-			if !strings.HasPrefix(path, "$") {
-				path = "$." + path
+			// // The rest of the key is the JSONPath
+			// path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
+			// // Ensure the JSONPath starts with '$'
+			// if !strings.HasPrefix(path, "$") {
+			// 	path = "$." + path
+			// }
+			// Ensure that the JSONPath handles escaped characters
+			path := filter.Key
+			path = strings.Replace(path, resultMapKey+".", "$.", 1)
+
+			compiledPath, err := jsonpath.Compile(path)
+			if err != nil {
+				logDebug("Error compiling JSONPath:", path)
+				continue
 			}
 
 			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
 			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+				// Fix compiledPath to handle escaped dots
+				compiledPath = fixCompiledPath(compiledPath)
 				// Drill down to create nested map structure
-				result, err := jsonpath.JsonPathLookup(resource, path)
+				result, err := compiledPath.Lookup(resource)
 				if err != nil {
 					logDebug("Path not found:", filter.Key)
 					// remove the resource from the slice
@@ -981,6 +1017,24 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	}
 
 	return nil
+}
+
+// This is a lazy fix for the jsonpath library which doesn't handle escaped dots in compiled paths
+// Let's patch the jsonpath library to handle this in the future
+func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
+	i := 0
+	for i < len(compiledPath.Steps) {
+		step := compiledPath.Steps[i]
+		if strings.HasSuffix(step.Key, "\\") && i+1 < len(compiledPath.Steps) {
+			nextStep := compiledPath.Steps[i+1]
+			step.Key = step.Key[:len(step.Key)-1] + "." + nextStep.Key
+			compiledPath.Steps[i] = step
+			compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
+		} else {
+			i++
+		}
+	}
+	return compiledPath
 }
 
 func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) (interface{}, error) {

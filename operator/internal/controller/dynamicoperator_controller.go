@@ -25,9 +25,9 @@ import (
 	"encoding/json"
 	"regexp"
 
+	"github.com/AvitalTamir/jsonpath"
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
 	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
-	"github.com/oliveagle/jsonpath"
 	"k8s.io/apimachinery/pkg/types"
 )
 

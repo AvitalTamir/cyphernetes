@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/oliveagle/jsonpath"
+	"github.com/AvitalTamir/jsonpath"
 )
 
 func initializeRelationships() {
