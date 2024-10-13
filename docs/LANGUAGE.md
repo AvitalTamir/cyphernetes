@@ -409,7 +409,7 @@ CREATE (d:Deployment {
 })
 ```
 
-Create expressions may optionally be followed by a `RETURN`` clause:
+Create expressions may optionally be followed by a `RETURN` clause:
 
 ```graphql
 CREATE (d:Deployment {
