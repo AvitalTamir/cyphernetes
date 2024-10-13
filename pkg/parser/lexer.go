@@ -87,10 +87,18 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		consumeWhitespace(l, &ch)
 
 		// Capture the JSONPATH
-		for isValidJsonPathChar(ch) {
-			l.s.Next() // Consume the character
-			lval.strVal += string(ch)
-			ch = l.s.Peek()
+		for {
+			ch := l.s.Peek()
+			if ch == '\\' {
+				l.s.Next()           // Consume backslash
+				nextCh := l.s.Next() // Consume the escaped character
+				lval.strVal += "\\" + string(nextCh)
+			} else if isValidJsonPathChar(ch) {
+				l.s.Next() // Consume the character
+				lval.strVal += string(ch)
+			} else {
+				break
+			}
 		}
 		if l.definingReturn {
 			l.insideReturnItem = true
@@ -309,14 +317,14 @@ func (l *Lexer) Lex(lval *yySymType) int {
 
 // Helper function to check if a character is valid in a jsonPath
 func isValidJsonPathChar(tok rune) bool {
-	// convert to string for easier comparison
+	// Convert to string for easier comparison
 	char := string(tok)
 
 	return char == "." || char == "[" || char == "]" ||
 		(char >= "0" && char <= "9") || char == "_" ||
 		(char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
 		char == "\"" || char == "*" || char == "$" || char == "#" ||
-		char == "/" || char == "-"
+		char == "/" || char == "-" || char == "\\" // Include backslash
 }
 
 func (l *Lexer) Error(e string) {
