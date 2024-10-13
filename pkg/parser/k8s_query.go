@@ -961,7 +961,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
 			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
 				// Fix compiledPath to handle escaped dots
-				fixCompiledPath(compiledPath)
+				compiledPath = fixCompiledPath(compiledPath)
 				// Drill down to create nested map structure
 				result, err := compiledPath.Lookup(resource)
 				if err != nil {
@@ -1021,19 +1021,20 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 
 // This is a lazy fix for the jsonpath library which doesn't handle escaped dots in compiled paths
 // Let's patch the jsonpath library to handle this in the future
-func fixCompiledPath(compiledPath *jsonpath.Compiled) {
-	for i, step := range compiledPath.Steps {
+func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
+	i := 0
+	for i < len(compiledPath.Steps) {
+		step := compiledPath.Steps[i]
 		if strings.HasSuffix(step.Key, "\\") && i+1 < len(compiledPath.Steps) {
 			nextStep := compiledPath.Steps[i+1]
 			step.Key = step.Key[:len(step.Key)-1] + "." + nextStep.Key
 			compiledPath.Steps[i] = step
-			if i+2 < len(compiledPath.Steps) {
-				compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
-			} else {
-				compiledPath.Steps = compiledPath.Steps[:i+1]
-			}
+			compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
+		} else {
+			i++
 		}
 	}
+	return compiledPath
 }
 
 func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) (interface{}, error) {
