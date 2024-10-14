@@ -1,3 +1,5 @@
+<img width="1219" alt="Screenshot 2024-10-15 at 0 03 00" src="https://github.com/user-attachments/assets/e3a36dcf-2add-44fb-8c8a-71225e0e026b">
+
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
@@ -37,10 +39,11 @@ Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query la
 It is a mixture of ASCII-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
 
 There are multiple ways to run Cyphernetes queries:
-1. Using the interactive shell by running `cyphernetes shell` in your terminal
-2. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
-3. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator which lets you define powerful Kubernetes workflows on-the-fly
-4. Using the Cyphernetes API in your own Go programs
+1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
+2. Using the interactive shell by running `cyphernetes shell` in your terminal
+3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
+4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator which lets you define powerful Kubernetes workflows on-the-fly
+5. Using the Cyphernetes API in your own Go programs
 
 To learn more about how to use Cyphernetes, refer to these documents:
 * [LANGUAGE.md](docs/LANGUAGE.md) - a crash-course in Cyphernetes language syntax
