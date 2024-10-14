@@ -43,6 +43,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkThem
 
   return (
     <div className="results-display">
+      <div className="left-panel-before"></div>
       <div className="results-header">
         <button onClick={() => setFormat('yaml')} className={format === 'yaml' ? 'active' : ''}>YAML</button>
         <button onClick={() => setFormat('json')} className={format === 'json' ? 'active' : ''}>JSON</button>
@@ -56,6 +57,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkThem
           </SyntaxHighlighter>
         )}
       </div>
+      <div className="left-panel-after"></div>
     </div>
   );
 };
