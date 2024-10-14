@@ -376,21 +376,10 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 				}
 			}
 
-			// for each nodeId, verify c.Items contains nodeId.metadata.name
+			// Add a "name" property to each node
 			for _, nodeId := range nodeIds {
 				metadataNamePath := strings.Join([]string{nodeId, "metadata.name"}, ".")
-				// Check if metadataNamePath already exists in c.Items
-				exists := false
-				for _, item := range c.Items {
-					if item.JsonPath == metadataNamePath {
-						exists = true
-						break
-					}
-				}
-				// If it doesn't exist, add it
-				if !exists {
-					c.Items = append(c.Items, &ReturnItem{JsonPath: metadataNamePath})
-				}
+				c.Items = append(c.Items, &ReturnItem{JsonPath: metadataNamePath, Alias: "name"})
 			}
 
 			for _, item := range c.Items {
@@ -412,6 +401,9 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 				var aggregateResult interface{}
 
 				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
+					// Ensure that the results.Data[nodeId] slice has enough elements to store the current resource.
+					// If the current index (idx) is beyond the current length of the slice,
+					// append a new empty map to the slice to accommodate the new data.
 					if len(results.Data[nodeId].([]interface{})) <= idx {
 						results.Data[nodeId] = append(results.Data[nodeId].([]interface{}), make(map[string]interface{}))
 					}
@@ -461,10 +453,20 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 					if item.Aggregate == "" {
 						key := item.Alias
 						if key == "" {
-							if len(pathParts) > 0 {
-								key = pathParts[len(pathParts)-1]
+							if len(pathParts) == 1 {
+								key = pathParts[0]
+							} else if len(pathParts) > 1 {
+								nestedMap := currentMap
+								for i := 0; i < len(pathParts)-1; i++ {
+									if _, exists := nestedMap[pathParts[i]]; !exists {
+										nestedMap[pathParts[i]] = make(map[string]interface{})
+									}
+									nestedMap = nestedMap[pathParts[i]].(map[string]interface{})
+								}
+								nestedMap[pathParts[len(pathParts)-1]] = result
+								continue
 							} else {
-								key = nodeId
+								key = "$"
 							}
 						}
 						currentMap[key] = result
