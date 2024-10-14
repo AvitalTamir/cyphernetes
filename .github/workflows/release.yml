@@ -45,7 +45,7 @@ jobs:
         helm push cyphernetes-operator-*.tgz oci://ghcr.io/avitaltamir/cyphernetes
     - name: Build CLI for all platforms
       run: |
-        make operator-manifests build-all-platforms-and-archs
+        make operator-manifests build-all-platforms
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -94,4 +94,23 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dist/cyphernetes-darwin-arm64
         asset_name: cyphernetes-darwin-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload Release Asset - Windows AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cyphernetes-windows-amd64
+        asset_name: cyphernetes-windows-amd64.exe
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - Windows ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/cyphernetes-windows-arm64
+        asset_name: cyphernetes-windows-arm64.exe
         asset_content_type: application/octet-stream
