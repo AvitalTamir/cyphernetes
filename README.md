@@ -50,7 +50,7 @@ To learn more about how to use Cyphernetes, refer to these documents:
 * [CLI.md](docs/CLI.md) - a guide to using Cyphernetes shell, query command and macros
 * [OPERATOR.md](docs/OPERATOR.md) - a guide to using Cyphernetes DynamicOperator
 
-### Some examples from the shell
+### Examples (from the Cyphernetes Shell)
 ```graphql
 # Get the desired and running replicas for all deployments
 MATCH (d:Deployment)
@@ -82,59 +82,6 @@ Relationships let us express connected operations in a natural way, and without 
 Created services/nginx
 
 Query executed in 30.692208ms
-```
-
-### It has macros and graphs too
-Macros are minimalistic, user-extensible & batteries included stored procedures.
-They turn the Cyphernetes shell into a handy kubectl alternative.
-Many useful macros are included - and it's easy to define your own.
-
-```graphql
-# This macro creates a service and public ingress for a deployment.
-# It's defined like this:
-# :exposepublic deploymentName hostname # Expose a deployment as a service and ingress
-# MATCH (deployment:Deployment {name: "$deploymentName"})
-# CREATE (deployment)->(service:Service);
-# MATCH (services:Service {name: "$deploymentName"})
-# CREATE (services)->(i:ingress {"spec":{"rules": [{"host": "$hostname"}]}});
-# MATCH (deployments:Deployment {name: "$deploymentName"})->(services:Service)->(ingresses:Ingress)
-# RETURN services.metadata.name, services.spec.type AS Type, services.spec.clusterIP AS ClusterIP, ingresses.spec.rules[0].host AS Host, ingresses.spec.rules[0].http.paths[0].path AS Path, ingresses.spec.rules[0].http.paths[0].backend.service.name AS Service;
-
-# Cyphernetes can optionally draw a graph of affected nodes as ASCII-art!
-
-> :expose_public nginx foo.com
-Created services/nginx
-Created ingresses/nginx
-
-┌─────────────────┐
-│ *Ingress* nginx │
-└─────────────────┘
-  │
-  │ :ROUTE
-  ▼
-┌─────────────────┐
-│ *Service* nginx │
-└─────────────────┘
-
-{
-  "ingresses": [
-    {
-      "Host": "foo.com",
-      "Path": "/",
-      "Service": "nginx",
-      "name": "nginx"
-    }
-  ],
-  "services": [
-    {
-      "ClusterIP": "10.96.164.152",
-      "Type": "ClusterIP",
-      "name": "nginx"
-    }
-  ]
-}
-
-Macro executed in 50.305083ms
 ```
 
 ## Get Cyphernetes
