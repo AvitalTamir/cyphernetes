@@ -442,6 +442,38 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 									aggregateResult = v1.Uint() + v2.Uint()
 								case reflect.Float32, reflect.Float64:
 									aggregateResult = v1.Float() + v2.Float()
+								case reflect.String:
+									if strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu") {
+										// Convert v1 to milliCPU
+										v1_cpu, err := convertToMilliCPU(v1.String())
+										if err != nil {
+											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+										}
+
+										// Convert v2 to milliCPU
+										v2_cpu, err := convertToMilliCPU(v2.String())
+										if err != nil {
+											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+										}
+
+										// SUM the CPU values and add the "m" suffix to indicate milliCPU
+										aggregateResult = strconv.Itoa(v1_cpu+v2_cpu) + "m"
+
+									} else if strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory") {
+										v1_mem, err := convertMemoryToBytes(v1.String())
+										if err != nil {
+											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
+										}
+
+										v2_mem, err := convertMemoryToBytes(v2.String())
+										if err != nil {
+											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
+										}
+
+										// SUM the Memory values
+										aggregateResult = convertBytesToMemory(v1_mem + v2_mem)
+									}
+
 								default:
 									// Handle unsupported types or error out
 									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
@@ -1232,4 +1264,129 @@ func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patche
 	}
 
 	return nil
+}
+
+// convertToMilliCPU converts a CPU value string to milliCPU (integer format).
+// It handles both standard CPU values (e.g., "1", "0.5") and milliCPU values (e.g., "500m").
+func convertToMilliCPU(cpu string) (int, error) {
+	// Check if the value is in milliCPU format
+	if strings.HasSuffix(cpu, "m") {
+		// Trim the "m" suffix and convert the remaining string to an integer
+		milliCPU, err := strconv.Atoi(strings.TrimSuffix(cpu, "m"))
+		if err != nil {
+			return 0, fmt.Errorf("invalid milliCPU value: %s", cpu)
+		}
+		return milliCPU, nil
+	}
+
+	// Convert to base unit (milliCPU) if no "m" suffix
+	standardCPU, err := strconv.Atoi(cpu)
+	if err != nil {
+		return 0, fmt.Errorf("invalid standard CPU value: %s", cpu)
+	}
+
+	return standardCPU * 1000, nil
+}
+
+// convertMemoryToBytes takes a memory string like "500M" or "2Gi"
+// and returns the corresponding value in bytes.
+func convertMemoryToBytes(mem string) (int64, error) {
+	// Suffixes for power-of-10 (decimal) memory units in Kubernetes
+	suffixesDecimal := map[string]int64{
+		"E": 1e18, // Exabyte
+		"P": 1e15, // Petabyte
+		"T": 1e12, // Terabyte
+		"G": 1e9,  // Gigabyte
+		"M": 1e6,  // Megabyte
+		"k": 1e3,  // Kilobyte (lowercase for kilobytes in decimal)
+	}
+
+	// Suffixes for power-of-2 (binary) memory units
+	suffixesBinary := map[string]int64{
+		"Ei": 1 << 60, // Exbibyte (2^60)
+		"Pi": 1 << 50, // Pebibyte (2^50)
+		"Ti": 1 << 40, // Tebibyte (2^40)
+		"Gi": 1 << 30, // Gibibyte (2^30)
+		"Mi": 1 << 20, // Mebibyte (2^20)
+		"Ki": 1 << 10, // Kibibyte (2^10)
+	}
+
+	// Check for power-of-2 suffixes first (Ei, Pi, Ti, etc.)
+	for suffix, multiplier := range suffixesBinary {
+		if strings.HasSuffix(mem, suffix) {
+			numberStr := strings.TrimSuffix(mem, suffix)
+			number, err := strconv.ParseFloat(numberStr, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid number format: %v", err)
+			}
+			return int64(number * float64(multiplier)), nil
+		}
+	}
+
+	// Check for power-of-10 suffixes next (E, P, T, etc.)
+	for suffix, multiplier := range suffixesDecimal {
+		if strings.HasSuffix(mem, suffix) {
+			numberStr := strings.TrimSuffix(mem, suffix)
+			number, err := strconv.ParseFloat(numberStr, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid number format: %v", err)
+			}
+			return int64(number * float64(multiplier)), nil
+		}
+	}
+
+	// If no suffix is found, assume it's in bytes
+	number, err := strconv.ParseFloat(mem, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid memory format: %v", err)
+	}
+	return int64(number), nil
+}
+
+// convertBytesToMemory converts a value in bytes to the closest readable unit,
+// supporting both decimal (e.g., kB, MB) and binary (e.g., KiB, MiB) units.
+func convertBytesToMemory(bytes int64) string {
+	// Define units for decimal (power-of-10) and binary (power-of-2)
+	decimalUnits := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"E", 1e18}, // Exabyte
+		{"P", 1e15}, // Petabyte
+		{"T", 1e12}, // Terabyte
+		{"G", 1e9},  // Gigabyte
+		{"M", 1e6},  // Megabyte
+		{"k", 1e3},  // Kilobyte
+	}
+
+	binaryUnits := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"Ei", 1 << 60}, // Exbibyte (2^60)
+		{"Pi", 1 << 50}, // Pebibyte (2^50)
+		{"Ti", 1 << 40}, // Tebibyte (2^40)
+		{"Gi", 1 << 30}, // Gibibyte (2^30)
+		{"Mi", 1 << 20}, // Mebibyte (2^20)
+		{"Ki", 1 << 10}, // Kibibyte (2^10)
+	}
+
+	// First check for binary units (power-of-two)
+	for _, unit := range binaryUnits {
+		if bytes >= unit.multiplier {
+			value := float64(bytes) / float64(unit.multiplier)
+			return fmt.Sprintf("%.1f%s", value, unit.suffix)
+		}
+	}
+
+	// If no binary unit applies, check for decimal units (power-of-ten)
+	for _, unit := range decimalUnits {
+		if bytes >= unit.multiplier {
+			value := float64(bytes) / float64(unit.multiplier)
+			return fmt.Sprintf("%.1f%s", value, unit.suffix)
+		}
+	}
+
+	// If the value is less than 1 kilobyte (or kibibyte), return as bytes
+	return fmt.Sprintf("%d", bytes)
 }
