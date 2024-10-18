@@ -457,7 +457,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 										}
 
 										// SUM the CPU values and add the "m" suffix to indicate milliCPU
-										aggregateResult = strconv.Itoa(v1_cpu+v2_cpu) + "m"
+										aggregateResult = convertMilliCPUToStandard(v1_cpu + v2_cpu)
 
 									} else if strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory") {
 										v1_mem, err := convertMemoryToBytes(v1.String())
@@ -1286,6 +1286,27 @@ func convertToMilliCPU(cpu string) (int, error) {
 	}
 
 	return standardCPU * 1000, nil
+}
+
+// convertMilliCPUToStandard converts a CPU value in milliCPU to the standard notation (integer or float)
+// if it's more readable. If it's less than 1000m, it returns the value in milliCPU format.
+func convertMilliCPUToStandard(milliCPU int) string {
+	// If the value is 1000m or greater, convert to standard CPU notation
+	if milliCPU >= 1000 {
+		// Convert to standard CPU by dividing by 1000 and check for decimal points
+		standardCPU := float64(milliCPU) / 1000.0
+
+		// If the value is a whole number (e.g., 2000m becomes 2), format as an integer
+		if standardCPU == float64(int(standardCPU)) {
+			return strconv.Itoa(int(standardCPU))
+		}
+
+		// Otherwise, return as a float with one decimal place
+		return fmt.Sprintf("%.1f", standardCPU)
+	}
+
+	// If less than 1000m, return the value in milliCPU format with the "m" suffix
+	return strconv.Itoa(milliCPU) + "m"
 }
 
 // convertMemoryToBytes takes a memory string like "500M" or "2Gi"
