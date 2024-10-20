@@ -1449,3 +1449,66 @@ func convertBytesToMemory(bytes int64) string {
 	// If the value is less than 1 kilobyte (or kibibyte), return as bytes
 	return fmt.Sprintf("%d", bytes)
 }
+
+func convertToStringSlice(v1 reflect.Value) ([]string, error) {
+	if v1.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("input is not a slice")
+	}
+
+	length := v1.Len()
+	result := make([]string, length)
+
+	for i := 0; i < length; i++ {
+		elem := v1.Index(i)
+
+		// If the element is directly a string
+		if elem.Kind() == reflect.String {
+			result[i] = elem.String()
+		} else {
+			// Try to convert the element to a string
+			if elem.CanInterface() {
+				switch v := elem.Interface().(type) {
+				case string:
+					result[i] = v
+				case fmt.Stringer:
+					result[i] = v.String()
+				default:
+					// As a last resort, use fmt.Sprint
+					result[i] = fmt.Sprint(v)
+				}
+			} else {
+				return nil, fmt.Errorf("cannot convert element at index %d to string", i)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func sumMilliCPU(cpuStrs []string) (int, error) {
+	cpuSum := 0
+	for _, cpuStr := range cpuStrs {
+		cpuVal, err := convertToMilliCPU(cpuStr)
+		if err != nil {
+			return 0, fmt.Errorf("error processing CPU value: %v", err)
+		}
+
+		cpuSum += cpuVal
+	}
+
+	return cpuSum, nil
+}
+
+func sumMemoryBytes(memStrs []string) (int64, error) {
+	memSum := int64(0)
+	for _, memStr := range memStrs {
+		memVal, err := convertMemoryToBytes(memStr)
+		if err != nil {
+			return 0, fmt.Errorf("error processing Memory value: %v", err)
+		}
+
+		memSum += memVal
+	}
+
+	return memSum, nil
+}
