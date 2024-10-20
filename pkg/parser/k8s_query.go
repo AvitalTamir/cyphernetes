@@ -546,6 +546,12 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 					if key == "" {
 						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
 					}
+
+					if slice, ok := aggregateResult.([]interface{}); ok && len(slice) == 0 {
+						aggregateResult = nil
+					} else if strSlice, ok := aggregateResult.([]string); ok && len(strSlice) == 1 {
+						aggregateResult = strSlice[0]
+					}
 					aggregateMap[key] = aggregateResult
 				}
 			}
