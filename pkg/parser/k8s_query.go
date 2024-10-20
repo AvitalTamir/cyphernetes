@@ -1318,12 +1318,12 @@ func convertToMilliCPU(cpu string) (int, error) {
 	}
 
 	// Convert to base unit (milliCPU) if no "m" suffix
-	standardCPU, err := strconv.Atoi(cpu)
+	standardCPU, err := strconv.ParseFloat(cpu, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid standard CPU value: %s", cpu)
 	}
 
-	return standardCPU * 1000, nil
+	return int(standardCPU * 1000), nil
 }
 
 // convertMilliCPUToStandard converts a CPU value in milliCPU to the standard notation (integer or float)
@@ -1339,8 +1339,14 @@ func convertMilliCPUToStandard(milliCPU int) string {
 			return strconv.Itoa(int(standardCPU))
 		}
 
-		// Otherwise, return as a float with one decimal place
-		return fmt.Sprintf("%.1f", standardCPU)
+		// Otherwise, format as a float, then drop the unnecessary trailing 0's
+		standardCPU_str := strings.TrimRight(fmt.Sprintf("%.3f", standardCPU), "0")
+
+		if strings.HasSuffix(standardCPU_str, ".") {
+			standardCPU_str = strings.TrimRight(standardCPU_str, ".")
+		}
+
+		return standardCPU_str
 	}
 
 	// If less than 1000m, return the value in milliCPU format with the "m" suffix
@@ -1405,7 +1411,20 @@ func convertMemoryToBytes(mem string) (int64, error) {
 // convertBytesToMemory converts a value in bytes to the closest readable unit,
 // supporting both decimal (e.g., kB, MB) and binary (e.g., KiB, MiB) units.
 func convertBytesToMemory(bytes int64) string {
-	// Define units for decimal (power-of-10) and binary (power-of-2)
+	// Binary units (power-of-2)
+	binaryUnits := []struct {
+		suffix     string
+		multiplier int64
+	}{
+		{"Ei", 1 << 60}, // Exbibyte
+		{"Pi", 1 << 50}, // Pebibyte
+		{"Ti", 1 << 40}, // Tebibyte
+		{"Gi", 1 << 30}, // Gibibyte
+		{"Mi", 1 << 20}, // Mebibyte
+		{"Ki", 1 << 10}, // Kibibyte
+	}
+
+	// Decimal units (power-of-10)
 	decimalUnits := []struct {
 		suffix     string
 		multiplier int64
@@ -1418,19 +1437,14 @@ func convertBytesToMemory(bytes int64) string {
 		{"k", 1e3},  // Kilobyte
 	}
 
-	binaryUnits := []struct {
-		suffix     string
-		multiplier int64
-	}{
-		{"Ei", 1 << 60}, // Exbibyte (2^60)
-		{"Pi", 1 << 50}, // Pebibyte (2^50)
-		{"Ti", 1 << 40}, // Tebibyte (2^40)
-		{"Gi", 1 << 30}, // Gibibyte (2^30)
-		{"Mi", 1 << 20}, // Mebibyte (2^20)
-		{"Ki", 1 << 10}, // Kibibyte (2^10)
+	// First check for decimal units (power-of-10) exactly
+	for _, unit := range decimalUnits {
+		if bytes == unit.multiplier {
+			return fmt.Sprintf("1.0%s", unit.suffix)
+		}
 	}
 
-	// First check for binary units (power-of-two)
+	// Then check for binary units (power-of-two)
 	for _, unit := range binaryUnits {
 		if bytes >= unit.multiplier {
 			value := float64(bytes) / float64(unit.multiplier)
@@ -1446,7 +1460,7 @@ func convertBytesToMemory(bytes int64) string {
 		}
 	}
 
-	// If the value is less than 1 kilobyte (or kibibyte), return as bytes
+	// If no unit applies, return the value in bytes
 	return fmt.Sprintf("%d", bytes)
 }
 
