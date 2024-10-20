@@ -526,6 +526,22 @@ RETURN COUNT{p} AS TotalPods,
 }
 ```
 
+```graphql
+MATCH (d:deployment {name:"auth-service"})->(s:svc)->(p:pod) 
+RETURN SUM { p.spec.containers[*].resources.requests.cpu } AS totalCPUReq, 
+       SUM {p.spec.containers[*].resources.requests.memory } AS totalMemReq;
+
+
+{
+  ...
+  "aggregate": {
+    "totalCPUReq": "5",
+    "totalMemReq": "336.0Mi"
+  },
+  ...
+}
+```
+
 ## Macros
 
 Cyphernetes comes with a set of default macros that can be used to query the Kubernetes API.
