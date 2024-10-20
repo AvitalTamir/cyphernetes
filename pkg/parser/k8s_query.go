@@ -457,30 +457,55 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
 										}
 
-										// Convert v2 to milliCPU
-										v2_cpu, err := convertToMilliCPU(v2.String())
+										aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
+									} else if isMemoryResource {
+										v1Mem, err := convertMemoryToBytes(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
 										}
-
-										// SUM the CPU values and add the "m" suffix to indicate milliCPU
-										aggregateResult = convertMilliCPUToStandard(v1_cpu + v2_cpu)
-
-									} else if strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory") {
-										v1_mem, err := convertMemoryToBytes(v1.String())
+										v2Mem, err := convertMemoryToBytes(v2.String())
 										if err != nil {
 											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
 										}
 
-										v2_mem, err := convertMemoryToBytes(v2.String())
-										if err != nil {
-											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
-										}
-
-										// SUM the Memory values
-										aggregateResult = convertBytesToMemory(v1_mem + v2_mem)
+										aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
+									}
+								case reflect.Slice:
+									v1Strs, err := convertToStringSlice(v1)
+									if err != nil {
+										return *results, fmt.Errorf("error converting v1 to string slice: %v", err)
 									}
 
+									v2Strs, err := convertToStringSlice(v2)
+									if err != nil {
+										return *results, fmt.Errorf("error converting v2 to string slice: %v", err)
+									}
+
+									if isCPUResource {
+										v1CpuSum, err := sumMilliCPU(v1Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v1 cpu value: %v", err)
+										}
+
+										v2CpuSum, err := sumMilliCPU(v2Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v2 cpu value: %v", err)
+										}
+
+										aggregateResult = []string{convertMilliCPUToStandard(v1CpuSum + v2CpuSum)}
+									} else if isMemoryResource {
+										v1MemSum, err := sumMemoryBytes(v1Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v1 memory value: %v", err)
+										}
+
+										v2MemSum, err := sumMemoryBytes(v2Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v2 memory value: %v", err)
+										}
+
+										aggregateResult = []string{convertBytesToMemory(v1MemSum + v2MemSum)}
+									}
 								default:
 									// Handle unsupported types or error out
 									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
