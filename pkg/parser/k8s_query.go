@@ -435,6 +435,10 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 								if v2.Kind() == reflect.Ptr {
 									v2 = v2.Elem()
 								}
+
+								isCPUResource := strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu")
+								isMemoryResource := strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory")
+
 								switch v1.Kind() {
 								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 									aggregateResult = v1.Int() + v2.Int()
@@ -443,9 +447,12 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 								case reflect.Float32, reflect.Float64:
 									aggregateResult = v1.Float() + v2.Float()
 								case reflect.String:
-									if strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu") {
-										// Convert v1 to milliCPU
-										v1_cpu, err := convertToMilliCPU(v1.String())
+									if isCPUResource {
+										v1Cpu, err := convertToMilliCPU(v1.String())
+										if err != nil {
+											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+										}
+										v2Cpu, err := convertToMilliCPU(v2.String())
 										if err != nil {
 											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
 										}
