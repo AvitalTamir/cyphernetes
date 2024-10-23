@@ -10,18 +10,19 @@ import (
 	"testing"
 )
 
-func runTestCommand(t *testing.T, testName, envVar string, args ...string) string {
+func runTestCommand(t *testing.T, testName, envVar string, args ...string) (string, string) {
 	cmd := exec.Command(os.Args[0], append([]string{"-test.run=" + testName}, args...)...)
 	cmd.Env = append(os.Environ(), envVar+"=1")
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to run %s: %v", testName, err)
 	}
 
-	return stdout.String()
+	return stdout.String(), stderr.String()
 }
 
 func checkOutput(t *testing.T, output, expectedContent, testName string) {
@@ -37,8 +38,8 @@ func checkPrompt(t *testing.T, output, expectedPromptOutput, testName string) {
 }
 
 func TestMain(t *testing.T) {
-	output := runTestCommand(t, "TestMainHelper", "TEST_MAIN")
-	checkOutput(t, output, "Use \"cyphernetes [command] --help\" for more information about a command.", "Execute()")
+	stdout, _ := runTestCommand(t, "TestMainHelper", "TEST_MAIN")
+	checkOutput(t, stdout, "Use \"cyphernetes [command] --help\" for more information about a command.", "Execute()")
 }
 
 func TestMainHelper(t *testing.T) {
@@ -49,9 +50,9 @@ func TestMainHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellNoFlag(t *testing.T) {
-	output := runTestCommand(t, "TestCyphernetesShellNoFlagHelper", "TEST_SHELL_NO_FLAG")
-	checkOutput(t, output, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell\"")
-	checkPrompt(t, output, "\\033\\[32m\\(.*\\) default »\\033\\[0m ", "\"cyphernetes shell\"")
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellNoFlagHelper", "TEST_SHELL_NO_FLAG")
+	checkOutput(t, stdout, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell\"")
+	checkPrompt(t, stdout, "\\033\\[32m\\(.*\\) default »\\033\\[0m ", "\"cyphernetes shell\"")
 }
 
 func TestCyphernetesShellNoFlagHelper(t *testing.T) {
@@ -64,9 +65,9 @@ func TestCyphernetesShellNoFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellWithAllNamespacesFlag(t *testing.T) {
-	output := runTestCommand(t, "TestCyphernetesShellWithAllNamespacesFlagHelper", "TEST_SHELL_ALL_NAMESPACES")
-	checkOutput(t, output, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell -A\"")
-	checkPrompt(t, output, "\\033\\[31m\\(.*\\) ALL NAMESPACES »\\033\\[0m ", "\"cyphernetes shell -A\"")
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithAllNamespacesFlagHelper", "TEST_SHELL_ALL_NAMESPACES")
+	checkOutput(t, stdout, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell -A\"")
+	checkPrompt(t, stdout, "\\033\\[31m\\(.*\\) ALL NAMESPACES »\\033\\[0m ", "\"cyphernetes shell -A\"")
 }
 
 func TestCyphernetesShellWithAllNamespacesFlagHelper(t *testing.T) {
@@ -79,7 +80,7 @@ func TestCyphernetesShellWithAllNamespacesFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellWithHelpFlag(t *testing.T) {
-	output := runTestCommand(t, "TestCyphernetesShellWithHelpFlagHelper", "TEST_SHELL_HELP")
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithHelpFlagHelper", "TEST_SHELL_HELP")
 	expectedContent := `Launch an interactive shell
 
 Usage:
@@ -92,7 +93,7 @@ Global Flags:
   -A, --all-namespaces     Query all namespaces
   -l, --loglevel string    The log level to use (debug, info, warn, error, fatal, panic) (default "info")
   -n, --namespace string   The namespace to query against (default "default")`
-	checkOutput(t, output, expectedContent, "\"cyphernetes shell -h\"")
+	checkOutput(t, stdout, expectedContent, "\"cyphernetes shell -h\"")
 }
 
 func TestCyphernetesShellWithHelpFlagHelper(t *testing.T) {
@@ -104,9 +105,9 @@ func TestCyphernetesShellWithHelpFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellWithNamespaceFlag(t *testing.T) {
-	output := runTestCommand(t, "TestCyphernetesShellWithNamespaceFlagHelper", "TEST_SHELL_NAMESPACE")
-	checkOutput(t, output, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell -n custom-namespace\"")
-	checkPrompt(t, output, "\\033\\[32m\\(.*\\) custom-namespace »\\033\\[0m ", "\"cyphernetes shell -n custom-namespace\"")
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithNamespaceFlagHelper", "TEST_SHELL_NAMESPACE")
+	checkOutput(t, stdout, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell -n custom-namespace\"")
+	checkPrompt(t, stdout, "\\033\\[32m\\(.*\\) custom-namespace »\\033\\[0m ", "\"cyphernetes shell -n custom-namespace\"")
 }
 
 func TestCyphernetesShellWithNamespaceFlagHelper(t *testing.T) {
@@ -119,5 +120,14 @@ func TestCyphernetesShellWithNamespaceFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellWithLogLevelFlag(t *testing.T) {
-	// TODO: complete this test func as part of issue-111
+	_, stderr := runTestCommand(t, "TestCyphernetesShellWithLogLevelFlagHelper", "TEST_SHELL_LOG_LEVEL")
+	checkOutput(t, stderr, "[DEBUG]", "\"cyphernetes shell -l debug\"")
+}
+
+func TestCyphernetesShellWithLogLevelFlagHelper(t *testing.T) {
+	if os.Getenv("TEST_SHELL_LOG_LEVEL") != "1" {
+		return
+	}
+	os.Args = []string{"cyphernetes", "shell", "-l", "debug"}
+	main()
 }
