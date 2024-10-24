@@ -102,7 +102,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
       e.preventDefault();
       insertSuggestion(suggestions[selectedSuggestionIndex]);
     }
-    // Removed the Cmd/Ctrl+H handler from here
   };
 
   const scrollSuggestionIntoView = (index: number) => {
@@ -253,7 +252,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
           className="history-button"
           onClick={() => setIsHistoryModalOpen(true)}
         >
-          History ({navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+H)
+          History ({navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K)
         </button>
         {queryStatus && (
           <div className="query-status">

@@ -1,6 +1,6 @@
 # Define the binary name
 BINARY_NAME=cyphernetes
-TARGET_KERNELS=darwin linux
+TARGET_KERNELS=darwin linux windows
 TARGET_ARCHS=amd64 arm64
 # Define the default make target
 all: operator-manifests bt
@@ -16,7 +16,7 @@ build: gen-parser web-build
 	mkdir -p dist/
 	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes
 
-build-all-platforms-and-archs:
+build-all-platforms:
 	@echo "👷 Building ${BINARY_NAME}..."
 	@for kernel in $(TARGET_KERNELS); do \
 		for arch in $(TARGET_ARCHS); do \

@@ -48,36 +48,6 @@ html, body, #root, .App {
   margin-right: 0.5rem;
 }
 
-/* Add blur effect to top and bottom of left panel */
-.left-panel::before,
-.left-panel::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 4rem;
-  z-index: 0;
-  pointer-events: none;
-  width: 100%;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.left-panel.has-results::before,
-.left-panel.has-results::after {
-  opacity: 1;
-}
-
-.left-panel::before {
-  top: 0;
-  backdrop-filter: blur(5px);
-}
-
-.left-panel::after {
-  bottom: 0;
-  backdrop-filter: blur(5px);
-}
-
 .right-panel {
   display: grid;
   grid-template-rows: 1fr 2fr;
