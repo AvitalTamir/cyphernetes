@@ -52,12 +52,13 @@ type yyXError struct {
 }
 
 const (
-	yyDefault           = 57382
+	yyDefault           = 57383
 	yyEofCode           = 57344
 	AS                  = 57366
 	BOOLEAN             = 57349
 	COLON               = 57354
 	COMMA               = 57364
+	CONTAINS            = 57382
 	COUNT               = 57375
 	CREATE              = 57359
 	DELETE              = 57358
@@ -93,71 +94,72 @@ const (
 	yyErrCode           = 57345
 
 	yyMaxDepth = 200
-	yyTabOfs   = -59
+	yyTabOfs   = -60
 )
 
 var (
 	yyPrec = map[int]int{}
 
 	yyXLAT = map[int]int{
-		57361: 0,  // EOF (41x)
-		57364: 1,  // COMMA (34x)
-		57360: 2,  // RETURN (27x)
-		57359: 3,  // CREATE (23x)
-		57358: 4,  // DELETE (22x)
-		57357: 5,  // SET (22x)
+		57361: 0,  // EOF (42x)
+		57364: 1,  // COMMA (35x)
+		57360: 2,  // RETURN (28x)
+		57359: 3,  // CREATE (24x)
+		57358: 4,  // DELETE (23x)
+		57357: 5,  // SET (23x)
 		57352: 6,  // LPAREN (14x)
 		57363: 7,  // RBRACE (10x)
 		57344: 8,  // $end (9x)
 		57346: 9,  // IDENT (9x)
-		57347: 10, // JSONPATH (9x)
-		57351: 11, // JSONDATA (8x)
-		57356: 12, // WHERE (8x)
-		57349: 13, // BOOLEAN (7x)
-		57348: 14, // INT (7x)
-		57350: 15, // STRING (7x)
-		57401: 16, // Value (7x)
-		57392: 17, // NodePattern (6x)
+		57351: 10, // JSONDATA (9x)
+		57347: 11, // JSONPATH (9x)
+		57349: 12, // BOOLEAN (8x)
+		57348: 13, // INT (8x)
+		57350: 14, // STRING (8x)
+		57402: 15, // Value (8x)
+		57356: 16, // WHERE (8x)
+		57393: 17, // NodePattern (6x)
 		57374: 18, // REL_ENDPROPS_NONE (6x)
 		57373: 19, // REL_ENDPROPS_RIGHT (6x)
 		57353: 20, // RPAREN (6x)
-		57393: 21, // NodeRelationshipList (5x)
+		57394: 21, // NodeRelationshipList (5x)
 		57371: 22, // REL_BEGINPROPS_LEFT (4x)
 		57372: 23, // REL_BEGINPROPS_NONE (4x)
 		57369: 24, // REL_NOPROPS_BOTH (4x)
 		57368: 25, // REL_NOPROPS_LEFT (4x)
 		57370: 26, // REL_NOPROPS_NONE (4x)
 		57367: 27, // REL_NOPROPS_RIGHT (4x)
-		57397: 28, // ReturnClause (4x)
+		57398: 28, // ReturnClause (4x)
 		57366: 29, // AS (3x)
 		57354: 30, // COLON (3x)
-		57388: 31, // KeyValuePair (3x)
+		57389: 31, // KeyValuePair (3x)
 		57362: 32, // LBRACE (3x)
-		57396: 33, // ResourceProperties (3x)
+		57397: 33, // ResourceProperties (3x)
 		57375: 34, // COUNT (2x)
-		57383: 35, // CreateClause (2x)
-		57386: 36, // JSONPathValue (2x)
-		57389: 37, // KeyValuePairs (2x)
-		57395: 38, // Relationship (2x)
-		57398: 39, // ReturnItem (2x)
+		57384: 35, // CreateClause (2x)
+		57387: 36, // JSONPathValue (2x)
+		57390: 37, // KeyValuePairs (2x)
+		57396: 38, // Relationship (2x)
+		57399: 39, // ReturnItem (2x)
 		57376: 40, // SUM (2x)
-		57384: 41, // DeleteClause (1x)
-		57365: 42, // EQUALS (1x)
-		57385: 43, // Expression (1x)
-		57378: 44, // GREATER_THAN (1x)
-		57380: 45, // GREATER_THAN_EQUALS (1x)
-		57387: 46, // JSONPathValueList (1x)
-		57379: 47, // LESS_THAN (1x)
-		57381: 48, // LESS_THAN_EQUALS (1x)
-		57355: 49, // MATCH (1x)
-		57390: 50, // MatchClause (1x)
-		57391: 51, // NodeIds (1x)
-		57377: 52, // NOT_EQUALS (1x)
-		57394: 53, // Properties (1x)
-		57399: 54, // ReturnItems (1x)
-		57400: 55, // SetClause (1x)
-		57382: 56, // $default (0x)
-		57345: 57, // error (0x)
+		57382: 41, // CONTAINS (1x)
+		57385: 42, // DeleteClause (1x)
+		57365: 43, // EQUALS (1x)
+		57386: 44, // Expression (1x)
+		57378: 45, // GREATER_THAN (1x)
+		57380: 46, // GREATER_THAN_EQUALS (1x)
+		57388: 47, // JSONPathValueList (1x)
+		57379: 48, // LESS_THAN (1x)
+		57381: 49, // LESS_THAN_EQUALS (1x)
+		57355: 50, // MATCH (1x)
+		57391: 51, // MatchClause (1x)
+		57392: 52, // NodeIds (1x)
+		57377: 53, // NOT_EQUALS (1x)
+		57395: 54, // Properties (1x)
+		57400: 55, // ReturnItems (1x)
+		57401: 56, // SetClause (1x)
+		57383: 57, // $default (0x)
+		57345: 58, // error (0x)
 	}
 
 	yySymNames = []string{
@@ -171,13 +173,13 @@ var (
 		"RBRACE",
 		"$end",
 		"IDENT",
-		"JSONPATH",
 		"JSONDATA",
-		"WHERE",
+		"JSONPATH",
 		"BOOLEAN",
 		"INT",
 		"STRING",
 		"Value",
+		"WHERE",
 		"NodePattern",
 		"REL_ENDPROPS_NONE",
 		"REL_ENDPROPS_RIGHT",
@@ -202,6 +204,7 @@ var (
 		"Relationship",
 		"ReturnItem",
 		"SUM",
+		"CONTAINS",
 		"DeleteClause",
 		"EQUALS",
 		"Expression",
@@ -225,21 +228,21 @@ var (
 
 	yyReductions = map[int]struct{ xsym, components int }{
 		0:  {0, 1},
-		1:  {43, 3},
-		2:  {43, 3},
-		3:  {43, 4},
-		4:  {43, 3},
-		5:  {43, 2},
-		6:  {43, 3},
-		7:  {43, 3},
-		8:  {43, 4},
-		9:  {50, 2},
-		10: {50, 4},
+		1:  {44, 3},
+		2:  {44, 3},
+		3:  {44, 4},
+		4:  {44, 3},
+		5:  {44, 2},
+		6:  {44, 3},
+		7:  {44, 3},
+		8:  {44, 4},
+		9:  {51, 2},
+		10: {51, 4},
 		11: {35, 2},
-		12: {55, 2},
-		13: {41, 2},
-		14: {51, 1},
-		15: {51, 3},
+		12: {56, 2},
+		13: {42, 2},
+		14: {52, 1},
+		15: {52, 3},
 		16: {37, 1},
 		17: {37, 3},
 		18: {31, 3},
@@ -248,72 +251,73 @@ var (
 		21: {31, 3},
 		22: {31, 3},
 		23: {31, 3},
-		24: {21, 1},
-		25: {21, 3},
-		26: {21, 5},
+		24: {31, 3},
+		25: {21, 1},
+		26: {21, 3},
 		27: {21, 5},
-		28: {21, 3},
-		29: {17, 3},
+		28: {21, 5},
+		29: {21, 3},
 		30: {17, 3},
-		31: {28, 2},
-		32: {54, 1},
-		33: {54, 3},
-		34: {39, 1},
-		35: {39, 3},
-		36: {39, 4},
+		31: {17, 3},
+		32: {28, 2},
+		33: {55, 1},
+		34: {55, 3},
+		35: {39, 1},
+		36: {39, 3},
 		37: {39, 4},
-		38: {39, 6},
+		38: {39, 4},
 		39: {39, 6},
-		40: {38, 1},
+		40: {39, 6},
 		41: {38, 1},
 		42: {38, 1},
 		43: {38, 1},
-		44: {38, 3},
+		44: {38, 1},
 		45: {38, 3},
 		46: {38, 3},
 		47: {38, 3},
-		48: {33, 3},
-		49: {33, 4},
-		50: {33, 5},
-		51: {53, 3},
-		52: {46, 1},
-		53: {46, 3},
-		54: {36, 3},
-		55: {16, 1},
-		56: {16, 1},
-		57: {16, 1},
-		58: {16, 1},
+		48: {38, 3},
+		49: {33, 3},
+		50: {33, 4},
+		51: {33, 5},
+		52: {54, 3},
+		53: {47, 1},
+		54: {47, 3},
+		55: {36, 3},
+		56: {15, 1},
+		57: {15, 1},
+		58: {15, 1},
+		59: {15, 1},
 	}
 
 	yyXErrors = map[yyXError]string{}
 
-	yyParseTab = [112][]uint16{
+	yyParseTab = [114][]uint16{
 		// 0
-		{3: 64, 35: 62, 43: 60, 49: 63, 61},
-		{8: 59},
-		{2: 131, 64, 157, 156, 28: 152, 35: 155, 41: 154, 55: 153},
-		{129, 2: 131, 28: 130},
-		{6: 67, 17: 66, 21: 110},
+		{3: 65, 35: 63, 44: 61, 50: 64, 62},
+		{8: 60},
+		{2: 134, 65, 160, 159, 28: 155, 35: 158, 42: 157, 56: 156},
+		{132, 2: 134, 28: 133},
+		{6: 68, 17: 67, 21: 111},
 		// 5
-		{6: 67, 17: 66, 21: 65},
-		{48, 2: 48},
-		{35, 90, 35, 35, 35, 35, 12: 35, 22: 96, 95, 94, 92, 91, 93, 38: 89},
-		{9: 69, 33: 68},
-		{20: 88},
+		{6: 68, 17: 67, 21: 66},
+		{49, 2: 49},
+		{35, 91, 35, 35, 35, 35, 16: 35, 22: 97, 96, 95, 93, 92, 94, 38: 90},
+		{9: 70, 33: 69},
+		{20: 89},
 		// 10
-		{20: 70, 30: 71},
-		{29, 29, 29, 29, 29, 29, 12: 29, 22: 29, 29, 29, 29, 29, 29},
-		{9: 72},
-		{18: 11, 11, 11, 32: 74, 53: 73},
+		{20: 71, 30: 72},
+		{29, 29, 29, 29, 29, 29, 16: 29, 22: 29, 29, 29, 29, 29, 29},
+		{9: 73},
+		{18: 11, 11, 11, 32: 75, 54: 74},
 		{18: 10, 10, 10},
 		// 15
-		{10: 78, 75, 36: 77, 46: 76},
+		{10: 76, 79, 36: 78, 47: 77},
 		{18: 9, 9, 9},
-		{1: 86, 7: 85},
+		{1: 87, 7: 86},
 		{1: 7, 7: 7},
-		{30: 79},
+		{30: 80},
 		// 20
-		{11: 84, 13: 83, 82, 81, 80},
+		{10: 85, 12: 84, 83, 82, 81},
 		{1: 5, 7: 5},
 		{4, 4, 4, 4, 4, 4, 7: 4},
 		{3, 3, 3, 3, 3, 3, 7: 3},
@@ -321,108 +325,110 @@ var (
 		// 25
 		{1, 1, 1, 1, 1, 1, 7: 1},
 		{18: 8, 8, 8},
-		{10: 78, 36: 87},
+		{11: 79, 36: 88},
 		{1: 6, 7: 6},
-		{30, 30, 30, 30, 30, 30, 12: 30, 22: 30, 30, 30, 30, 30, 30},
+		{30, 30, 30, 30, 30, 30, 16: 30, 22: 30, 30, 30, 30, 30, 30},
 		// 30
-		{6: 67, 17: 105},
-		{6: 67, 17: 66, 21: 104},
+		{6: 68, 17: 106},
+		{6: 68, 17: 67, 21: 105},
 		{6: 19},
 		{6: 18},
 		{6: 17},
 		// 35
 		{6: 16},
-		{9: 98, 33: 101},
-		{9: 98, 33: 97},
-		{18: 99, 100},
-		{30: 71},
+		{9: 99, 33: 102},
+		{9: 99, 33: 98},
+		{18: 100, 101},
+		{30: 72},
 		// 40
 		{6: 14},
 		{6: 12},
-		{18: 102, 103},
+		{18: 103, 104},
 		{6: 15},
 		{6: 13},
 		// 45
-		{31, 2: 31, 31, 31, 31, 12: 31},
-		{34, 106, 34, 34, 34, 34, 12: 34, 22: 96, 95, 94, 92, 91, 93, 38: 107},
-		{6: 67, 17: 66, 21: 109},
-		{6: 67, 17: 66, 21: 108},
-		{32, 2: 32, 32, 32, 32, 12: 32},
+		{31, 2: 31, 31, 31, 31, 16: 31},
+		{34, 107, 34, 34, 34, 34, 16: 34, 22: 97, 96, 95, 93, 92, 94, 38: 108},
+		{6: 68, 17: 67, 21: 110},
+		{6: 68, 17: 67, 21: 109},
+		{32, 2: 32, 32, 32, 32, 16: 32},
 		// 50
-		{33, 2: 33, 33, 33, 33, 12: 33},
-		{2: 50, 50, 50, 50, 12: 111},
-		{10: 114, 31: 113, 37: 112},
-		{1: 127, 49, 49, 49, 49},
-		{43, 43, 43, 43, 43, 43},
+		{33, 2: 33, 33, 33, 33, 16: 33},
+		{2: 51, 51, 51, 51, 16: 112},
+		{11: 115, 31: 114, 37: 113},
+		{1: 130, 50, 50, 50, 50},
+		{44, 44, 44, 44, 44, 44},
 		// 55
-		{42: 115, 44: 117, 119, 47: 118, 120, 52: 116},
-		{11: 84, 13: 83, 82, 81, 126},
-		{11: 84, 13: 83, 82, 81, 125},
-		{11: 84, 13: 83, 82, 81, 124},
-		{11: 84, 13: 83, 82, 81, 123},
+		{41: 122, 43: 116, 45: 118, 120, 48: 119, 121, 53: 117},
+		{10: 85, 12: 84, 83, 82, 129},
+		{10: 85, 12: 84, 83, 82, 128},
+		{10: 85, 12: 84, 83, 82, 127},
+		{10: 85, 12: 84, 83, 82, 126},
 		// 60
-		{11: 84, 13: 83, 82, 81, 122},
-		{11: 84, 13: 83, 82, 81, 121},
+		{10: 85, 12: 84, 83, 82, 125},
+		{10: 85, 12: 84, 83, 82, 124},
+		{10: 85, 12: 84, 83, 82, 123},
 		{36, 36, 36, 36, 36, 36},
 		{37, 37, 37, 37, 37, 37},
-		{38, 38, 38, 38, 38, 38},
 		// 65
+		{38, 38, 38, 38, 38, 38},
 		{39, 39, 39, 39, 39, 39},
 		{40, 40, 40, 40, 40, 40},
 		{41, 41, 41, 41, 41, 41},
-		{10: 114, 31: 128},
 		{42, 42, 42, 42, 42, 42},
 		// 70
-		{8: 54},
-		{151},
-		{10: 134, 34: 135, 39: 133, 136, 54: 132},
-		{28, 149},
-		{27, 27},
-		// 75
-		{25, 25, 29: 147},
-		{32: 142},
-		{32: 137},
-		{10: 138},
-		{7: 139},
-		// 80
-		{22, 22, 29: 140},
-		{9: 141},
-		{20, 20},
-		{10: 143},
-		{7: 144},
-		// 85
-		{23, 23, 29: 145},
-		{9: 146},
-		{21, 21},
-		{9: 148},
-		{24, 24},
-		// 90
-		{10: 134, 34: 135, 39: 150, 136},
-		{26, 26},
-		{8: 53},
-		{170},
-		{167, 2: 131, 28: 168},
-		// 95
-		{166},
-		{163, 2: 131, 28: 164},
-		{10: 114, 31: 113, 37: 162},
-		{9: 159, 51: 158},
-		{46, 160},
-		// 100
-		{45, 45},
-		{9: 161},
-		{44, 44},
-		{47, 127, 47},
-		{8: 52},
-		// 105
-		{165},
-		{8: 51},
+		{11: 115, 31: 131},
+		{43, 43, 43, 43, 43, 43},
 		{8: 55},
-		{8: 57},
+		{154},
+		{11: 137, 34: 138, 39: 136, 139, 55: 135},
+		// 75
+		{28, 152},
+		{27, 27},
+		{25, 25, 29: 150},
+		{32: 145},
+		{32: 140},
+		// 80
+		{11: 141},
+		{7: 142},
+		{22, 22, 29: 143},
+		{9: 144},
+		{20, 20},
+		// 85
+		{11: 146},
+		{7: 147},
+		{23, 23, 29: 148},
+		{9: 149},
+		{21, 21},
+		// 90
+		{9: 151},
+		{24, 24},
+		{11: 137, 34: 138, 39: 153, 139},
+		{26, 26},
+		{8: 54},
+		// 95
+		{173},
+		{170, 2: 134, 28: 171},
 		{169},
-		// 110
+		{166, 2: 134, 28: 167},
+		{11: 115, 31: 114, 37: 165},
+		// 100
+		{9: 162, 52: 161},
+		{47, 163},
+		{46, 46},
+		{9: 164},
+		{45, 45},
+		// 105
+		{48, 130, 48},
+		{8: 53},
+		{168},
+		{8: 52},
 		{8: 56},
+		// 110
 		{8: 58},
+		{172},
+		{8: 57},
+		{8: 59},
 	}
 )
 
@@ -463,7 +469,7 @@ func yylex1(yylex yyLexer, lval *yySymType) (n int) {
 }
 
 func yyParse(yylex yyLexer) int {
-	const yyError = 57
+	const yyError = 58
 
 	yyEx, _ := yylex.(yyLexerEx)
 	var yyn int
@@ -745,12 +751,16 @@ yynewstate:
 		}
 	case 24:
 		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "CONTAINS"} // CONTAINS
+		}
+	case 25:
+		{
 			yyVAL.nodeRelationshipList = &NodeRelationshipList{
 				Nodes:         []*NodePattern{yyS[yypt-0].nodePattern},
 				Relationships: []*Relationship{},
 			}
 		}
-	case 25:
+	case 26:
 		{
 			yyS[yypt-1].relationship.LeftNode = yyS[yypt-2].nodePattern
 			yyS[yypt-1].relationship.RightNode = yyS[yypt-0].nodePattern
@@ -759,7 +769,7 @@ yynewstate:
 				Relationships: []*Relationship{yyS[yypt-1].relationship},
 			}
 		}
-	case 26:
+	case 27:
 		{
 			yyS[yypt-3].relationship.LeftNode = yyS[yypt-4].nodePattern
 			yyS[yypt-3].relationship.RightNode = yyS[yypt-2].nodePattern
@@ -768,7 +778,7 @@ yynewstate:
 				Relationships: append([]*Relationship{yyS[yypt-3].relationship}, yyS[yypt-0].nodeRelationshipList.Relationships...),
 			}
 		}
-	case 27:
+	case 28:
 		{
 			yyS[yypt-3].relationship.LeftNode = yyS[yypt-4].nodePattern
 			yyS[yypt-3].relationship.RightNode = yyS[yypt-2].nodePattern
@@ -779,122 +789,122 @@ yynewstate:
 				Relationships: append([]*Relationship{yyS[yypt-3].relationship, yyS[yypt-1].relationship}, yyS[yypt-0].nodeRelationshipList.Relationships...),
 			}
 		}
-	case 28:
+	case 29:
 		{
 			yyVAL.nodeRelationshipList = &NodeRelationshipList{
 				Nodes:         append([]*NodePattern{yyS[yypt-2].nodePattern}, yyS[yypt-0].nodeRelationshipList.Nodes...),
 				Relationships: yyS[yypt-0].nodeRelationshipList.Relationships,
 			}
 		}
-	case 29:
+	case 30:
 		{
 			yyVAL.nodePattern = &NodePattern{ResourceProperties: yyS[yypt-1].resourceProperties}
 		}
-	case 30:
+	case 31:
 		{
 			yyVAL.nodePattern = &NodePattern{&ResourceProperties{Name: yyS[yypt-1].strVal, Kind: "", Properties: nil, JsonData: ""}}
 		}
-	case 31:
+	case 32:
 		{
 			yyVAL.returnClause = &ReturnClause{Items: yyS[yypt-0].returnItems}
 		}
-	case 32:
+	case 33:
 		{
 			yyVAL.returnItems = []*ReturnItem{yyS[yypt-0].returnItem}
 		}
-	case 33:
+	case 34:
 		{
 			yyVAL.returnItems = append(yyS[yypt-2].returnItems, yyS[yypt-0].returnItem)
 		}
-	case 34:
+	case 35:
 		{
 			yyVAL.returnItem = &ReturnItem{JsonPath: yyS[yypt-0].strVal}
 		}
-	case 35:
+	case 36:
 		{
 			yyVAL.returnItem = &ReturnItem{JsonPath: yyS[yypt-2].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 36:
+	case 37:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "COUNT", JsonPath: yyS[yypt-1].strVal}
 		}
-	case 37:
+	case 38:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "SUM", JsonPath: yyS[yypt-1].strVal}
 		}
-	case 38:
+	case 39:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "COUNT", JsonPath: yyS[yypt-3].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 39:
+	case 40:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "SUM", JsonPath: yyS[yypt-3].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 40:
+	case 41:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: None, LeftNode: nil, RightNode: nil}
 		}
-	case 41:
+	case 42:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Left, LeftNode: nil, RightNode: nil}
 		}
-	case 42:
+	case 43:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Right, LeftNode: nil, RightNode: nil}
 		}
-	case 43:
+	case 44:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Both, LeftNode: nil, RightNode: nil}
 		}
-	case 44:
+	case 45:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: None, LeftNode: nil, RightNode: nil}
 		}
-	case 45:
+	case 46:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Left, LeftNode: nil, RightNode: nil}
 		}
-	case 46:
+	case 47:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Right, LeftNode: nil, RightNode: nil}
 		}
-	case 47:
+	case 48:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Both, LeftNode: nil, RightNode: nil}
 		}
-	case 48:
+	case 49:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-2].strVal, Kind: yyS[yypt-0].strVal, Properties: nil, JsonData: ""}
 		}
-	case 49:
+	case 50:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-3].strVal, Kind: yyS[yypt-1].strVal, Properties: yyS[yypt-0].properties, JsonData: ""}
 		}
-	case 50:
+	case 51:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-4].strVal, Kind: yyS[yypt-2].strVal, Properties: nil, JsonData: yyS[yypt-0].strVal}
 		}
-	case 51:
+	case 52:
 		{
 			yyVAL.properties = &Properties{PropertyList: yyS[yypt-1].jsonPathValueList}
 		}
-	case 52:
+	case 53:
 		{
 			yyVAL.jsonPathValueList = []*Property{yyS[yypt-0].jsonPathValue} // Start with one Property element
 		}
-	case 53:
+	case 54:
 		{
 			yyVAL.jsonPathValueList = append(yyS[yypt-2].jsonPathValueList, yyS[yypt-0].jsonPathValue) // $1 and $3 are the left and right operands of COMMA
 		}
-	case 54:
+	case 55:
 		{
 			yyVAL.jsonPathValue = &Property{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value}
 		}
-	case 55:
+	case 56:
 		{
 			yyVAL.value = strings.Trim(yyS[yypt-0].strVal, "\"")
 		}
-	case 56:
+	case 57:
 		{
 			// Parse the int from the string
 			i, err := strconv.Atoi(yyS[yypt-0].strVal)
@@ -904,12 +914,12 @@ yynewstate:
 			}
 			yyVAL.value = i
 		}
-	case 57:
+	case 58:
 		{
 			// Parse the boolean from the string
 			yyVAL.value = strings.ToUpper(yyS[yypt-0].strVal) == "TRUE"
 		}
-	case 58:
+	case 59:
 		{
 			yyVAL.value = yyS[yypt-0].strVal
 		}
