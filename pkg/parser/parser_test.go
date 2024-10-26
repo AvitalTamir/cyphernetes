@@ -1052,7 +1052,7 @@ func TestMatchReturnSumAsCountAs(t *testing.T) {
 	}
 }
 
-func TestParseQueryWithContains(t *testing.T) {
+func TestParseQueryWithContainsString(t *testing.T) {
 	query := `MATCH (n:Node) WHERE n.metadata.name CONTAINS "test" RETURN n.metadata.name`
 	expected := &Expression{
 		Clauses: []Clause{
@@ -1070,6 +1070,39 @@ func TestParseQueryWithContains(t *testing.T) {
 					{
 						Key:      "n.metadata.name",
 						Value:    "test",
+						Operator: "CONTAINS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "n.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithContainsRegexp(t *testing.T) {
+	query := `MATCH (n:Node) WHERE n.metadata.name CONTAINS "^test.*" RETURN n.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "n.metadata.name",
+						Value:    "^test.*",
 						Operator: "CONTAINS",
 					},
 				},
