@@ -517,7 +517,6 @@ func TestLexer(t *testing.T) {
 			},
 		},
 		{
-			// add a case for match where contains
 			name:  "MATCH WHERE CONTAINS",
 			input: "MATCH (k:Kind) WHERE k.name CONTAINS \"^test.*\" RETURN k.name",
 			wantTokens: []int{
