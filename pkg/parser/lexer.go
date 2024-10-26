@@ -199,6 +199,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		case "CONTAINS":
 			logDebug("Returning CONTAINS token")
 			return int(CONTAINS)
+		case "=~":
+			logDebug("Returning REGEX_COMPARE token")
+			return int(REGEX_COMPARE)
 		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)

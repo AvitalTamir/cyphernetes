@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -1057,6 +1058,21 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				case "NOT_EQUALS":
 					keep = !reflect.DeepEqual(resultValue, filterValue)
 				case "CONTAINS":
+					keep = strings.Contains(fmt.Sprintf("%v", resultValue), fmt.Sprintf("%v", filterValue))
+				case "REGEX_COMPARE":
+					if filterValueStr, ok := filterValue.(string); ok {
+						if resultValueStr, ok := resultValue.(string); ok {
+							if regex, err := regexp.Compile(filterValueStr); err == nil {
+								keep = regex.MatchString(resultValueStr)
+							} else {
+								logDebug(fmt.Sprintf("Invalid regex: %v", filterValue))
+							}
+						} else {
+							logDebug(fmt.Sprintf("Invalid comparison: %v is not a string", resultValue))
+						}
+					} else {
+						logDebug(fmt.Sprintf("Invalid comparison: %v is not a string", filterValue))
+					}
 					keep = strings.Contains(fmt.Sprintf("%v", resultValue), fmt.Sprintf("%v", filterValue))
 				case "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUALS", "LESS_THAN_EQUALS":
 					if resultNum, ok := resultValue.(float64); ok {

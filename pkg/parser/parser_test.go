@@ -1085,8 +1085,8 @@ func TestParseQueryWithContainsString(t *testing.T) {
 	testParseQuery(t, query, expected)
 }
 
-func TestParseQueryWithContainsRegexp(t *testing.T) {
-	query := `MATCH (n:Node) WHERE n.metadata.name CONTAINS "^test.*" RETURN n.metadata.name`
+func TestParseQueryWithRegexCompare(t *testing.T) {
+	query := `MATCH (n:Node) WHERE n.metadata.name =~ "^test.*" RETURN n.metadata.name`
 	expected := &Expression{
 		Clauses: []Clause{
 			&MatchClause{
@@ -1103,7 +1103,7 @@ func TestParseQueryWithContainsRegexp(t *testing.T) {
 					{
 						Key:      "n.metadata.name",
 						Value:    "^test.*",
-						Operator: "CONTAINS",
+						Operator: "REGEX_COMPARE",
 					},
 				},
 			},
