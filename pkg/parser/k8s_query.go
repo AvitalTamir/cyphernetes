@@ -1056,6 +1056,8 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					keep = reflect.DeepEqual(resultValue, filterValue)
 				case "NOT_EQUALS":
 					keep = !reflect.DeepEqual(resultValue, filterValue)
+				case "CONTAINS":
+					keep = strings.Contains(fmt.Sprintf("%v", resultValue), fmt.Sprintf("%v", filterValue))
 				case "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUALS", "LESS_THAN_EQUALS":
 					if resultNum, ok := resultValue.(float64); ok {
 						if filterNum, ok := filterValue.(float64); ok {

@@ -196,6 +196,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			lval.strVal = l.s.TokenText()
 			logDebug("Returning BOOLEAN token with value:", lval.strVal)
 			return int(BOOLEAN)
+		case "CONTAINS":
+			logDebug("Returning CONTAINS token")
+			return int(CONTAINS)
 		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)

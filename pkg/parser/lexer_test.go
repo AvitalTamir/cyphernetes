@@ -516,6 +516,40 @@ func TestLexer(t *testing.T) {
 				"",                // EOF
 			},
 		},
+		{
+			name:  "MATCH WHERE CONTAINS",
+			input: "MATCH (k:Kind) WHERE k.name CONTAINS \"^test.*\" RETURN k.name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				CONTAINS,
+				STRING,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",            // MATCH
+				"",            // LPAREN
+				"k",           // IDENT
+				"",            // COLON
+				"Kind",        // IDENT
+				"",            // RPAREN
+				"",            // WHERE
+				"k.name",      // JSONPATH
+				"",            // CONTAINS
+				"\"^test.*\"", // STRING
+				"",            // RETURN
+				"k.name",      // JSONPATH
+				"",            // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {
