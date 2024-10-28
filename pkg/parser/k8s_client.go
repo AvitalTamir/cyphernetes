@@ -421,7 +421,8 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 		return visitedFields
 	}
 
-	// fmt.Printf("Processing schema: %s\n", schema)
+	logDebug(fmt.Sprintf("Processing schema: %s\n", schema))
+
 	fields := []string{}
 
 	// Handle properties
@@ -440,7 +441,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 				if ref := schemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
 					nestedSchema = resolveReference(ref.XRef, parent, fullName)
 					if nestedSchema == nil {
-						// fmt.Printf("Failed to resolve reference for field: %s\n", fullName)
+						logError(fmt.Sprintf("Failed to resolve reference for field: %s\n", fullName))
 						continue
 					}
 				} else if nested := schemaOrRef.GetSchema(); nested != nil {
@@ -465,7 +466,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			if ref := subSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
 				subSchema = resolveReference(ref.XRef, parent, prefix)
 				if subSchema == nil {
-					// fmt.Printf("Failed to resolve reference in allOf: %s\n", ref.XRef)
+					logError(fmt.Sprintf("Failed to resolve reference in allOf: %s\n", ref.XRef))
 					continue
 				}
 			} else if nested := subSchemaOrRef.GetSchema(); nested != nil {
@@ -488,7 +489,7 @@ func processSchema(schema *openapi_v3.Schema, prefix string, visited map[string]
 			if ref := itemSchemaOrRef.GetReference(); ref != nil && ref.XRef != "" {
 				itemSchema = resolveReference(ref.XRef, parent, prefix)
 				if itemSchema == nil {
-					// fmt.Printf("Failed to resolve reference for array items at: %s\n", prefix)
+					logError(fmt.Sprintf("Failed to resolve reference for array items at: %s\n", prefix))
 					return fields
 				}
 			} else if nested := itemSchemaOrRef.GetSchema(); nested != nil {
@@ -534,13 +535,13 @@ func resolveReference(ref string, parent string, path string) *openapi_v3.Schema
 	// Example ref format: "#/components/schemas/Pod"
 	refParts := strings.Split(ref, "/")
 	if len(refParts) < 4 {
-		// fmt.Printf("Invalid ref format: %s\n", ref)
+		logError(fmt.Sprintf("Invalid ref format: %s\n", ref))
 		return nil // Invalid ref format
 	}
 	schemaName := refParts[len(refParts)-1]
 
 	if openAPIDoc == nil || openAPIDoc.Components == nil || openAPIDoc.Components.Schemas == nil {
-		// fmt.Println("openAPIDoc or its Components/Schemas are nil")
+		logError(fmt.Sprintln("openAPIDoc or its Components/Schemas are nil"))
 		return nil
 	}
 
@@ -554,7 +555,7 @@ func resolveReference(ref string, parent string, path string) *openapi_v3.Schema
 					createRelationshipRule(parent, gvr.Resource, path)
 				}
 			}
-			// fmt.Printf("Resolved reference %s to schema %s\n", ref, schemaName)
+			logDebug(fmt.Sprintf("Resolved reference %s to schema %s\n", ref, schemaName))
 			return schemaEntry.Value.GetSchema()
 		}
 	}

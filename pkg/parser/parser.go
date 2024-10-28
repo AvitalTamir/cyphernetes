@@ -129,7 +129,13 @@ func ParseQuery(query string) (*Expression, error) {
 
 func logDebug(v ...interface{}) {
 	if LogLevel == "debug" {
-		log.Println(v...)
+		log.Println(append([]interface{}{"[DEBUG] "}, v...)...)
+	}
+}
+
+func logError(v ...interface{}) {
+	if LogLevel == "error" {
+		log.Println(append([]interface{}{"[ERROR] "}, v...)...)
 	}
 }
 
