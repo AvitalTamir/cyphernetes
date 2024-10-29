@@ -179,7 +179,6 @@ KeyValuePair:
     | JSONPATH REGEX_COMPARE Value {
         $$ = &KeyValuePair{Key: $1, Value $3, Operator: "REGEX_COMPARE" } // =~
     }
-
 ;
 
 NodeRelationshipList:
