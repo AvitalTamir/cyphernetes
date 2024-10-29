@@ -177,7 +177,7 @@ KeyValuePair:
         $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "CONTAINS"} // CONTAINS
     }
     | JSONPATH REGEX_COMPARE Value {
-        $$ = &KeyValuePair{Key: $1, Value $3, Operator: "REGEX_COMPARE" } // =~
+        $$ = &KeyValuePair{Key: $1, Value: $3, Operator: "REGEX_COMPARE"} // =~
     }
 ;
 
