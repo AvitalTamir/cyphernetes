@@ -571,7 +571,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 }
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
-	// fmt.Printf("Debug: Processing relationship: %+v\n", rel)
+	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
@@ -663,7 +663,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 	}
 
-	// fmt.Printf("Debug: Matched resources: %+v\n", matchedResources)
+	logDebug(fmt.Sprintf("Matched resources: %+v\n", matchedResources))
 
 	if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
 		for idx, rightResource := range rightResources {
@@ -785,9 +785,9 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
-	// fmt.Println("Debug: Building graph")
-	// fmt.Printf("Debug: result.Data: %+v\n", result.Data)
-	// fmt.Printf("Debug: Initial result.Graph.Edges: %+v\n", result.Graph.Edges)
+	logDebug(fmt.Sprintln("Building graph"))
+	logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
+	logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
 
 	nodeMap := make(map[string]bool)
 	edgeMap := make(map[string]bool)
