@@ -188,6 +188,8 @@ RETURN d.metadata.name,
 * `>` - greater than
 * `<=` - less than or equal to
 * `>=` - greater than or equal to
+* `=~` - regex matching
+* `CONTAINS` - partial string matching
 
 Examples:
 ```graphql
