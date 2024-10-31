@@ -218,6 +218,12 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		logDebug("Returning COLON token")
 		return int(COLON)
 	case '=':
+		ch := l.s.Peek()
+		if ch == '~' {
+			l.s.Next() // Consume '~'
+			logDebug("Returning REGEX_COMPARE token")
+			return int(REGEX_COMPARE)
+		}
 		logDebug("Returning EQUALS token")
 		return int(EQUALS)
 	case '!':

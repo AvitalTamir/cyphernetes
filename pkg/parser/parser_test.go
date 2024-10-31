@@ -1084,3 +1084,36 @@ func TestParseQueryWithContainsString(t *testing.T) {
 
 	testParseQuery(t, query, expected)
 }
+
+func TestParseQueryWithRegexCompare(t *testing.T) {
+	query := `MATCH (n:Node) WHERE n.metadata.name =~ "^test.*" RETURN n.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "n",
+							Kind: "Node",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "n.metadata.name",
+						Value:    "^test.*",
+						Operator: "REGEX_COMPARE",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "n.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}

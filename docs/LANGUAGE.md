@@ -188,6 +188,8 @@ RETURN d.metadata.name,
 * `>` - greater than
 * `<=` - less than or equal to
 * `>=` - greater than or equal to
+* `=~` - regex matching
+* `CONTAINS` - partial string matching
 
 Examples:
 ```graphql
@@ -209,6 +211,13 @@ RETURN p.metadata.name, p.status.phase
 MATCH (d:Deployment)->(s:Service)->(i:Ingress)
 WHERE d.spec.replicas >= 1
 SET i.spec.ingressClassName = "active"
+```
+
+```graphql
+# Find all deployments that end with "api"
+MATCH (d:Deployment)
+WHERE d.metadata.name =~ "^.*api$"
+RETURN d.spec
 ```
 
 ### Matching Multiple Nodes
