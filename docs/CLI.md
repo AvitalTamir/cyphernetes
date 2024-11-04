@@ -97,3 +97,54 @@ Available flags:
 ```bash
 cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
+
+# Custom Relationships
+
+Cyphernetes allows you to define custom relationships between Kubernetes resources in a `~/.cyphernetes/relationships.yaml` file. This is useful when working with custom resources or when you want to define relationships that aren't built into Cyphernetes.
+
+Example relationships.yaml:
+
+```yaml
+relationships:
+  - kindA: applications.argoproj.io
+    kindB: services
+    relationship: ARGOAPP_SYNC_SERVICE
+    matchCriteria:
+      - fieldA: "$.spec.source.targetRevision"
+        fieldB: "$.metadata.labels.targetRevision"
+        comparisonType: ExactMatch
+      - fieldA: "$.spec.project"
+        fieldB: "$.metadata.labels.project" 
+        comparisonType: ExactMatch
+
+  - kindA: pods
+    kindB: deployments
+    relationship: DEPLOYMENT_OWN_POD
+    matchCriteria:
+      - fieldA: "$.metadata.name"
+        fieldB: "$.metadata.name"
+        comparisonType: StringContains
+```
+
+The relationships.yaml file supports the following fields:
+
+- `kindA`, `kindB`: The Kubernetes resource kinds to relate (use plural form, e.g. "deployments" not "Deployment")
+- `relationship`: A unique identifier for this relationship type (conventionally UPPERCASE)
+- `matchCriteria`: List of criteria that must all match for the relationship to exist
+  - `fieldA`: JSONPath to field in kindA resource
+  - `fieldB`: JSONPath to field in kindB resource  
+  - `comparisonType`: One of:
+    - `ExactMatch`: Values must match exactly
+    - `ContainsAll`: All key-value pairs in fieldB must exist in fieldA
+    - `StringContains`: The value in fieldA contains the value in fieldB as a substring
+  - `defaultProps`: Optional default values to use when creating resources
+    - `fieldA`: JSONPath to field in kindA
+    - `fieldB`: JSONPath to field in kindB  
+    - `default`: Default value if field is not specified
+
+Custom relationships are loaded on startup and can be used just like built-in relationships in queries:
+
+```graphql
+MATCH (d:Deployment)->(c:ConfigMap)
+RETURN d.metadata.name, c.metadata.name
+```

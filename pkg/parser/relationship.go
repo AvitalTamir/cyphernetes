@@ -2,11 +2,88 @@ package parser
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/AvitalTamir/jsonpath"
 )
+
+type CustomRelationships struct {
+	Relationships []RelationshipRule `yaml:"relationships"`
+}
+
+func loadCustomRelationships() error {
+	// Get user's home directory
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("error getting home directory: %v", err)
+	}
+
+	// Check if .cyphernetes/relationships.yaml exists
+	relationshipsPath := filepath.Join(home, ".cyphernetes", "relationships.yaml")
+	if _, err := os.Stat(relationshipsPath); os.IsNotExist(err) {
+		logDebug("No relationships.yaml file found at", relationshipsPath)
+		return nil
+	}
+
+	// Read and parse relationships.yaml
+	data, err := os.ReadFile(relationshipsPath)
+	if err != nil {
+		return fmt.Errorf("error reading relationships file: %v", err)
+	}
+
+	logDebug("Read relationships file contents:", string(data))
+
+	var customRels CustomRelationships
+	if err := yaml.Unmarshal(data, &customRels); err != nil {
+		return fmt.Errorf("error parsing relationships file: %v", err)
+	}
+
+	logDebug("Parsed relationships:", fmt.Sprintf("%+v", customRels))
+
+	customRelationshipCount := 0
+	// Validate and add custom relationships
+	for _, rule := range customRels.Relationships {
+		logDebug("Processing rule:", fmt.Sprintf("%+v", rule))
+
+		// Validate required fields
+		if rule.KindA == "" || rule.KindB == "" || string(rule.Relationship) == "" {
+			return fmt.Errorf("invalid relationship rule: kindA, kindB and relationship are required: %+v", rule)
+		}
+		if len(rule.MatchCriteria) == 0 {
+			return fmt.Errorf("invalid relationship rule: at least one match criterion is required: %+v", rule)
+		}
+
+		// Validate each criterion
+		for _, criterion := range rule.MatchCriteria {
+			logDebug("Processing criterion:", fmt.Sprintf("%+v", criterion))
+
+			if criterion.FieldA == "" || criterion.FieldB == "" {
+				return fmt.Errorf("invalid match criterion: fieldA and fieldB are required: %+v", criterion)
+			}
+			if criterion.ComparisonType != ExactMatch &&
+				criterion.ComparisonType != ContainsAll &&
+				criterion.ComparisonType != StringContains {
+				return fmt.Errorf("invalid comparison type: must be ExactMatch, ContainsAll, or StringContains: %v", criterion.ComparisonType)
+			}
+		}
+
+		// Add to global relationships
+		relationshipRules = append(relationshipRules, rule)
+		customRelationshipCount++
+		logDebug("Added rule successfully:", fmt.Sprintf("%+v", rule))
+	}
+	pluralExt := "s"
+	if customRelationshipCount == 1 {
+		pluralExt = ""
+	}
+	fmt.Println("💡 added", customRelationshipCount, "custom relationship", pluralExt)
+	return nil
+}
 
 func initializeRelationships() {
 	// Map to hold available kinds for quick look-up
@@ -21,6 +98,11 @@ func initializeRelationships() {
 	// Regular expression to match fields ending with 'Name', or 'Ref'
 	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
 	refFieldRegex := regexp.MustCompile(`(\w+)(Ref)`)
+
+	// Load custom relationships
+	if err := loadCustomRelationships(); err != nil {
+		logDebug("Error loading custom relationships:", err)
+	}
 
 	for kindA, fields := range ResourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
@@ -169,6 +251,27 @@ func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion
 				return false
 			}
 			if !matchFields(fieldsA, fieldsB) {
+				return false
+			}
+		case StringContains:
+			// Extract the fields
+			fieldA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+			if err != nil {
+				logDebug("Error extracting fieldA: ", err)
+				return false
+			}
+			fieldB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+			if err != nil {
+				logDebug("Error extracting fieldB: ", err)
+				return false
+			}
+
+			// Convert both fields to strings
+			strA := fmt.Sprintf("%v", fieldA)
+			strB := fmt.Sprintf("%v", fieldB)
+
+			// Check if fieldA contains fieldB
+			if !strings.Contains(strA, strB) {
 				return false
 			}
 		}

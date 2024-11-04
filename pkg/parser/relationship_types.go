@@ -38,29 +38,29 @@ const (
 type ComparisonType string
 
 const (
-	ExactMatch  ComparisonType = "ExactMatch"
-	ContainsAll ComparisonType = "ContainsAll"
+	ExactMatch     ComparisonType = "ExactMatch"
+	ContainsAll    ComparisonType = "ContainsAll"
+	StringContains ComparisonType = "StringContains"
 )
 
 type MatchCriterion struct {
-	FieldA         string
-	FieldB         string
-	ComparisonType ComparisonType
-	DefaultProps   []DefaultProp
+	FieldA         string         `yaml:"fieldA"`
+	FieldB         string         `yaml:"fieldB"`
+	ComparisonType ComparisonType `yaml:"comparisonType"`
+	DefaultProps   []DefaultProp  `yaml:"defaultProps,omitempty"`
 }
 
 type DefaultProp struct {
-	FieldA  string
-	FieldB  string
-	Default interface{}
+	FieldA  string      `yaml:"fieldA"`
+	FieldB  string      `yaml:"fieldB"`
+	Default interface{} `yaml:"default"`
 }
 
 type RelationshipRule struct {
-	KindA        string
-	KindB        string
-	Relationship RelationshipType
-	// Currently only supports one match criterion but can be extended to support multiple
-	MatchCriteria []MatchCriterion
+	KindA         string           `yaml:"kindA"`
+	KindB         string           `yaml:"kindB"`
+	Relationship  RelationshipType `yaml:"relationship"`
+	MatchCriteria []MatchCriterion `yaml:"matchCriteria"`
 }
 
 var relationshipRules = []RelationshipRule{

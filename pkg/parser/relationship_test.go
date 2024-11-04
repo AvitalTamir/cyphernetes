@@ -1,7 +1,10 @@
 package parser
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -277,6 +280,204 @@ func TestApplyRelationshipRule(t *testing.T) {
 			result := applyRelationshipRule(tt.resourcesA, tt.resourcesB, tt.rule, tt.direction)
 			if !reflect.DeepEqual(result, tt.expectedResult) {
 				t.Errorf("Expected result: %+v, but got: %+v", tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+func TestLoadCustomRelationships(t *testing.T) {
+	// Create a temporary directory for test files
+	tmpDir := t.TempDir()
+	os.Setenv("HOME", tmpDir)
+
+	// Create .cyphernetes directory
+	cyphernetesDir := filepath.Join(tmpDir, ".cyphernetes")
+	if err := os.MkdirAll(cyphernetesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		yamlContent   string
+		expectedRules []RelationshipRule
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "Valid custom relationships",
+			yamlContent: `
+relationships:
+  - kindA: pods
+    kindB: configmaps
+    relationship: POD_USE_CONFIGMAP
+    matchCriteria:
+      - fieldA: "$.spec.volumes[].configMap.name"
+        fieldB: "$.metadata.name"
+        comparisonType: ExactMatch
+        defaultProps:
+          - fieldA: "$.spec.volumes[].name"
+            fieldB: ""
+            default: "config-volume"
+`,
+			expectedRules: []RelationshipRule{
+				{
+					KindA:        "pods",
+					KindB:        "configmaps",
+					Relationship: "POD_USE_CONFIGMAP",
+					MatchCriteria: []MatchCriterion{
+						{
+							FieldA:         "$.spec.volumes[].configMap.name",
+							FieldB:         "$.metadata.name",
+							ComparisonType: ExactMatch,
+							DefaultProps: []DefaultProp{
+								{
+									FieldA:  "$.spec.volumes[].name",
+									FieldB:  "",
+									Default: "config-volume",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedError: false,
+		},
+		{
+			name: "Missing required fields",
+			yamlContent: `
+relationships:
+  - kindA: pods
+    relationship: INVALID_RULE
+    matchCriteria:
+      - fieldA: "$.spec.volumes[].configMap.name"
+        comparisonType: ExactMatch
+`,
+			expectedError: true,
+			errorContains: "kindB and relationship are required",
+		},
+		{
+			name: "Invalid comparison type",
+			yamlContent: `
+relationships:
+  - kindA: pods
+    kindB: configmaps
+    relationship: POD_USE_CONFIGMAP
+    matchCriteria:
+      - fieldA: "$.spec.volumes[].configMap.name"
+        fieldB: "$.metadata.name"
+        comparisonType: InvalidType
+`,
+			expectedError: true,
+			errorContains: "must be ExactMatch, ContainsAll, or StringContains",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Write test YAML to file
+			yamlPath := filepath.Join(cyphernetesDir, "relationships.yaml")
+			if err := os.WriteFile(yamlPath, []byte(tt.yamlContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Reset global relationshipRules
+			originalRules := relationshipRules
+			relationshipRules = []RelationshipRule{}
+			defer func() {
+				relationshipRules = originalRules
+			}()
+
+			// Test loading custom relationships
+			err := loadCustomRelationships()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing %q but got %q", tt.errorContains, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			// Check if expected rules were loaded
+			for _, expectedRule := range tt.expectedRules {
+				found := false
+				for _, actualRule := range relationshipRules {
+					if reflect.DeepEqual(expectedRule, actualRule) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected rule not found: %+v", expectedRule)
+				}
+			}
+		})
+	}
+}
+
+func TestStringContainsComparison(t *testing.T) {
+	tests := []struct {
+		name        string
+		resourceA   interface{}
+		resourceB   interface{}
+		criteria    []MatchCriterion
+		expectMatch bool
+	}{
+		{
+			name: "String contains match",
+			resourceA: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "myapp-config",
+				},
+			},
+			resourceB: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "myapp",
+				},
+			},
+			criteria: []MatchCriterion{
+				{
+					FieldA:         "$.metadata.name",
+					FieldB:         "$.metadata.name",
+					ComparisonType: StringContains,
+				},
+			},
+			expectMatch: true,
+		},
+		{
+			name: "String contains no match",
+			resourceA: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "other-config",
+				},
+			},
+			resourceB: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "myapp",
+				},
+			},
+			criteria: []MatchCriterion{
+				{
+					FieldA:         "$.metadata.name",
+					FieldB:         "$.metadata.name",
+					ComparisonType: StringContains,
+				},
+			},
+			expectMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchByCriteria(tt.resourceA, tt.resourceB, tt.criteria)
+			if result != tt.expectMatch {
+				t.Errorf("Expected match: %v, but got: %v", tt.expectMatch, result)
 			}
 		})
 	}
