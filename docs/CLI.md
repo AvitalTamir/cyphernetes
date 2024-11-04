@@ -100,7 +100,7 @@ cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 
 # Custom Relationships
 
-Cyphernetes allows you to define custom relationships between Kubernetes resources in a `~/.cyphernetes/relationships.yaml` file. This is useful when working with custom resources or when you want to define relationships that aren't built into Cyphernetes.
+Cyphernetes allows defining custom relationships between Kubernetes resources in a `~/.cyphernetes/relationships.yaml` file. This is useful when working with custom resources or when you want to define relationships that aren't built into Cyphernetes.
 
 Example relationships.yaml:
 
