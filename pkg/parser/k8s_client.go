@@ -21,9 +21,11 @@ import (
 
 var (
 	executorInstance *QueryExecutor
-	once             sync.Once
+	contextExecutors map[string]*QueryExecutor
+	executorsLock    sync.RWMutex
 	openAPIDoc       *openapi_v3.Document
 	openAPIDocMutex  sync.RWMutex
+	once             sync.Once
 )
 
 // Make resourceSpecs accessible outside the package
@@ -53,8 +55,66 @@ func GetQueryExecutorInstance() *QueryExecutor {
 			return
 		}
 		executorInstance = executor
+		contextExecutors = make(map[string]*QueryExecutor)
 	})
 	return executorInstance
+}
+
+func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
+	executorsLock.RLock()
+	if executor, exists := contextExecutors[context]; exists {
+		executorsLock.RUnlock()
+		return executor, nil
+	}
+	executorsLock.RUnlock()
+
+	// Create new executor for this context
+	executorsLock.Lock()
+	defer executorsLock.Unlock()
+
+	// Double-check after acquiring write lock
+	if executor, exists := contextExecutors[context]; exists {
+		return executor, nil
+	}
+
+	// Create config for specific context
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{
+		CurrentContext: context,
+	}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	config, err := kubeConfig.ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config for context %s: %v", context, err)
+	}
+
+	// Create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating clientset for context %s: %v", context, err)
+	}
+
+	// Create the dynamic client
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating dynamic client for context %s: %v", context, err)
+	}
+
+	executor := &QueryExecutor{
+		Clientset:      clientset,
+		DynamicClient:  dynamicClient,
+		requestChannel: make(chan *apiRequest),
+		semaphore:      make(chan struct{}, 1),
+	}
+
+	go executor.processRequests()
+
+	if contextExecutors == nil {
+		contextExecutors = make(map[string]*QueryExecutor)
+	}
+	contextExecutors[context] = executor
+	return executor, nil
 }
 
 type QueryExecutor struct {
