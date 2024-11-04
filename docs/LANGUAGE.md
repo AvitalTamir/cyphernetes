@@ -171,6 +171,7 @@ The results will be prefixed with the context name, followed by an underscore:
         "name": "coredns"
       }
     }
+  ]
 }
 ```
 
