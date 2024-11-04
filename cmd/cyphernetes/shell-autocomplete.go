@@ -137,7 +137,7 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			// Handle other autocompletion cases (like keywords)
 
 			// Keywords
-			keywords := []string{"match", "where", "return", "set", "delete", "create", "as", "sum", "count"}
+			keywords := []string{"match", "where", "return", "set", "delete", "create", "as", "sum", "count", "in", "contains"}
 
 			for _, k := range keywords {
 				if strings.HasPrefix(k, prefix) {
