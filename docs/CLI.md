@@ -145,6 +145,6 @@ The relationships.yaml file supports the following fields:
 Custom relationships are loaded on startup and can be used just like built-in relationships in queries:
 
 ```graphql
-MATCH (d:Deployment)->(c:ConfigMap)
-RETURN d.metadata.name, c.metadata.name
+MATCH (d:Deployment)->(p:Pod)
+RETURN d.metadata.name, p.metadata.name
 ```
