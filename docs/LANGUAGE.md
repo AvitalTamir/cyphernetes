@@ -582,3 +582,24 @@ IN staging, production
 MATCH (d:Deployment {namespace: "kube-system"})
 RETURN d.metadata.name
 ```
+
+Cyphernetes will run the query for each context in the `IN` clause, and return the results in a single payload.
+The results will be prefixed with the context name, followed by an underscore:
+
+```json
+{
+  "staging_d": [
+    {
+      "metadata": {
+        "name": "coredns"
+      }
+    }
+  ],
+  "production_d": [
+    {
+      "metadata": {
+        "name": "coredns"
+      }
+    }
+}
+```
