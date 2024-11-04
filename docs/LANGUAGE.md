@@ -549,3 +549,29 @@ RETURN SUM { p.spec.containers[*].resources.requests.cpu } AS totalCPUReq,
   ...
 }
 ```
+
+## Context
+
+> Some Cyphernetes programs will allow you to change the default namespace or context, but this is beyond the scope of this document, which is focused on the Cyphernetes query language itself.
+
+By default, Cyphernetes will query the current context (as defined by `kubectl config current-context`).
+If no namespace is specified in the current context, Cyphernetes will default to using the `default` namespace.
+
+### Overriding the Default Namespace
+
+You can override the default namespace per node by specifying the `namespace` property in the node's properties:
+
+```graphql
+MATCH (d:Deployment {namespace: "staging"})->(s:Service)
+RETURN d.metadata.name, s.spec.clusterIP
+```
+
+### Querying Multiple Clusters
+
+Cyphernetes supports querying multiple clusters using the `IN` keyword.
+
+```graphql
+IN staging, production
+MATCH (d:Deployment {namespace: "kube-system"})
+RETURN d.metadata.name
+```
