@@ -359,7 +359,7 @@ func GetOpenAPIResourceSpecs() (map[string][]string, error) {
 // fetchResourceSpecsFromOpenAPI fetches and parses the OpenAPI V3 schemas
 func fetchResourceSpecsFromOpenAPI() (map[string][]string, error) {
 	if !CleanOutput {
-		fmt.Print("🔎 fetching resource specs from openapi... ")
+		fmt.Print("🔎 fetching resource specs... ")
 	}
 	openAPIDocMutex.Lock()
 	defer openAPIDocMutex.Unlock()
