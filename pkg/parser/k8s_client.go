@@ -128,6 +128,7 @@ type apiRequest struct {
 	kind          string
 	fieldSelector string
 	labelSelector string
+	namespace     string
 	responseChan  chan *apiResponse
 }
 
@@ -192,18 +193,19 @@ func (q *QueryExecutor) GetDynamicClient() dynamic.Interface {
 func (q *QueryExecutor) processRequests() {
 	for request := range q.requestChannel {
 		q.semaphore <- struct{}{} // Acquire a token
-		list, err := q.fetchResources(request.kind, request.fieldSelector, request.labelSelector)
+		list, err := q.fetchResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
 		<-q.semaphore // Release the token
 		request.responseChan <- &apiResponse{list: &list, err: err}
 	}
 }
 
-func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string) (*unstructured.UnstructuredList, error) {
+func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (*unstructured.UnstructuredList, error) {
 	responseChan := make(chan *apiResponse)
 	q.requestChannel <- &apiRequest{
 		kind:          kind,
 		fieldSelector: fieldSelector,
 		labelSelector: labelSelector,
+		namespace:     namespace,
 		responseChan:  responseChan,
 	}
 
@@ -211,7 +213,7 @@ func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, label
 	return response.list, response.err
 }
 
-func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string) (unstructured.UnstructuredList, error) {
+func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string, namespace string) (unstructured.UnstructuredList, error) {
 	labelSelector = strings.ReplaceAll(labelSelector, "\"", "")
 	// Use discovery client to find the GVR for the given kind
 	gvr, err := FindGVR(q.Clientset, kind)
@@ -235,7 +237,7 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 		return emptyList, err
 	}
 
-	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
+	list, err := q.DynamicClient.Resource(gvr).Namespace(namespace).List(context.Background(), metav1.ListOptions{
 		FieldSelector: fieldSelector,
 		LabelSelector: labelMap.String(),
 	})

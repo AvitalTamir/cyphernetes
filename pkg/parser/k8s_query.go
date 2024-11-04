@@ -956,12 +956,26 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 }
 
 func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
-	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
-		for i, prop := range n.ResourceProperties.Properties.PropertyList {
+	namespace := Namespace
+
+	// Create a copy of ResourceProperties
+	resourcePropertiesCopy := &ResourceProperties{
+		Kind: n.ResourceProperties.Kind,
+		Name: n.ResourceProperties.Name,
+	}
+	if n.ResourceProperties.Properties != nil {
+		resourcePropertiesCopy.Properties = &Properties{
+			PropertyList: make([]*Property, len(n.ResourceProperties.Properties.PropertyList)),
+		}
+		copy(resourcePropertiesCopy.Properties.PropertyList, n.ResourceProperties.Properties.PropertyList)
+	}
+
+	if resourcePropertiesCopy.Properties != nil && len(resourcePropertiesCopy.Properties.PropertyList) > 0 {
+		for i, prop := range resourcePropertiesCopy.Properties.PropertyList {
 			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-				Namespace = prop.Value.(string)
+				namespace = prop.Value.(string)
 				// Remove the namespace slice from the properties
-				n.ResourceProperties.Properties.PropertyList = append(n.ResourceProperties.Properties.PropertyList[:i], n.ResourceProperties.Properties.PropertyList[i+1:]...)
+				resourcePropertiesCopy.Properties.PropertyList = append(resourcePropertiesCopy.Properties.PropertyList[:i], resourcePropertiesCopy.Properties.PropertyList[i+1:]...)
 			}
 		}
 	}
@@ -971,8 +985,8 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	var hasNameSelector bool
 	var hasLabelSelector bool
 
-	if n.ResourceProperties.Properties != nil {
-		for _, prop := range n.ResourceProperties.Properties.PropertyList {
+	if resourcePropertiesCopy.Properties != nil {
+		for _, prop := range resourcePropertiesCopy.Properties.PropertyList {
 			if prop.Key == "name" || prop.Key == "metadata.name" || prop.Key == `"name"` || prop.Key == `"metadata.name"` {
 				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
 				hasNameSelector = true
@@ -992,14 +1006,14 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	// Check if the resource has already been fetched
 	if resultCache[q.resourcePropertyName(n)] == nil {
 		// Get the list of resources of the specified kind.
-		resultCache[q.resourcePropertyName(n)], err = q.getResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
+		resultCache[q.resourcePropertyName(n)], err = q.getResources(resourcePropertiesCopy.Kind, fieldSelector, labelSelector, namespace)
 		if err != nil {
 			fmt.Println("Error marshalling results to JSON: ", err)
 			return err
 		}
 	}
 
-	resultMap[n.ResourceProperties.Name] = resultCache[q.resourcePropertyName(n)]
+	resultMap[resourcePropertiesCopy.Name] = resultCache[q.resourcePropertyName(n)]
 
 	// Apply extra filters
 	for _, filter := range extraFilters {
@@ -1023,14 +1037,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		}
 		if resultMap[resultMapKey] == nil {
 			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
-		} else if resultMapKey == n.ResourceProperties.Name {
-			// // The rest of the key is the JSONPath
-			// path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
-			// // Ensure the JSONPath starts with '$'
-			// if !strings.HasPrefix(path, "$") {
-			// 	path = "$." + path
-			// }
-			// Ensure that the JSONPath handles escaped characters
+		} else if resultMapKey == resourcePropertiesCopy.Name {
 			path := filter.Key
 			path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
@@ -1041,7 +1048,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			}
 
 			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
-			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+			for j, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
 				// Fix compiledPath to handle escaped dots
 				compiledPath = fixCompiledPath(compiledPath)
 				// Drill down to create nested map structure
@@ -1049,7 +1056,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				if err != nil {
 					logDebug("Path not found:", filter.Key)
 					// remove the resource from the slice
-					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
 					continue
 				}
 
@@ -1098,19 +1105,19 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 
 				if !keep {
 					// remove the resource from the slice
-					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
 				}
 			}
 
 			// remove nil values from the slice
 			var filtered []map[string]interface{}
-			for _, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+			for _, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
 				if resource != nil {
 					filtered = append(filtered, resource)
 				}
 			}
 
-			resultMap[n.ResourceProperties.Name] = filtered
+			resultMap[resourcePropertiesCopy.Name] = filtered
 		}
 	}
 
@@ -1135,8 +1142,8 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	return compiledPath
 }
 
-func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) (interface{}, error) {
-	list, err := q.getK8sResources(kind, fieldSelector, labelSelector)
+func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	list, err := q.getK8sResources(kind, fieldSelector, labelSelector, namespace)
 	if err != nil {
 		fmt.Println("Error getting list of resources: ", err)
 		return nil, err
