@@ -31,6 +31,7 @@ function App() {
   const [aggregateResults, setAggregateResults] = useState<AggregateResult>({});
   const [filterManagedFields, setFilterManagedFields] = useState(true);
   const [darkTheme, setDarkTheme] = useState(false);
+  const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -238,19 +239,35 @@ function App() {
 
   return (
     <div className={`App ${!isPanelOpen ? 'left-sidebar-closed' : ''}`}>
-      <button className="toggle-button" onClick={() => {
-        setIsPanelOpen(!isPanelOpen);
-        setTimeout(() => {
-          window.dispatchEvent(new Event('resize'));
-        }, 10);
-      }}>
-        {"×"}
-      </button>
+      {!isPanelOpen && (
+        <button className="toggle-button" onClick={() => {
+          setIsPanelOpen(!isPanelOpen);
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+          }, 10);
+        }}>
+          {"→"}
+        </button>
+      )}
       <div className={`left-panel ${!isPanelOpen ? 'closed' : ''} ${hasResults ? 'has-results' : ''}`}>
         {isPanelOpen && (
           <>
-            <ResultsDisplay result={filteredResult} error={error} darkTheme={darkTheme} />
+            <button className="toggle-button panel-close-button" onClick={() => {
+              setIsPanelOpen(false);
+              setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+              }, 10);
+            }}>
+              {"←"}
+            </button>
+            <ResultsDisplay 
+              result={filteredResult} 
+              error={error} 
+              darkTheme={darkTheme}
+              format={format} 
+            />
             {hasResults && (
+              <div>
               <div className="filter-options-container">
                 <label className="custom-checkbox small">
                   <input
@@ -271,6 +288,31 @@ function App() {
                   Dark Theme
                 </label>
               </div>
+              <div className="format-selector">
+                <label className="custom-radio">
+                  <input
+                    type="radio"
+                    name="format"
+                    value="yaml"
+                    checked={format === 'yaml'}
+                    onChange={(e) => setFormat('yaml')}
+                  />
+                  <span className="radio-mark"></span>
+                  YAML
+                </label>
+                <label className="custom-radio">
+                  <input
+                    type="radio"
+                    name="format"
+                    value="json"
+                    checked={format === 'json'}
+                    onChange={(e) => setFormat('json')}
+                  />
+                  <span className="radio-mark"></span>
+                  JSON
+                </label>
+              </div>
+            </div>
             )}
           </>
         )}
