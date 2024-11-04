@@ -648,6 +648,70 @@ func TestLexer(t *testing.T) {
 				"",           // EOF
 			},
 		},
+		{
+			name:  "IN with dashed context name",
+			input: "IN kind-kind MATCH (k:Kind) RETURN k.name",
+			wantTokens: []int{
+				IN,
+				IDENT,
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",          // IN
+				"kind-kind", // IDENT (now includes the dash)
+				"",          // MATCH
+				"",          // LPAREN
+				"k",         // IDENT
+				"",          // COLON
+				"Kind",      // IDENT
+				"",          // RPAREN
+				"",          // RETURN
+				"k.name",    // JSONPATH
+				"",          // EOF
+			},
+		},
+		{
+			name:  "IN with multiple dashed context names",
+			input: "IN kind-kind, prod-cluster MATCH (k:Kind) RETURN k.name",
+			wantTokens: []int{
+				IN,
+				IDENT,
+				COMMA,
+				IDENT,
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",             // IN
+				"kind-kind",    // IDENT
+				"",             // COMMA
+				"prod-cluster", // IDENT
+				"",             // MATCH
+				"",             // LPAREN
+				"k",            // IDENT
+				"",             // COLON
+				"Kind",         // IDENT
+				"",             // RPAREN
+				"",             // RETURN
+				"k.name",       // JSONPATH
+				"",             // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {

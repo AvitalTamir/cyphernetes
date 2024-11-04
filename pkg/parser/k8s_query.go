@@ -48,13 +48,17 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	if len(ast.Contexts) > 0 {
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
+	return q.ExecuteSingleQuery(ast, namespace)
+}
 
+func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
 	} else if namespace != "" {
 		Namespace = namespace
 	}
+
 	results := &QueryResult{
 		Data: make(map[string]interface{}),
 		Graph: Graph{
@@ -62,6 +66,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			Edges: []Edge{},
 		},
 	}
+
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
@@ -1551,8 +1556,7 @@ func sumMemoryBytes(memStrs []string) (int64, error) {
 // Add new function to handle multi-context execution
 func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
 	if len(ast.Contexts) == 0 {
-		// Use default executor for backward compatibility
-		return GetQueryExecutorInstance().Execute(ast, namespace)
+		return QueryResult{}, fmt.Errorf("no contexts provided for multi-context query")
 	}
 
 	// Initialize combined results
@@ -1574,7 +1578,8 @@ func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, e
 		// Create a modified AST with prefixed variables
 		modifiedAst := prefixVariables(ast, context)
 
-		result, err := executor.Execute(modifiedAst, namespace)
+		// Use ExecuteSingleQuery instead of Execute
+		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace)
 		if err != nil {
 			return combinedResults, fmt.Errorf("error executing query in context %s: %v", context, err)
 		}
