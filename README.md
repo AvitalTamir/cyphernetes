@@ -9,13 +9,11 @@
 
 Cyphernetes turns this: 😣
 ```bash
-# Select all zero-scaled Deployments in all namespaces,
-# find all Ingresses routing to these deployments -
-# for each Ingress change it's ingress class to 'inactive':
+# Delete all pods that are not running
 
 kubectl get pods --all-namespaces --field-selector 'status.phase!=Running' \
--o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' --no-headers | \
-xargs -l bash -c 'kubectl delete pod $2 -n $1' _
+-o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' \
+--no-headers | xargs -L1 -I {} bash -c 'set -- {}; kubectl delete pod $2 -n $1'
 ```
 
 Into this: 🤩 
