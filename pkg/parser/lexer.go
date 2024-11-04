@@ -230,6 +230,9 @@ func (l *Lexer) Lex(lval *yySymType) int {
 			l.definingFrom = true
 			l.buf.tok = IN
 			return int(IN)
+		case "NULL":
+			lval.strVal = "null"
+			return int(NULL)
 		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)

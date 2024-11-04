@@ -1239,3 +1239,107 @@ func TestParseQueryWithInAndSet(t *testing.T) {
 
 	testParseQuery(t, query, expected)
 }
+
+func TestParseQueryWithNullEquals(t *testing.T) {
+	query := `MATCH (s:Service) WHERE s.spec.clusterIP = null RETURN s.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "s",
+							Kind: "Service",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "s.spec.clusterIP",
+						Value:    nil,
+						Operator: "EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "s.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithNullNotEquals(t *testing.T) {
+	query := `MATCH (s:Service) WHERE s.spec.clusterIP != null RETURN s.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "s",
+							Kind: "Service",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "s.spec.clusterIP",
+						Value:    nil,
+						Operator: "NOT_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "s.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithMultipleNullComparisons(t *testing.T) {
+	query := `MATCH (s:Service) WHERE s.spec.clusterIP = null, s.status.loadBalancer != null RETURN s.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "s",
+							Kind: "Service",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "s.spec.clusterIP",
+						Value:    nil,
+						Operator: "EQUALS",
+					},
+					{
+						Key:      "s.status.loadBalancer",
+						Value:    nil,
+						Operator: "NOT_EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "s.metadata.name"},
+				},
+			},
+		},
+	}
+
+	testParseQuery(t, query, expected)
+}
