@@ -18,6 +18,11 @@ interface QueryInputProps {
   isPanelOpen: boolean;
 }
 
+interface ContextInfo {
+  context: string;
+  namespace: string;
+}
+
 const QueryInput: React.FC<QueryInputProps> = ({ 
   onSubmit, 
   isLoading, 
@@ -36,6 +41,8 @@ const QueryInput: React.FC<QueryInputProps> = ({
   const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0 });
 
   const [queryHistory, setQueryHistory] = useState<string[]>([]);
+
+  const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('queryHistory');
@@ -185,9 +192,36 @@ const QueryInput: React.FC<QueryInputProps> = ({
     }
   };
 
+  const fetchContextInfo = useCallback(async () => {
+    try {
+      const response = await fetch('/api/context');
+      if (!response.ok) {
+        throw new Error('Failed to fetch context info');
+      }
+      const data = await response.json();
+      setContextInfo(data);
+    } catch (error) {
+      console.error('Failed to fetch context info:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchContextInfo();
+  }, [fetchContextInfo]);
+
   return (
     <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
       <div className="query-editor">
+        {contextInfo && (
+          <div className="context-indicator">
+            ctx: <span className="context">{contextInfo.context}</span>
+            {contextInfo.namespace && (
+              <>
+                ns: <span className="namespace">{contextInfo.namespace}</span>
+              </>
+            )}
+          </div>
+        )}
         <SyntaxHighlighter
           language="cypher"
           style={dracula}

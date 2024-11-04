@@ -7,6 +7,7 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/gin-gonic/gin"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type QueryRequest struct {
@@ -18,12 +19,18 @@ type QueryResponse struct {
 	Graph  interface{} `json:"graph"`
 }
 
+type ContextInfo struct {
+	Context   string `json:"context"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
 func setupAPIRoutes(router *gin.Engine) {
 	api := router.Group("/api")
 	{
 		api.POST("/query", handleQuery)
 		api.GET("/autocomplete", handleAutocomplete)
 		api.GET("/convert-resource-name", handleConvertResourceName)
+		api.GET("/context", handleGetContext)
 	}
 }
 
@@ -114,4 +121,36 @@ func handleConvertResourceName(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"singular": gvr.Resource})
+}
+
+func handleGetContext(c *gin.Context) {
+	// Get the kubeconfig loader
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		rules,
+		&clientcmd.ConfigOverrides{},
+	).RawConfig()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load kubeconfig"})
+		return
+	}
+
+	// Get current context
+	currentContext := config.CurrentContext
+	if currentContext == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No current context set"})
+		return
+	}
+
+	// Get namespace from context
+	namespace := "default"
+	if context, exists := config.Contexts[currentContext]; exists && context.Namespace != "" {
+		namespace = context.Namespace
+	}
+
+	c.JSON(http.StatusOK, ContextInfo{
+		Context:   currentContext,
+		Namespace: namespace,
+	})
 }
