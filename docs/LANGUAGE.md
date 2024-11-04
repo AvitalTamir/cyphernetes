@@ -335,6 +335,8 @@ This query returns all Services that expose a Deployment, and the name of the De
 
 The relationship's direction is unimportant. `(d:Deployment)->(s:Service)` is the same as `(d:Deployment)<-(s:Service)`.
 
+> If you're familiar with Cypher, you might be wondering about relationship properties. At this time, Cyphernetes does not make use of relationship properties - they are, however, legal - and you may use them if you wish for your own documentation purposes. i.e. `(d:Deployment)->[r:SERVICE_EXPOSE_DEPLOYMENT {"service-type": "kubernetes-internal"}]->(s:Service)` is legal Cyphernetes syntax, but does not affect the query's outcome. The variable `r` is not defined in this query, and is not available for use in a `RETURN` clause or otherwise.
+
 ### Basic Relationship Match
 
 Cyphernetes understands the relationships between Kubernetes resources:
