@@ -45,12 +45,20 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
+	if len(ast.Contexts) > 0 {
+		return ExecuteMultiContextQuery(ast, namespace)
+	}
+	return q.ExecuteSingleQuery(ast, namespace)
+}
+
+func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
 	} else if namespace != "" {
 		Namespace = namespace
 	}
+
 	results := &QueryResult{
 		Data: make(map[string]interface{}),
 		Graph: Graph{
@@ -58,6 +66,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			Edges: []Edge{},
 		},
 	}
+
 	// Iterate over the clauses in the AST.
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
@@ -947,12 +956,26 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 }
 
 func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
-	if n.ResourceProperties.Properties != nil && len(n.ResourceProperties.Properties.PropertyList) > 0 {
-		for i, prop := range n.ResourceProperties.Properties.PropertyList {
+	namespace := Namespace
+
+	// Create a copy of ResourceProperties
+	resourcePropertiesCopy := &ResourceProperties{
+		Kind: n.ResourceProperties.Kind,
+		Name: n.ResourceProperties.Name,
+	}
+	if n.ResourceProperties.Properties != nil {
+		resourcePropertiesCopy.Properties = &Properties{
+			PropertyList: make([]*Property, len(n.ResourceProperties.Properties.PropertyList)),
+		}
+		copy(resourcePropertiesCopy.Properties.PropertyList, n.ResourceProperties.Properties.PropertyList)
+	}
+
+	if resourcePropertiesCopy.Properties != nil && len(resourcePropertiesCopy.Properties.PropertyList) > 0 {
+		for i, prop := range resourcePropertiesCopy.Properties.PropertyList {
 			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-				Namespace = prop.Value.(string)
+				namespace = prop.Value.(string)
 				// Remove the namespace slice from the properties
-				n.ResourceProperties.Properties.PropertyList = append(n.ResourceProperties.Properties.PropertyList[:i], n.ResourceProperties.Properties.PropertyList[i+1:]...)
+				resourcePropertiesCopy.Properties.PropertyList = append(resourcePropertiesCopy.Properties.PropertyList[:i], resourcePropertiesCopy.Properties.PropertyList[i+1:]...)
 			}
 		}
 	}
@@ -962,8 +985,8 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	var hasNameSelector bool
 	var hasLabelSelector bool
 
-	if n.ResourceProperties.Properties != nil {
-		for _, prop := range n.ResourceProperties.Properties.PropertyList {
+	if resourcePropertiesCopy.Properties != nil {
+		for _, prop := range resourcePropertiesCopy.Properties.PropertyList {
 			if prop.Key == "name" || prop.Key == "metadata.name" || prop.Key == `"name"` || prop.Key == `"metadata.name"` {
 				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
 				hasNameSelector = true
@@ -983,14 +1006,14 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	// Check if the resource has already been fetched
 	if resultCache[q.resourcePropertyName(n)] == nil {
 		// Get the list of resources of the specified kind.
-		resultCache[q.resourcePropertyName(n)], err = q.getResources(n.ResourceProperties.Kind, fieldSelector, labelSelector)
+		resultCache[q.resourcePropertyName(n)], err = q.getResources(resourcePropertiesCopy.Kind, fieldSelector, labelSelector, namespace)
 		if err != nil {
 			fmt.Println("Error marshalling results to JSON: ", err)
 			return err
 		}
 	}
 
-	resultMap[n.ResourceProperties.Name] = resultCache[q.resourcePropertyName(n)]
+	resultMap[resourcePropertiesCopy.Name] = resultCache[q.resourcePropertyName(n)]
 
 	// Apply extra filters
 	for _, filter := range extraFilters {
@@ -1014,14 +1037,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		}
 		if resultMap[resultMapKey] == nil {
 			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
-		} else if resultMapKey == n.ResourceProperties.Name {
-			// // The rest of the key is the JSONPath
-			// path := strings.Join(strings.Split(filter.Key, ".")[1:], ".")
-			// // Ensure the JSONPath starts with '$'
-			// if !strings.HasPrefix(path, "$") {
-			// 	path = "$." + path
-			// }
-			// Ensure that the JSONPath handles escaped characters
+		} else if resultMapKey == resourcePropertiesCopy.Name {
 			path := filter.Key
 			path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
@@ -1032,7 +1048,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			}
 
 			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
-			for j, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+			for j, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
 				// Fix compiledPath to handle escaped dots
 				compiledPath = fixCompiledPath(compiledPath)
 				// Drill down to create nested map structure
@@ -1040,7 +1056,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				if err != nil {
 					logDebug("Path not found:", filter.Key)
 					// remove the resource from the slice
-					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
 					continue
 				}
 
@@ -1089,19 +1105,19 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 
 				if !keep {
 					// remove the resource from the slice
-					resultMap[n.ResourceProperties.Name].([]map[string]interface{})[j] = nil
+					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
 				}
 			}
 
 			// remove nil values from the slice
 			var filtered []map[string]interface{}
-			for _, resource := range resultMap[n.ResourceProperties.Name].([]map[string]interface{}) {
+			for _, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
 				if resource != nil {
 					filtered = append(filtered, resource)
 				}
 			}
 
-			resultMap[n.ResourceProperties.Name] = filtered
+			resultMap[resourcePropertiesCopy.Name] = filtered
 		}
 	}
 
@@ -1126,8 +1142,8 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	return compiledPath
 }
 
-func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector string) (interface{}, error) {
-	list, err := q.getK8sResources(kind, fieldSelector, labelSelector)
+func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	list, err := q.getK8sResources(kind, fieldSelector, labelSelector, namespace)
 	if err != nil {
 		fmt.Println("Error getting list of resources: ", err)
 		return nil, err
@@ -1542,4 +1558,234 @@ func sumMemoryBytes(memStrs []string) (int64, error) {
 	}
 
 	return memSum, nil
+}
+
+// Add new function to handle multi-context execution
+func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
+	if len(ast.Contexts) == 0 {
+		return QueryResult{}, fmt.Errorf("no contexts provided for multi-context query")
+	}
+
+	// Initialize combined results
+	combinedResults := QueryResult{
+		Data: make(map[string]interface{}),
+		Graph: Graph{
+			Nodes: []Node{},
+			Edges: []Edge{},
+		},
+	}
+
+	// Execute query for each context
+	for _, context := range ast.Contexts {
+		executor, err := GetContextQueryExecutor(context)
+		if err != nil {
+			return combinedResults, fmt.Errorf("error getting executor for context %s: %v", context, err)
+		}
+
+		// Create a modified AST with prefixed variables
+		modifiedAst := prefixVariables(ast, context)
+
+		// Use ExecuteSingleQuery instead of Execute
+		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace)
+		if err != nil {
+			return combinedResults, fmt.Errorf("error executing query in context %s: %v", context, err)
+		}
+
+		// Merge results
+		for k, v := range result.Data {
+			combinedResults.Data[k] = v
+		}
+		combinedResults.Graph.Nodes = append(combinedResults.Graph.Nodes, result.Graph.Nodes...)
+		combinedResults.Graph.Edges = append(combinedResults.Graph.Edges, result.Graph.Edges...)
+	}
+
+	return combinedResults, nil
+}
+
+// Helper function to prefix variables in the AST
+func prefixVariables(ast *Expression, context string) *Expression {
+	modified := &Expression{
+		Clauses:  make([]Clause, len(ast.Clauses)),
+		Contexts: ast.Contexts,
+	}
+
+	for i, clause := range ast.Clauses {
+		switch c := clause.(type) {
+		case *MatchClause:
+			modified.Clauses[i] = prefixMatchClause(c, context)
+		case *ReturnClause:
+			modified.Clauses[i] = prefixReturnClause(c, context)
+		case *SetClause:
+			modified.Clauses[i] = prefixSetClause(c, context)
+		case *DeleteClause:
+			modified.Clauses[i] = prefixDeleteClause(c, context)
+		case *CreateClause:
+			modified.Clauses[i] = prefixCreateClause(c, context)
+		}
+	}
+
+	return modified
+}
+
+// Helper functions to prefix variables in each clause type
+func prefixMatchClause(c *MatchClause, context string) *MatchClause {
+	modified := &MatchClause{
+		Nodes:         make([]*NodePattern, len(c.Nodes)),
+		Relationships: make([]*Relationship, len(c.Relationships)),
+		ExtraFilters:  make([]*KeyValuePair, len(c.ExtraFilters)),
+	}
+
+	// Prefix node names
+	for i, node := range c.Nodes {
+		modified.Nodes[i] = &NodePattern{
+			ResourceProperties: &ResourceProperties{
+				Name:       context + "_" + node.ResourceProperties.Name,
+				Kind:       node.ResourceProperties.Kind,
+				Properties: node.ResourceProperties.Properties,
+				JsonData:   node.ResourceProperties.JsonData,
+			},
+		}
+	}
+
+	// Prefix relationships
+	for i, rel := range c.Relationships {
+		modified.Relationships[i] = &Relationship{
+			ResourceProperties: rel.ResourceProperties,
+			Direction:          rel.Direction,
+			LeftNode: &NodePattern{
+				ResourceProperties: &ResourceProperties{
+					Name:       context + "_" + rel.LeftNode.ResourceProperties.Name,
+					Kind:       rel.LeftNode.ResourceProperties.Kind,
+					Properties: rel.LeftNode.ResourceProperties.Properties,
+					JsonData:   rel.LeftNode.ResourceProperties.JsonData,
+				},
+			},
+			RightNode: &NodePattern{
+				ResourceProperties: &ResourceProperties{
+					Name:       context + "_" + rel.RightNode.ResourceProperties.Name,
+					Kind:       rel.RightNode.ResourceProperties.Kind,
+					Properties: rel.RightNode.ResourceProperties.Properties,
+					JsonData:   rel.RightNode.ResourceProperties.JsonData,
+				},
+			},
+		}
+	}
+
+	// Prefix filter variables
+	for i, filter := range c.ExtraFilters {
+		parts := strings.Split(filter.Key, ".")
+		if len(parts) > 0 {
+			parts[0] = context + "_" + parts[0]
+		}
+		modified.ExtraFilters[i] = &KeyValuePair{
+			Key:      strings.Join(parts, "."),
+			Value:    filter.Value,
+			Operator: filter.Operator,
+		}
+	}
+
+	return modified
+}
+
+// Add similar prefix functions for other clause types...
+
+func prefixReturnClause(c *ReturnClause, context string) *ReturnClause {
+	modified := &ReturnClause{
+		Items: make([]*ReturnItem, len(c.Items)),
+	}
+
+	for i, item := range c.Items {
+		// Split the JsonPath to prefix the variable name
+		parts := strings.Split(item.JsonPath, ".")
+		if len(parts) > 0 {
+			parts[0] = context + "_" + parts[0]
+		}
+
+		modified.Items[i] = &ReturnItem{
+			JsonPath:  strings.Join(parts, "."),
+			Alias:     item.Alias,
+			Aggregate: item.Aggregate,
+		}
+	}
+
+	return modified
+}
+
+func prefixSetClause(c *SetClause, context string) *SetClause {
+	modified := &SetClause{
+		KeyValuePairs: make([]*KeyValuePair, len(c.KeyValuePairs)),
+	}
+
+	for i, kvp := range c.KeyValuePairs {
+		// Split the key to prefix the variable name
+		parts := strings.Split(kvp.Key, ".")
+		if len(parts) > 0 {
+			parts[0] = context + "_" + parts[0]
+		}
+
+		modified.KeyValuePairs[i] = &KeyValuePair{
+			Key:      strings.Join(parts, "."),
+			Value:    kvp.Value,
+			Operator: kvp.Operator,
+		}
+	}
+
+	return modified
+}
+
+func prefixDeleteClause(c *DeleteClause, context string) *DeleteClause {
+	modified := &DeleteClause{
+		NodeIds: make([]string, len(c.NodeIds)),
+	}
+
+	for i, nodeId := range c.NodeIds {
+		modified.NodeIds[i] = context + "_" + nodeId
+	}
+
+	return modified
+}
+
+func prefixCreateClause(c *CreateClause, context string) *CreateClause {
+	modified := &CreateClause{
+		Nodes:         make([]*NodePattern, len(c.Nodes)),
+		Relationships: make([]*Relationship, len(c.Relationships)),
+	}
+
+	// Prefix node names
+	for i, node := range c.Nodes {
+		modified.Nodes[i] = &NodePattern{
+			ResourceProperties: &ResourceProperties{
+				Name:       context + "_" + node.ResourceProperties.Name,
+				Kind:       node.ResourceProperties.Kind,
+				Properties: node.ResourceProperties.Properties,
+				JsonData:   node.ResourceProperties.JsonData,
+			},
+		}
+	}
+
+	// Prefix relationship node references
+	for i, rel := range c.Relationships {
+		modified.Relationships[i] = &Relationship{
+			ResourceProperties: rel.ResourceProperties,
+			Direction:          rel.Direction,
+			LeftNode: &NodePattern{
+				ResourceProperties: &ResourceProperties{
+					Name:       context + "_" + rel.LeftNode.ResourceProperties.Name,
+					Kind:       rel.LeftNode.ResourceProperties.Kind,
+					Properties: rel.LeftNode.ResourceProperties.Properties,
+					JsonData:   rel.LeftNode.ResourceProperties.JsonData,
+				},
+			},
+			RightNode: &NodePattern{
+				ResourceProperties: &ResourceProperties{
+					Name:       context + "_" + rel.RightNode.ResourceProperties.Name,
+					Kind:       rel.RightNode.ResourceProperties.Kind,
+					Properties: rel.RightNode.ResourceProperties.Properties,
+					JsonData:   rel.RightNode.ResourceProperties.JsonData,
+				},
+			},
+		}
+	}
+
+	return modified
 }

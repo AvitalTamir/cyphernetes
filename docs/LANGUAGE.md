@@ -1,4 +1,4 @@
-# Introduction to Cyphernetes
+# Introduction to the Cyphernetes Language
 
 Hi, welcome to Cyphernetes.
 
@@ -6,9 +6,9 @@ Let's get you started, you'll be querying the Kubernetes resource graph like a p
 
 ----
 
-## Language
+## Node Patterns
 
-### Nodes
+In Cyphernetes, we draw patterns of resources using ASCII-art, using parentheses to denote nodes and arrows to denote relationships.
 
 Let's draw a circle using parenthesis:
 
@@ -44,9 +44,13 @@ This document adheres to a convention of using minified, lowercase variable name
 Variable names are allowed to be mixed-case and have any length. Labels may also be mixed-case.
 Unlike labels, variable names are case-sensitive, so `(d:Deployment)` and `(D:Deployment)` are not the same.
 
-### Pattern Matching
+## Reading Resources from the Graph
 
-To query the Kubernetes resource graph, we use MATCH/RETURN expressions:
+To query the Kubernetes resource graph, we use `MATCH`/`RETURN` expressions.
+`MATCH` is used to "draw" a pattern of resources, and will select all instances that match the pattern.
+For example, `MATCH (d:Deployment)->(s:Service)` will ONLY return Deployments and Services that are connected by a Service - i.e. exposed Deployments. It will not return any other Deployments that don't have a Service exposing them.
+
+`RETURN` is used to get the results. It takes a list of comma-separated JSONPaths, and returns the results in a JSON object.
 
 ```graphql
 MATCH (d:Deployment) RETURN d.metadata.name
@@ -115,6 +119,62 @@ The returned payload is a JSON object that contains a key for every variable def
 Each of these keys' value is an array of Kubernetes resources that matched the respective node pattern in the `MATCH` clause. Unlike kubectl, Cyphernetes will **always return an array**, even if only one or zero resources were matched.
 
 The payload will only include the fields requested in the `RETURN` clause. If only the variable name is specified in the `RETURN` clause, the payload will include the entire Kubernetes resource.
+
+## Context
+
+> Some Cyphernetes programs will allow you to change the default namespace or context, but this is beyond the scope of this document, which is focused on the Cyphernetes query language itself.
+
+By default, Cyphernetes will query the current context (as defined by `kubectl config current-context`).
+If no namespace is specified in the current context, Cyphernetes will default to using the `default` namespace, similar to kubectl.
+
+### Overriding the Default Namespace
+
+You can override the default namespace per node by specifying the `namespace` property in the node's properties:
+
+```graphql
+MATCH (d:Deployment {namespace: "staging"})->(s:Service)
+RETURN d.metadata.name, s.spec.clusterIP
+```
+
+You can use this language feature to query resources across namespaces:
+
+```graphql
+MATCH (d:Deployment {namespace: "staging"}), (d2:Deployment {namespace: "production"})
+RETURN d.spec.replicas, d2.spec.replicas
+```
+
+### Querying Multiple Clusters
+
+Cyphernetes supports querying multiple clusters using the `IN` keyword.
+
+```graphql
+IN staging, production
+MATCH (d:Deployment {namespace: "kube-system"})
+RETURN d.metadata.name
+```
+
+Cyphernetes will run the query for each context in the `IN` clause, and return the results in a single payload.
+The results will be prefixed with the context name, followed by an underscore:
+
+```json
+{
+  "staging_d": [
+    {
+      "metadata": {
+        "name": "coredns"
+      }
+    }
+  ],
+  "production_d": [
+    {
+      "metadata": {
+        "name": "coredns"
+      }
+    }
+}
+```
+
+## Advanced Pattern Matching
 
 ### Match by Name and Labels
 
@@ -260,7 +320,7 @@ RETURN d.metadata.name, s.metadata.name
 }
 ```
 
-### Relationships
+## Relationships
 
 Relationships are the glue that holds the Kubernetes resource graph together. Cyphernetes understands the relationships between Kubernetes resources, and lets us query them in a natural way.
 
@@ -274,6 +334,8 @@ RETURN d.metadata.service, s.metadata.name
 This query returns all Services that expose a Deployment, and the name of the Deployment they expose. Only Deployments and Services that have a relationship between them will be returned.
 
 The relationship's direction is unimportant. `(d:Deployment)->(s:Service)` is the same as `(d:Deployment)<-(s:Service)`.
+
+> If you're familiar with Cypher, you might be wondering about relationship properties. At this time, Cyphernetes does not make use of relationship properties - they are, however, legal - and you may use them if you wish for your own documentation purposes. i.e. `(d:Deployment)->[r:SERVICE_EXPOSE_DEPLOYMENT {"service-type": "kubernetes-internal"}]->(s:Service)` is legal Cyphernetes syntax, but does not affect the query's outcome. The variable `r` is not defined in this query, and is not available for use in a `RETURN` clause or otherwise.
 
 ### Basic Relationship Match
 
@@ -375,6 +437,10 @@ RETURN i.metadata.name, i.spec.rules,
 ```
 
 > Here we match a Deployment, the Service that exposes it, and through the Service also the Ingress that routes to it. We also match the Istio VirtualService that belongs to the same application. Cyphernetes doesn't yet understand Istio, so we fallback to using the app label.
+
+## Mutating the Graph
+
+Cyphernetes supports creating, updating and deleting resources in the graph using the `CREATE`, `SET` and `DELETE` keywords.
 
 ### Creating Resources
 
@@ -511,8 +577,6 @@ Relationships in `MATCH` clauses may be used to delete resources that are connec
 MATCH (d:Deployment {name: "nginx"})->(s:Service)->(i:Ingress)
 DELETE s, i
 ```
-
-----
 
 ## Aggregations
 

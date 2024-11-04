@@ -1117,3 +1117,125 @@ func TestParseQueryWithRegexCompare(t *testing.T) {
 
 	testParseQuery(t, query, expected)
 }
+
+func TestParseQueryWithIn(t *testing.T) {
+	query := `IN staging MATCH (d:deploy) RETURN d.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+				},
+			},
+		},
+		Contexts: []string{"staging"},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithMultipleContexts(t *testing.T) {
+	query := `IN staging, production MATCH (d:deploy) RETURN d.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+				},
+			},
+		},
+		Contexts: []string{"staging", "production"},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithInAndWhere(t *testing.T) {
+	query := `IN staging MATCH (d:deploy) WHERE d.metadata.namespace = "default" RETURN d.metadata.name`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters: []*KeyValuePair{
+					{
+						Key:      "d.metadata.namespace",
+						Value:    "default",
+						Operator: "EQUALS",
+					},
+				},
+			},
+			&ReturnClause{
+				Items: []*ReturnItem{
+					{JsonPath: "d.metadata.name"},
+				},
+			},
+		},
+		Contexts: []string{"staging"},
+	}
+
+	testParseQuery(t, query, expected)
+}
+
+func TestParseQueryWithInAndSet(t *testing.T) {
+	query := `IN staging MATCH (d:deploy) SET d.metadata.labels.env = "prod"`
+	expected := &Expression{
+		Clauses: []Clause{
+			&MatchClause{
+				Nodes: []*NodePattern{
+					{
+						ResourceProperties: &ResourceProperties{
+							Name: "d",
+							Kind: "deploy",
+						},
+					},
+				},
+				Relationships: []*Relationship{},
+				ExtraFilters:  nil,
+			},
+			&SetClause{
+				KeyValuePairs: []*KeyValuePair{
+					{
+						Key:      "d.metadata.labels.env",
+						Value:    "prod",
+						Operator: "EQUALS",
+					},
+				},
+			},
+		},
+		Contexts: []string{"staging"},
+	}
+
+	testParseQuery(t, query, expected)
+}

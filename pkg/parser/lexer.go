@@ -27,6 +27,7 @@ type Lexer struct {
 	definingWhere     bool
 	definingAggregate bool
 	insideReturnItem  bool
+	definingFrom      bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -40,6 +41,14 @@ func consumeWhitespace(l *Lexer, ch *rune) {
 		l.s.Next() // Consume the whitespace
 		*ch = l.s.Peek()
 	}
+}
+
+// Add this helper function to check if a character is valid in an identifier
+func isValidIdentChar(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' || ch == '-' // Add dash as valid character
 }
 
 func (l *Lexer) Lex(lval *yySymType) int {
@@ -135,6 +144,24 @@ func (l *Lexer) Lex(lval *yySymType) int {
 	switch tok {
 	case scanner.Ident:
 		lit := l.s.TokenText()
+
+		// If we're reading an identifier and there might be more parts with dashes
+		if l.definingFrom {
+			var fullIdent strings.Builder
+			fullIdent.WriteString(lit)
+
+			// Keep consuming while we see valid identifier characters
+			for {
+				ch := l.s.Peek()
+				if !isValidIdentChar(ch) {
+					break
+				}
+				l.s.Next() // Consume the character
+				fullIdent.WriteRune(ch)
+			}
+			lit = fullIdent.String()
+		}
+
 		switch strings.ToUpper(lit) {
 		case "MATCH":
 			logDebug("Returning MATCH token")
@@ -199,6 +226,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		case "CONTAINS":
 			logDebug("Returning CONTAINS token")
 			return int(CONTAINS)
+		case "IN":
+			l.definingFrom = true
+			l.buf.tok = IN
+			return int(IN)
 		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)

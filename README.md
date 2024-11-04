@@ -9,40 +9,33 @@
 
 Cyphernetes turns this: 😣
 ```bash
-# Select all zero-scaled Deployments in all namespaces,
-# find all Ingresses routing to these deployments -
-# for each Ingress change it's ingress class to 'inactive':
+# Delete all pods that are not running
 
-kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
-[.metadata.namespace, .metadata.name, (.spec.selector | to_entries | map("\(.key)=\(.value)") | \
-join(","))] | @tsv' | while read -r ns dep selector; do kubectl get services -n "$ns" -o json | \
-jq -r --arg selector "$selector" '.items[] | select((.spec.selector | to_entries | \
-map("\(.key)=\(.value)") | join(",")) == $selector) | .metadata.name' | \
-while read -r svc; do kubectl get ingresses -n "$ns" -o json | jq -r --arg svc "$svc" '.items[] | \
-select(.spec.rules[].http.paths[].backend.service.name == $svc) | .metadata.name' | \
-xargs -I {} kubectl patch ingress {} -n "$ns" --type=json -p \
-'[{"op": "replace", "path": "/spec/ingressClassName", "value": "inactive"}]'; done; done
+kubectl get pods --all-namespaces --field-selector 'status.phase!=Running' \
+-o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' \
+--no-headers | xargs -L1 -I {} bash -c 'set -- {}; kubectl delete pod $2 -n $1'
 ```
 
 Into this: 🤩 
 ```graphql
 # Do the same thing!
 
-MATCH (d:Deployment)->(s:Service)->(i:Ingress)
-WHERE d.spec.replicas=0
-SET i.spec.ingressClassName="inactive";
+MATCH (p:Pod)
+WHERE p.status.phase != "Running"
+DELETE p;
 ```
 
 ## How?
 
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
-It is a mixture of ASCII-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
+Cypher is a mixture of ASCII-art, SQL and JSON and that lets us express graph operations in an efficeint way that is also fun and creative.
+Cyphernetes extends Cypher with Kubernetes-specific syntax and features. It allows you to query and mutate Kubernetes resources in a natural way, works out-of-the-box with your CRDs, supports multi-cluster queries, and more.
 
 There are multiple ways to run Cyphernetes queries:
 1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
-4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator which lets you define powerful Kubernetes workflows on-the-fly
+4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
 5. Using the Cyphernetes API in your own Go programs
 
 To learn more about how to use Cyphernetes, refer to these documents:
@@ -184,4 +177,5 @@ Cyphernetes is open-sourced under the Apache 2.0 license. See the [LICENSE](LICE
 ## Authors
 
 * _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
-* _Query engine enhancements, Bug fixes_ - [James Kim](https://github.com/jameskim0987)
+* _Enhancements, Bug fixes_ - [James Kim](https://github.com/jameskim0987)
+* _Enhancements, Bug fixes_ - [Naor Peled](https://github.com/naorpeled)

@@ -21,9 +21,11 @@ import (
 
 var (
 	executorInstance *QueryExecutor
-	once             sync.Once
+	contextExecutors map[string]*QueryExecutor
+	executorsLock    sync.RWMutex
 	openAPIDoc       *openapi_v3.Document
 	openAPIDocMutex  sync.RWMutex
+	once             sync.Once
 )
 
 // Make resourceSpecs accessible outside the package
@@ -53,8 +55,66 @@ func GetQueryExecutorInstance() *QueryExecutor {
 			return
 		}
 		executorInstance = executor
+		contextExecutors = make(map[string]*QueryExecutor)
 	})
 	return executorInstance
+}
+
+func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
+	executorsLock.RLock()
+	if executor, exists := contextExecutors[context]; exists {
+		executorsLock.RUnlock()
+		return executor, nil
+	}
+	executorsLock.RUnlock()
+
+	// Create new executor for this context
+	executorsLock.Lock()
+	defer executorsLock.Unlock()
+
+	// Double-check after acquiring write lock
+	if executor, exists := contextExecutors[context]; exists {
+		return executor, nil
+	}
+
+	// Create config for specific context
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{
+		CurrentContext: context,
+	}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	config, err := kubeConfig.ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config for context %s: %v", context, err)
+	}
+
+	// Create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating clientset for context %s: %v", context, err)
+	}
+
+	// Create the dynamic client
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error creating dynamic client for context %s: %v", context, err)
+	}
+
+	executor := &QueryExecutor{
+		Clientset:      clientset,
+		DynamicClient:  dynamicClient,
+		requestChannel: make(chan *apiRequest),
+		semaphore:      make(chan struct{}, 1),
+	}
+
+	go executor.processRequests()
+
+	if contextExecutors == nil {
+		contextExecutors = make(map[string]*QueryExecutor)
+	}
+	contextExecutors[context] = executor
+	return executor, nil
 }
 
 type QueryExecutor struct {
@@ -68,6 +128,7 @@ type apiRequest struct {
 	kind          string
 	fieldSelector string
 	labelSelector string
+	namespace     string
 	responseChan  chan *apiResponse
 }
 
@@ -132,18 +193,19 @@ func (q *QueryExecutor) GetDynamicClient() dynamic.Interface {
 func (q *QueryExecutor) processRequests() {
 	for request := range q.requestChannel {
 		q.semaphore <- struct{}{} // Acquire a token
-		list, err := q.fetchResources(request.kind, request.fieldSelector, request.labelSelector)
+		list, err := q.fetchResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
 		<-q.semaphore // Release the token
 		request.responseChan <- &apiResponse{list: &list, err: err}
 	}
 }
 
-func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string) (*unstructured.UnstructuredList, error) {
+func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (*unstructured.UnstructuredList, error) {
 	responseChan := make(chan *apiResponse)
 	q.requestChannel <- &apiRequest{
 		kind:          kind,
 		fieldSelector: fieldSelector,
 		labelSelector: labelSelector,
+		namespace:     namespace,
 		responseChan:  responseChan,
 	}
 
@@ -151,7 +213,7 @@ func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, label
 	return response.list, response.err
 }
 
-func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string) (unstructured.UnstructuredList, error) {
+func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string, namespace string) (unstructured.UnstructuredList, error) {
 	labelSelector = strings.ReplaceAll(labelSelector, "\"", "")
 	// Use discovery client to find the GVR for the given kind
 	gvr, err := FindGVR(q.Clientset, kind)
@@ -175,7 +237,7 @@ func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelS
 		return emptyList, err
 	}
 
-	list, err := q.DynamicClient.Resource(gvr).Namespace(Namespace).List(context.Background(), metav1.ListOptions{
+	list, err := q.DynamicClient.Resource(gvr).Namespace(namespace).List(context.Background(), metav1.ListOptions{
 		FieldSelector: fieldSelector,
 		LabelSelector: labelMap.String(),
 	})
