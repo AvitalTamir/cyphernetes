@@ -13,10 +13,10 @@ interface ResultsDisplayProps {
   result: string | null;
   error: string | null;
   darkTheme: boolean;
+  format: 'yaml' | 'json';
 }
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkTheme }) => {
-  const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkTheme, format }) => {
   const [formattedResult, setFormattedResult] = useState<string>('');
 
   useEffect(() => {
@@ -44,20 +44,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, darkThem
   return (
     <div className="results-display">
       <div className="left-panel-before"></div>
-      <div className="results-header">
-        <button onClick={() => setFormat('yaml')} className={format === 'yaml' ? 'active' : ''}>YAML</button>
-        <button onClick={() => setFormat('json')} className={format === 'json' ? 'active' : ''}>JSON</button>
-      </div>
       <div className="results-content">
-        {error ? (
-          <div className="error">{error}</div>
-        ) : (
-          <SyntaxHighlighter language={format} style={theme} customStyle={{fontSize: '14px'}} height={'100%'}>
-            {formattedResult}
-          </SyntaxHighlighter>
-        )}
+        <SyntaxHighlighter language={format} style={theme} customStyle={{fontSize: '14px'}} height={'100%'}>
+          {formattedResult}
+        </SyntaxHighlighter>
       </div>
-      <div className="left-panel-after"></div>
+      <div className="bottom-controls">
+        <div className="left-panel-after"></div>
+      </div>
     </div>
   );
 };
