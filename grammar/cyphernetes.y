@@ -42,6 +42,7 @@ func debugLog(v ...interface{}) {
     resourceProperties     *ResourceProperties
     nodeRelationshipList   *NodeRelationshipList
     nodeIds        []string
+    contexts              []string
 }
 
 %token <strVal> IDENT
@@ -53,6 +54,7 @@ func debugLog(v ...interface{}) {
 %token LPAREN RPAREN COLON MATCH WHERE SET DELETE CREATE RETURN EOF LBRACE RBRACE COMMA EQUALS AS
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 %token COUNT SUM NOT_EQUALS GREATER_THAN LESS_THAN GREATER_THAN_EQUALS LESS_THAN_EQUALS CONTAINS REGEX_COMPARE
+%token IN
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -78,6 +80,8 @@ func debugLog(v ...interface{}) {
 %type<nodeIds> NodeIds
 %type<returnItems> ReturnItems
 %type<returnItem> ReturnItem
+%type<contexts> Contexts
+%type<strVal> Context
 
 %%
 
@@ -85,26 +89,50 @@ Expression:
     MatchClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
     }
+    | IN Contexts MatchClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4}, Contexts: $2}
+    }
     | MatchClause SetClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | IN Contexts MatchClause SetClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4}, Contexts: $2}
     }
     | MatchClause SetClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2, $3}}
     }
+    | IN Contexts MatchClause SetClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4, $5}, Contexts: $2}
+    }
     | MatchClause DeleteClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | IN Contexts MatchClause DeleteClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4}, Contexts: $2}
     }
     | CreateClause EOF {
         result = &Expression{Clauses: []Clause{$1}}
     }
+    | IN Contexts CreateClause EOF {
+        result = &Expression{Clauses: []Clause{$3}, Contexts: $2}
+    }
     | CreateClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
+    }
+    | IN Contexts CreateClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4}, Contexts: $2}
     }
     | MatchClause CreateClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2}}
     }
+    | IN Contexts MatchClause CreateClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4}, Contexts: $2}
+    }
     | MatchClause CreateClause ReturnClause EOF {
         result = &Expression{Clauses: []Clause{$1, $2, $3}}
+    }
+    | IN Contexts MatchClause CreateClause ReturnClause EOF {
+        result = &Expression{Clauses: []Clause{$3, $4, $5}, Contexts: $2}
     }
 ;
 
@@ -348,4 +376,20 @@ Value:
         $$ = $1
     }
 ;
+
+Contexts:
+    Context {
+        $$ = []string{$1}
+    }
+    | Contexts COMMA Context {
+        $$ = append($1, $3)
+    }
+;
+
+Context:
+    IDENT {
+        $$ = $1
+    }
+;
+
 %%

@@ -45,6 +45,7 @@ type yySymType struct {
 	resourceProperties   *ResourceProperties
 	nodeRelationshipList *NodeRelationshipList
 	nodeIds              []string
+	contexts             []string
 }
 
 type yyXError struct {
@@ -52,7 +53,7 @@ type yyXError struct {
 }
 
 const (
-	yyDefault           = 57384
+	yyDefault           = 57385
 	yyEofCode           = 57344
 	AS                  = 57366
 	BOOLEAN             = 57349
@@ -67,6 +68,7 @@ const (
 	GREATER_THAN        = 57378
 	GREATER_THAN_EQUALS = 57380
 	IDENT               = 57346
+	IN                  = 57384
 	INT                 = 57348
 	JSONDATA            = 57351
 	JSONPATH            = 57347
@@ -95,73 +97,76 @@ const (
 	yyErrCode           = 57345
 
 	yyMaxDepth = 200
-	yyTabOfs   = -61
+	yyTabOfs   = -72
 )
 
 var (
 	yyPrec = map[int]int{}
 
 	yyXLAT = map[int]int{
-		57361: 0,  // EOF (43x)
-		57364: 1,  // COMMA (36x)
-		57360: 2,  // RETURN (29x)
-		57359: 3,  // CREATE (25x)
-		57358: 4,  // DELETE (24x)
-		57357: 5,  // SET (24x)
-		57352: 6,  // LPAREN (14x)
-		57351: 7,  // JSONDATA (10x)
-		57363: 8,  // RBRACE (10x)
-		57344: 9,  // $end (9x)
-		57349: 10, // BOOLEAN (9x)
-		57346: 11, // IDENT (9x)
+		57361: 0,  // EOF (51x)
+		57364: 1,  // COMMA (40x)
+		57360: 2,  // RETURN (33x)
+		57359: 3,  // CREATE (30x)
+		57358: 4,  // DELETE (25x)
+		57357: 5,  // SET (25x)
+		57344: 6,  // $end (17x)
+		57352: 7,  // LPAREN (14x)
+		57346: 8,  // IDENT (11x)
+		57351: 9,  // JSONDATA (10x)
+		57363: 10, // RBRACE (10x)
+		57349: 11, // BOOLEAN (9x)
 		57348: 12, // INT (9x)
 		57347: 13, // JSONPATH (9x)
 		57350: 14, // STRING (9x)
-		57403: 15, // Value (9x)
-		57356: 16, // WHERE (8x)
-		57394: 17, // NodePattern (6x)
-		57374: 18, // REL_ENDPROPS_NONE (6x)
-		57373: 19, // REL_ENDPROPS_RIGHT (6x)
-		57353: 20, // RPAREN (6x)
-		57395: 21, // NodeRelationshipList (5x)
-		57371: 22, // REL_BEGINPROPS_LEFT (4x)
-		57372: 23, // REL_BEGINPROPS_NONE (4x)
-		57369: 24, // REL_NOPROPS_BOTH (4x)
-		57368: 25, // REL_NOPROPS_LEFT (4x)
-		57370: 26, // REL_NOPROPS_NONE (4x)
-		57367: 27, // REL_NOPROPS_RIGHT (4x)
-		57399: 28, // ReturnClause (4x)
-		57366: 29, // AS (3x)
-		57354: 30, // COLON (3x)
-		57390: 31, // KeyValuePair (3x)
-		57362: 32, // LBRACE (3x)
-		57398: 33, // ResourceProperties (3x)
-		57375: 34, // COUNT (2x)
-		57385: 35, // CreateClause (2x)
-		57388: 36, // JSONPathValue (2x)
-		57391: 37, // KeyValuePairs (2x)
-		57397: 38, // Relationship (2x)
-		57400: 39, // ReturnItem (2x)
-		57376: 40, // SUM (2x)
-		57382: 41, // CONTAINS (1x)
-		57386: 42, // DeleteClause (1x)
-		57365: 43, // EQUALS (1x)
-		57387: 44, // Expression (1x)
-		57378: 45, // GREATER_THAN (1x)
-		57380: 46, // GREATER_THAN_EQUALS (1x)
-		57389: 47, // JSONPathValueList (1x)
-		57379: 48, // LESS_THAN (1x)
-		57381: 49, // LESS_THAN_EQUALS (1x)
-		57355: 50, // MATCH (1x)
-		57392: 51, // MatchClause (1x)
-		57393: 52, // NodeIds (1x)
-		57377: 53, // NOT_EQUALS (1x)
-		57396: 54, // Properties (1x)
-		57383: 55, // REGEX_COMPARE (1x)
-		57401: 56, // ReturnItems (1x)
-		57402: 57, // SetClause (1x)
-		57384: 58, // $default (0x)
-		57345: 59, // error (0x)
+		57406: 15, // Value (9x)
+		57402: 16, // ReturnClause (8x)
+		57356: 17, // WHERE (8x)
+		57397: 18, // NodePattern (6x)
+		57374: 19, // REL_ENDPROPS_NONE (6x)
+		57373: 20, // REL_ENDPROPS_RIGHT (6x)
+		57353: 21, // RPAREN (6x)
+		57355: 22, // MATCH (5x)
+		57398: 23, // NodeRelationshipList (5x)
+		57388: 24, // CreateClause (4x)
+		57371: 25, // REL_BEGINPROPS_LEFT (4x)
+		57372: 26, // REL_BEGINPROPS_NONE (4x)
+		57369: 27, // REL_NOPROPS_BOTH (4x)
+		57368: 28, // REL_NOPROPS_LEFT (4x)
+		57370: 29, // REL_NOPROPS_NONE (4x)
+		57367: 30, // REL_NOPROPS_RIGHT (4x)
+		57366: 31, // AS (3x)
+		57354: 32, // COLON (3x)
+		57393: 33, // KeyValuePair (3x)
+		57362: 34, // LBRACE (3x)
+		57401: 35, // ResourceProperties (3x)
+		57386: 36, // Context (2x)
+		57375: 37, // COUNT (2x)
+		57389: 38, // DeleteClause (2x)
+		57391: 39, // JSONPathValue (2x)
+		57394: 40, // KeyValuePairs (2x)
+		57395: 41, // MatchClause (2x)
+		57400: 42, // Relationship (2x)
+		57403: 43, // ReturnItem (2x)
+		57405: 44, // SetClause (2x)
+		57376: 45, // SUM (2x)
+		57382: 46, // CONTAINS (1x)
+		57387: 47, // Contexts (1x)
+		57365: 48, // EQUALS (1x)
+		57390: 49, // Expression (1x)
+		57378: 50, // GREATER_THAN (1x)
+		57380: 51, // GREATER_THAN_EQUALS (1x)
+		57384: 52, // IN (1x)
+		57392: 53, // JSONPathValueList (1x)
+		57379: 54, // LESS_THAN (1x)
+		57381: 55, // LESS_THAN_EQUALS (1x)
+		57396: 56, // NodeIds (1x)
+		57377: 57, // NOT_EQUALS (1x)
+		57399: 58, // Properties (1x)
+		57383: 59, // REGEX_COMPARE (1x)
+		57404: 60, // ReturnItems (1x)
+		57385: 61, // $default (0x)
+		57345: 62, // error (0x)
 	}
 
 	yySymNames = []string{
@@ -171,58 +176,61 @@ var (
 		"CREATE",
 		"DELETE",
 		"SET",
+		"$end",
 		"LPAREN",
+		"IDENT",
 		"JSONDATA",
 		"RBRACE",
-		"$end",
 		"BOOLEAN",
-		"IDENT",
 		"INT",
 		"JSONPATH",
 		"STRING",
 		"Value",
+		"ReturnClause",
 		"WHERE",
 		"NodePattern",
 		"REL_ENDPROPS_NONE",
 		"REL_ENDPROPS_RIGHT",
 		"RPAREN",
+		"MATCH",
 		"NodeRelationshipList",
+		"CreateClause",
 		"REL_BEGINPROPS_LEFT",
 		"REL_BEGINPROPS_NONE",
 		"REL_NOPROPS_BOTH",
 		"REL_NOPROPS_LEFT",
 		"REL_NOPROPS_NONE",
 		"REL_NOPROPS_RIGHT",
-		"ReturnClause",
 		"AS",
 		"COLON",
 		"KeyValuePair",
 		"LBRACE",
 		"ResourceProperties",
+		"Context",
 		"COUNT",
-		"CreateClause",
+		"DeleteClause",
 		"JSONPathValue",
 		"KeyValuePairs",
+		"MatchClause",
 		"Relationship",
 		"ReturnItem",
+		"SetClause",
 		"SUM",
 		"CONTAINS",
-		"DeleteClause",
+		"Contexts",
 		"EQUALS",
 		"Expression",
 		"GREATER_THAN",
 		"GREATER_THAN_EQUALS",
+		"IN",
 		"JSONPathValueList",
 		"LESS_THAN",
 		"LESS_THAN_EQUALS",
-		"MATCH",
-		"MatchClause",
 		"NodeIds",
 		"NOT_EQUALS",
 		"Properties",
 		"REGEX_COMPARE",
 		"ReturnItems",
-		"SetClause",
 		"$default",
 		"error",
 	}
@@ -231,211 +239,249 @@ var (
 
 	yyReductions = map[int]struct{ xsym, components int }{
 		0:  {0, 1},
-		1:  {44, 3},
-		2:  {44, 3},
-		3:  {44, 4},
-		4:  {44, 3},
-		5:  {44, 2},
-		6:  {44, 3},
-		7:  {44, 3},
-		8:  {44, 4},
-		9:  {51, 2},
-		10: {51, 4},
-		11: {35, 2},
-		12: {57, 2},
-		13: {42, 2},
-		14: {52, 1},
-		15: {52, 3},
-		16: {37, 1},
-		17: {37, 3},
-		18: {31, 3},
-		19: {31, 3},
-		20: {31, 3},
-		21: {31, 3},
-		22: {31, 3},
-		23: {31, 3},
-		24: {31, 3},
-		25: {31, 3},
-		26: {21, 1},
-		27: {21, 3},
-		28: {21, 5},
-		29: {21, 5},
-		30: {21, 3},
-		31: {17, 3},
-		32: {17, 3},
-		33: {28, 2},
-		34: {56, 1},
-		35: {56, 3},
-		36: {39, 1},
-		37: {39, 3},
-		38: {39, 4},
-		39: {39, 4},
-		40: {39, 6},
-		41: {39, 6},
-		42: {38, 1},
-		43: {38, 1},
-		44: {38, 1},
-		45: {38, 1},
-		46: {38, 3},
-		47: {38, 3},
-		48: {38, 3},
-		49: {38, 3},
-		50: {33, 3},
-		51: {33, 4},
-		52: {33, 5},
-		53: {54, 3},
-		54: {47, 1},
-		55: {47, 3},
-		56: {36, 3},
-		57: {15, 1},
-		58: {15, 1},
-		59: {15, 1},
-		60: {15, 1},
+		1:  {49, 3},
+		2:  {49, 5},
+		3:  {49, 3},
+		4:  {49, 5},
+		5:  {49, 4},
+		6:  {49, 6},
+		7:  {49, 3},
+		8:  {49, 5},
+		9:  {49, 2},
+		10: {49, 4},
+		11: {49, 3},
+		12: {49, 5},
+		13: {49, 3},
+		14: {49, 5},
+		15: {49, 4},
+		16: {49, 6},
+		17: {41, 2},
+		18: {41, 4},
+		19: {24, 2},
+		20: {44, 2},
+		21: {38, 2},
+		22: {56, 1},
+		23: {56, 3},
+		24: {40, 1},
+		25: {40, 3},
+		26: {33, 3},
+		27: {33, 3},
+		28: {33, 3},
+		29: {33, 3},
+		30: {33, 3},
+		31: {33, 3},
+		32: {33, 3},
+		33: {33, 3},
+		34: {23, 1},
+		35: {23, 3},
+		36: {23, 5},
+		37: {23, 5},
+		38: {23, 3},
+		39: {18, 3},
+		40: {18, 3},
+		41: {16, 2},
+		42: {60, 1},
+		43: {60, 3},
+		44: {43, 1},
+		45: {43, 3},
+		46: {43, 4},
+		47: {43, 4},
+		48: {43, 6},
+		49: {43, 6},
+		50: {42, 1},
+		51: {42, 1},
+		52: {42, 1},
+		53: {42, 1},
+		54: {42, 3},
+		55: {42, 3},
+		56: {42, 3},
+		57: {42, 3},
+		58: {35, 3},
+		59: {35, 4},
+		60: {35, 5},
+		61: {58, 3},
+		62: {53, 1},
+		63: {53, 3},
+		64: {39, 3},
+		65: {15, 1},
+		66: {15, 1},
+		67: {15, 1},
+		68: {15, 1},
+		69: {47, 1},
+		70: {47, 3},
+		71: {36, 1},
 	}
 
 	yyXErrors = map[yyXError]string{}
 
-	yyParseTab = [116][]uint16{
+	yyParseTab = [139][]uint16{
 		// 0
-		{3: 66, 35: 64, 44: 62, 50: 65, 63},
-		{9: 61},
-		{2: 137, 66, 163, 162, 28: 158, 35: 161, 42: 160, 57: 159},
-		{135, 2: 137, 28: 136},
-		{6: 69, 17: 68, 21: 112},
+		{3: 78, 22: 77, 24: 76, 41: 74, 49: 73, 52: 75},
+		{6: 72},
+		{2: 149, 78, 185, 184, 16: 199, 24: 202, 38: 201, 44: 200},
+		{8: 172, 36: 171, 47: 170},
+		{147, 2: 149, 16: 148},
 		// 5
-		{6: 69, 17: 68, 21: 67},
-		{50, 2: 50},
-		{35, 92, 35, 35, 35, 35, 16: 35, 22: 98, 97, 96, 94, 93, 95, 38: 91},
-		{11: 71, 33: 70},
-		{20: 90},
+		{7: 81, 18: 80, 23: 124},
+		{7: 81, 18: 80, 23: 79},
+		{53, 2: 53},
+		{38, 104, 38, 38, 38, 38, 17: 38, 25: 110, 109, 108, 106, 105, 107, 42: 103},
+		{8: 83, 35: 82},
 		// 10
-		{20: 72, 30: 73},
-		{29, 29, 29, 29, 29, 29, 16: 29, 22: 29, 29, 29, 29, 29, 29},
-		{11: 74},
-		{18: 11, 11, 11, 32: 76, 54: 75},
-		{18: 10, 10, 10},
+		{21: 102},
+		{21: 84, 32: 85},
+		{32, 32, 32, 32, 32, 32, 17: 32, 25: 32, 32, 32, 32, 32, 32},
+		{8: 86},
+		{19: 14, 14, 14, 34: 88, 58: 87},
 		// 15
-		{7: 77, 13: 80, 36: 79, 47: 78},
-		{18: 9, 9, 9},
-		{1: 88, 8: 87},
-		{1: 7, 8: 7},
-		{30: 81},
+		{19: 13, 13, 13},
+		{9: 89, 13: 92, 39: 91, 53: 90},
+		{19: 12, 12, 12},
+		{1: 100, 10: 99},
+		{1: 10, 10: 10},
 		// 20
-		{7: 86, 10: 85, 12: 84, 14: 83, 82},
-		{1: 5, 8: 5},
-		{4, 4, 4, 4, 4, 4, 8: 4},
-		{3, 3, 3, 3, 3, 3, 8: 3},
-		{2, 2, 2, 2, 2, 2, 8: 2},
+		{32: 93},
+		{9: 98, 11: 97, 96, 14: 95, 94},
+		{1: 8, 10: 8},
+		{7, 7, 7, 7, 7, 7, 10: 7},
+		{6, 6, 6, 6, 6, 6, 10: 6},
 		// 25
-		{1, 1, 1, 1, 1, 1, 8: 1},
-		{18: 8, 8, 8},
-		{13: 80, 36: 89},
-		{1: 6, 8: 6},
-		{30, 30, 30, 30, 30, 30, 16: 30, 22: 30, 30, 30, 30, 30, 30},
+		{5, 5, 5, 5, 5, 5, 10: 5},
+		{4, 4, 4, 4, 4, 4, 10: 4},
+		{19: 11, 11, 11},
+		{13: 92, 39: 101},
+		{1: 9, 10: 9},
 		// 30
-		{6: 69, 17: 107},
-		{6: 69, 17: 68, 21: 106},
-		{6: 19},
-		{6: 18},
-		{6: 17},
+		{33, 33, 33, 33, 33, 33, 17: 33, 25: 33, 33, 33, 33, 33, 33},
+		{7: 81, 18: 119},
+		{7: 81, 18: 80, 23: 118},
+		{7: 22},
+		{7: 21},
 		// 35
-		{6: 16},
-		{11: 100, 33: 103},
-		{11: 100, 33: 99},
-		{18: 101, 102},
-		{30: 73},
+		{7: 20},
+		{7: 19},
+		{8: 112, 35: 115},
+		{8: 112, 35: 111},
+		{19: 113, 114},
 		// 40
-		{6: 14},
-		{6: 12},
-		{18: 104, 105},
-		{6: 15},
-		{6: 13},
+		{32: 85},
+		{7: 17},
+		{7: 15},
+		{19: 116, 117},
+		{7: 18},
 		// 45
-		{31, 2: 31, 31, 31, 31, 16: 31},
-		{34, 108, 34, 34, 34, 34, 16: 34, 22: 98, 97, 96, 94, 93, 95, 38: 109},
-		{6: 69, 17: 68, 21: 111},
-		{6: 69, 17: 68, 21: 110},
-		{32, 2: 32, 32, 32, 32, 16: 32},
+		{7: 16},
+		{34, 2: 34, 34, 34, 34, 17: 34},
+		{37, 120, 37, 37, 37, 37, 17: 37, 25: 110, 109, 108, 106, 105, 107, 42: 121},
+		{7: 81, 18: 80, 23: 123},
+		{7: 81, 18: 80, 23: 122},
 		// 50
-		{33, 2: 33, 33, 33, 33, 16: 33},
-		{2: 52, 52, 52, 52, 16: 113},
-		{13: 116, 31: 115, 37: 114},
-		{1: 133, 51, 51, 51, 51},
-		{45, 45, 45, 45, 45, 45},
+		{35, 2: 35, 35, 35, 35, 17: 35},
+		{36, 2: 36, 36, 36, 36, 17: 36},
+		{2: 55, 55, 55, 55, 17: 125},
+		{13: 128, 33: 127, 40: 126},
+		{1: 145, 54, 54, 54, 54},
 		// 55
-		{41: 123, 43: 117, 45: 119, 121, 48: 120, 122, 53: 118, 55: 124},
-		{7: 86, 10: 85, 12: 84, 14: 83, 132},
-		{7: 86, 10: 85, 12: 84, 14: 83, 131},
-		{7: 86, 10: 85, 12: 84, 14: 83, 130},
-		{7: 86, 10: 85, 12: 84, 14: 83, 129},
+		{48, 48, 48, 48, 48, 48},
+		{46: 135, 48: 129, 50: 131, 133, 54: 132, 134, 57: 130, 59: 136},
+		{9: 98, 11: 97, 96, 14: 95, 144},
+		{9: 98, 11: 97, 96, 14: 95, 143},
+		{9: 98, 11: 97, 96, 14: 95, 142},
 		// 60
-		{7: 86, 10: 85, 12: 84, 14: 83, 128},
-		{7: 86, 10: 85, 12: 84, 14: 83, 127},
-		{7: 86, 10: 85, 12: 84, 14: 83, 126},
-		{7: 86, 10: 85, 12: 84, 14: 83, 125},
-		{36, 36, 36, 36, 36, 36},
+		{9: 98, 11: 97, 96, 14: 95, 141},
+		{9: 98, 11: 97, 96, 14: 95, 140},
+		{9: 98, 11: 97, 96, 14: 95, 139},
+		{9: 98, 11: 97, 96, 14: 95, 138},
+		{9: 98, 11: 97, 96, 14: 95, 137},
 		// 65
-		{37, 37, 37, 37, 37, 37},
-		{38, 38, 38, 38, 38, 38},
 		{39, 39, 39, 39, 39, 39},
 		{40, 40, 40, 40, 40, 40},
 		{41, 41, 41, 41, 41, 41},
-		// 70
 		{42, 42, 42, 42, 42, 42},
 		{43, 43, 43, 43, 43, 43},
-		{13: 116, 31: 134},
+		// 70
 		{44, 44, 44, 44, 44, 44},
-		{9: 56},
+		{45, 45, 45, 45, 45, 45},
+		{46, 46, 46, 46, 46, 46},
+		{13: 128, 33: 146},
+		{47, 47, 47, 47, 47, 47},
 		// 75
-		{157},
-		{13: 140, 34: 141, 39: 139, 142, 56: 138},
-		{28, 155},
-		{27, 27},
-		{25, 25, 29: 153},
+		{6: 63},
+		{169},
+		{13: 152, 37: 153, 43: 151, 45: 154, 60: 150},
+		{31, 167},
+		{30, 30},
 		// 80
-		{32: 148},
-		{32: 143},
-		{13: 144},
-		{8: 145},
-		{22, 22, 29: 146},
+		{28, 28, 31: 165},
+		{34: 160},
+		{34: 155},
+		{13: 156},
+		{10: 157},
 		// 85
-		{11: 147},
-		{20, 20},
-		{13: 149},
-		{8: 150},
-		{23, 23, 29: 151},
+		{25, 25, 31: 158},
+		{8: 159},
+		{23, 23},
+		{13: 161},
+		{10: 162},
 		// 90
-		{11: 152},
-		{21, 21},
-		{11: 154},
+		{26, 26, 31: 163},
+		{8: 164},
 		{24, 24},
-		{13: 140, 34: 141, 39: 156, 142},
+		{8: 166},
+		{27, 27},
 		// 95
-		{26, 26},
-		{9: 55},
-		{176},
-		{173, 2: 137, 28: 174},
-		{172},
+		{13: 152, 37: 153, 43: 168, 45: 154},
+		{29, 29},
+		{6: 61},
+		{1: 175, 3: 78, 22: 77, 24: 174, 41: 173},
+		{1: 3, 3: 3, 22: 3},
 		// 100
-		{169, 2: 137, 28: 170},
-		{13: 116, 31: 115, 37: 168},
-		{11: 165, 52: 164},
-		{48, 166},
-		{47, 47},
+		{1: 1, 3: 1, 22: 1},
+		{2: 149, 78, 185, 184, 16: 180, 24: 183, 38: 182, 44: 181},
+		{177, 2: 149, 16: 178},
+		{8: 172, 36: 176},
+		{1: 2, 3: 2, 22: 2},
 		// 105
-		{11: 167},
-		{46, 46},
-		{49, 133, 49},
-		{9: 54},
-		{171},
+		{6: 62},
+		{179},
+		{6: 60},
+		{198},
+		{195, 2: 149, 16: 196},
 		// 110
-		{9: 53},
-		{9: 57},
-		{9: 59},
-		{175},
-		{9: 58},
+		{194},
+		{191, 2: 149, 16: 192},
+		{13: 128, 33: 127, 40: 190},
+		{8: 187, 56: 186},
+		{51, 188},
 		// 115
-		{9: 60},
+		{50, 50},
+		{8: 189},
+		{49, 49},
+		{52, 145, 52},
+		{6: 58},
+		// 120
+		{193},
+		{6: 56},
+		{6: 64},
+		{6: 68},
+		{197},
+		// 125
+		{6: 66},
+		{6: 70},
+		{210},
+		{207, 2: 149, 16: 208},
+		{206},
+		// 130
+		{203, 2: 149, 16: 204},
+		{6: 59},
+		{205},
+		{6: 57},
+		{6: 65},
+		// 135
+		{6: 69},
+		{209},
+		{6: 67},
+		{6: 71},
 	}
 )
 
@@ -476,7 +522,7 @@ func yylex1(yylex yyLexer, lval *yySymType) (n int) {
 }
 
 func yyParse(yylex yyLexer) int {
-	const yyError = 59
+	const yyError = 62
 
 	yyEx, _ := yylex.(yyLexerEx)
 	var yyn int
@@ -670,108 +716,140 @@ yynewstate:
 		}
 	case 2:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].setClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].returnClause}, Contexts: yyS[yypt-3].contexts}
 		}
 	case 3:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].setClause, yyS[yypt-1].returnClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].setClause}}
 		}
 	case 4:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].deleteClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].setClause}, Contexts: yyS[yypt-3].contexts}
 		}
 	case 5:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-1].createClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].setClause, yyS[yypt-1].returnClause}}
 		}
 	case 6:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-2].createClause, yyS[yypt-1].returnClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].setClause, yyS[yypt-1].returnClause}, Contexts: yyS[yypt-4].contexts}
 		}
 	case 7:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].createClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].deleteClause}}
 		}
 	case 8:
 		{
-			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].createClause, yyS[yypt-1].returnClause}}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].deleteClause}, Contexts: yyS[yypt-3].contexts}
 		}
 	case 9:
 		{
-			yyVAL.matchClause = &MatchClause{Nodes: yyS[yypt-0].nodeRelationshipList.Nodes, Relationships: yyS[yypt-0].nodeRelationshipList.Relationships, ExtraFilters: nil}
+			result = &Expression{Clauses: []Clause{yyS[yypt-1].createClause}}
 		}
 	case 10:
 		{
-			yyVAL.matchClause = &MatchClause{Nodes: yyS[yypt-2].nodeRelationshipList.Nodes, Relationships: yyS[yypt-2].nodeRelationshipList.Relationships, ExtraFilters: yyS[yypt-0].keyValuePairs}
+			result = &Expression{Clauses: []Clause{yyS[yypt-1].createClause}, Contexts: yyS[yypt-2].contexts}
 		}
 	case 11:
 		{
-			yyVAL.createClause = &CreateClause{Nodes: yyS[yypt-0].nodeRelationshipList.Nodes, Relationships: yyS[yypt-0].nodeRelationshipList.Relationships}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].createClause, yyS[yypt-1].returnClause}}
 		}
 	case 12:
 		{
-			yyVAL.setClause = &SetClause{KeyValuePairs: yyS[yypt-0].keyValuePairs}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].createClause, yyS[yypt-1].returnClause}, Contexts: yyS[yypt-3].contexts}
 		}
 	case 13:
 		{
-			yyVAL.deleteClause = &DeleteClause{NodeIds: yyS[yypt-0].nodeIds}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].createClause}}
 		}
 	case 14:
 		{
-			yyVAL.nodeIds = []string{yyS[yypt-0].strVal}
+			result = &Expression{Clauses: []Clause{yyS[yypt-2].matchClause, yyS[yypt-1].createClause}, Contexts: yyS[yypt-3].contexts}
 		}
 	case 15:
 		{
-			yyVAL.nodeIds = append(yyS[yypt-2].nodeIds, yyS[yypt-0].strVal)
+			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].createClause, yyS[yypt-1].returnClause}}
 		}
 	case 16:
 		{
-			yyVAL.keyValuePairs = []*KeyValuePair{yyS[yypt-0].keyValuePair} // Start with one Property element
+			result = &Expression{Clauses: []Clause{yyS[yypt-3].matchClause, yyS[yypt-2].createClause, yyS[yypt-1].returnClause}, Contexts: yyS[yypt-4].contexts}
 		}
 	case 17:
 		{
-			yyVAL.keyValuePairs = append(yyS[yypt-2].keyValuePairs, yyS[yypt-0].keyValuePair) // $1 and $3 are the left and right operands of COMMA
+			yyVAL.matchClause = &MatchClause{Nodes: yyS[yypt-0].nodeRelationshipList.Nodes, Relationships: yyS[yypt-0].nodeRelationshipList.Relationships, ExtraFilters: nil}
 		}
 	case 18:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "EQUALS"} // ==
+			yyVAL.matchClause = &MatchClause{Nodes: yyS[yypt-2].nodeRelationshipList.Nodes, Relationships: yyS[yypt-2].nodeRelationshipList.Relationships, ExtraFilters: yyS[yypt-0].keyValuePairs}
 		}
 	case 19:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "NOT_EQUALS"} // !=
+			yyVAL.createClause = &CreateClause{Nodes: yyS[yypt-0].nodeRelationshipList.Nodes, Relationships: yyS[yypt-0].nodeRelationshipList.Relationships}
 		}
 	case 20:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "GREATER_THAN"} // >
+			yyVAL.setClause = &SetClause{KeyValuePairs: yyS[yypt-0].keyValuePairs}
 		}
 	case 21:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "LESS_THAN"} // <
+			yyVAL.deleteClause = &DeleteClause{NodeIds: yyS[yypt-0].nodeIds}
 		}
 	case 22:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "GREATER_THAN_EQUALS"} // >=
+			yyVAL.nodeIds = []string{yyS[yypt-0].strVal}
 		}
 	case 23:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "LESS_THAN_EQUALS"} // <=
+			yyVAL.nodeIds = append(yyS[yypt-2].nodeIds, yyS[yypt-0].strVal)
 		}
 	case 24:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "CONTAINS"} // CONTAINS
+			yyVAL.keyValuePairs = []*KeyValuePair{yyS[yypt-0].keyValuePair} // Start with one Property element
 		}
 	case 25:
 		{
-			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "REGEX_COMPARE"} // =~
+			yyVAL.keyValuePairs = append(yyS[yypt-2].keyValuePairs, yyS[yypt-0].keyValuePair) // $1 and $3 are the left and right operands of COMMA
 		}
 	case 26:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "EQUALS"} // ==
+		}
+	case 27:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "NOT_EQUALS"} // !=
+		}
+	case 28:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "GREATER_THAN"} // >
+		}
+	case 29:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "LESS_THAN"} // <
+		}
+	case 30:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "GREATER_THAN_EQUALS"} // >=
+		}
+	case 31:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "LESS_THAN_EQUALS"} // <=
+		}
+	case 32:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "CONTAINS"} // CONTAINS
+		}
+	case 33:
+		{
+			yyVAL.keyValuePair = &KeyValuePair{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value, Operator: "REGEX_COMPARE"} // =~
+		}
+	case 34:
 		{
 			yyVAL.nodeRelationshipList = &NodeRelationshipList{
 				Nodes:         []*NodePattern{yyS[yypt-0].nodePattern},
 				Relationships: []*Relationship{},
 			}
 		}
-	case 27:
+	case 35:
 		{
 			yyS[yypt-1].relationship.LeftNode = yyS[yypt-2].nodePattern
 			yyS[yypt-1].relationship.RightNode = yyS[yypt-0].nodePattern
@@ -780,7 +858,7 @@ yynewstate:
 				Relationships: []*Relationship{yyS[yypt-1].relationship},
 			}
 		}
-	case 28:
+	case 36:
 		{
 			yyS[yypt-3].relationship.LeftNode = yyS[yypt-4].nodePattern
 			yyS[yypt-3].relationship.RightNode = yyS[yypt-2].nodePattern
@@ -789,7 +867,7 @@ yynewstate:
 				Relationships: append([]*Relationship{yyS[yypt-3].relationship}, yyS[yypt-0].nodeRelationshipList.Relationships...),
 			}
 		}
-	case 29:
+	case 37:
 		{
 			yyS[yypt-3].relationship.LeftNode = yyS[yypt-4].nodePattern
 			yyS[yypt-3].relationship.RightNode = yyS[yypt-2].nodePattern
@@ -800,122 +878,122 @@ yynewstate:
 				Relationships: append([]*Relationship{yyS[yypt-3].relationship, yyS[yypt-1].relationship}, yyS[yypt-0].nodeRelationshipList.Relationships...),
 			}
 		}
-	case 30:
+	case 38:
 		{
 			yyVAL.nodeRelationshipList = &NodeRelationshipList{
 				Nodes:         append([]*NodePattern{yyS[yypt-2].nodePattern}, yyS[yypt-0].nodeRelationshipList.Nodes...),
 				Relationships: yyS[yypt-0].nodeRelationshipList.Relationships,
 			}
 		}
-	case 31:
+	case 39:
 		{
 			yyVAL.nodePattern = &NodePattern{ResourceProperties: yyS[yypt-1].resourceProperties}
 		}
-	case 32:
+	case 40:
 		{
 			yyVAL.nodePattern = &NodePattern{&ResourceProperties{Name: yyS[yypt-1].strVal, Kind: "", Properties: nil, JsonData: ""}}
 		}
-	case 33:
+	case 41:
 		{
 			yyVAL.returnClause = &ReturnClause{Items: yyS[yypt-0].returnItems}
 		}
-	case 34:
+	case 42:
 		{
 			yyVAL.returnItems = []*ReturnItem{yyS[yypt-0].returnItem}
 		}
-	case 35:
+	case 43:
 		{
 			yyVAL.returnItems = append(yyS[yypt-2].returnItems, yyS[yypt-0].returnItem)
 		}
-	case 36:
+	case 44:
 		{
 			yyVAL.returnItem = &ReturnItem{JsonPath: yyS[yypt-0].strVal}
 		}
-	case 37:
+	case 45:
 		{
 			yyVAL.returnItem = &ReturnItem{JsonPath: yyS[yypt-2].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 38:
+	case 46:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "COUNT", JsonPath: yyS[yypt-1].strVal}
 		}
-	case 39:
+	case 47:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "SUM", JsonPath: yyS[yypt-1].strVal}
 		}
-	case 40:
+	case 48:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "COUNT", JsonPath: yyS[yypt-3].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 41:
+	case 49:
 		{
 			yyVAL.returnItem = &ReturnItem{Aggregate: "SUM", JsonPath: yyS[yypt-3].strVal, Alias: yyS[yypt-0].strVal}
 		}
-	case 42:
+	case 50:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: None, LeftNode: nil, RightNode: nil}
 		}
-	case 43:
+	case 51:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Left, LeftNode: nil, RightNode: nil}
 		}
-	case 44:
+	case 52:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Right, LeftNode: nil, RightNode: nil}
 		}
-	case 45:
+	case 53:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: nil, Direction: Both, LeftNode: nil, RightNode: nil}
 		}
-	case 46:
+	case 54:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: None, LeftNode: nil, RightNode: nil}
 		}
-	case 47:
+	case 55:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Left, LeftNode: nil, RightNode: nil}
 		}
-	case 48:
+	case 56:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Right, LeftNode: nil, RightNode: nil}
 		}
-	case 49:
+	case 57:
 		{
 			yyVAL.relationship = &Relationship{ResourceProperties: yyS[yypt-1].resourceProperties, Direction: Both, LeftNode: nil, RightNode: nil}
 		}
-	case 50:
+	case 58:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-2].strVal, Kind: yyS[yypt-0].strVal, Properties: nil, JsonData: ""}
 		}
-	case 51:
+	case 59:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-3].strVal, Kind: yyS[yypt-1].strVal, Properties: yyS[yypt-0].properties, JsonData: ""}
 		}
-	case 52:
+	case 60:
 		{
 			yyVAL.resourceProperties = &ResourceProperties{Name: yyS[yypt-4].strVal, Kind: yyS[yypt-2].strVal, Properties: nil, JsonData: yyS[yypt-0].strVal}
 		}
-	case 53:
+	case 61:
 		{
 			yyVAL.properties = &Properties{PropertyList: yyS[yypt-1].jsonPathValueList}
 		}
-	case 54:
+	case 62:
 		{
 			yyVAL.jsonPathValueList = []*Property{yyS[yypt-0].jsonPathValue} // Start with one Property element
 		}
-	case 55:
+	case 63:
 		{
 			yyVAL.jsonPathValueList = append(yyS[yypt-2].jsonPathValueList, yyS[yypt-0].jsonPathValue) // $1 and $3 are the left and right operands of COMMA
 		}
-	case 56:
+	case 64:
 		{
 			yyVAL.jsonPathValue = &Property{Key: yyS[yypt-2].strVal, Value: yyS[yypt-0].value}
 		}
-	case 57:
+	case 65:
 		{
 			yyVAL.value = strings.Trim(yyS[yypt-0].strVal, "\"")
 		}
-	case 58:
+	case 66:
 		{
 			// Parse the int from the string
 			i, err := strconv.Atoi(yyS[yypt-0].strVal)
@@ -925,14 +1003,26 @@ yynewstate:
 			}
 			yyVAL.value = i
 		}
-	case 59:
+	case 67:
 		{
 			// Parse the boolean from the string
 			yyVAL.value = strings.ToUpper(yyS[yypt-0].strVal) == "TRUE"
 		}
-	case 60:
+	case 68:
 		{
 			yyVAL.value = yyS[yypt-0].strVal
+		}
+	case 69:
+		{
+			yyVAL.contexts = []string{yyS[yypt-0].strVal}
+		}
+	case 70:
+		{
+			yyVAL.contexts = append(yyS[yypt-2].contexts, yyS[yypt-0].strVal)
+		}
+	case 71:
+		{
+			yyVAL.strVal = yyS[yypt-0].strVal
 		}
 
 	}

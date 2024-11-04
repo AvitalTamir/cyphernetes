@@ -27,6 +27,7 @@ type Lexer struct {
 	definingWhere     bool
 	definingAggregate bool
 	insideReturnItem  bool
+	definingFrom      bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -199,6 +200,10 @@ func (l *Lexer) Lex(lval *yySymType) int {
 		case "CONTAINS":
 			logDebug("Returning CONTAINS token")
 			return int(CONTAINS)
+		case "IN":
+			l.definingFrom = true
+			l.buf.tok = IN
+			return int(IN)
 		default:
 			lval.strVal = lit
 			logDebug("Returning IDENT token with value:", lval.strVal)

@@ -13,7 +13,8 @@ var AllNamespaces bool
 var CleanOutput bool
 
 type Expression struct {
-	Clauses []Clause
+	Clauses  []Clause
+	Contexts []string
 }
 
 func (e *Expression) String() string {

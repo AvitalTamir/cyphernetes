@@ -584,6 +584,70 @@ func TestLexer(t *testing.T) {
 				"",            // EOF
 			},
 		},
+		{
+			name:  "IN MATCH RETURN",
+			input: "IN staging MATCH (k:Kind) RETURN k.name",
+			wantTokens: []int{
+				IN,
+				IDENT,
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",        // IN
+				"staging", // IDENT
+				"",        // MATCH
+				"",        // LPAREN
+				"k",       // IDENT
+				"",        // COLON
+				"Kind",    // IDENT
+				"",        // RPAREN
+				"",        // RETURN
+				"k.name",  // JSONPATH
+				"",        // EOF
+			},
+		},
+		{
+			name:  "IN multiple contexts MATCH RETURN",
+			input: "IN staging, production MATCH (k:Kind) RETURN k.name",
+			wantTokens: []int{
+				IN,
+				IDENT,
+				COMMA,
+				IDENT,
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",           // IN
+				"staging",    // IDENT
+				"",           // COMMA
+				"production", // IDENT
+				"",           // MATCH
+				"",           // LPAREN
+				"k",          // IDENT
+				"",           // COLON
+				"Kind",       // IDENT
+				"",           // RPAREN
+				"",           // RETURN
+				"k.name",     // JSONPATH
+				"",           // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {
