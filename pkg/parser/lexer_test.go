@@ -712,6 +712,74 @@ func TestLexer(t *testing.T) {
 				"",             // EOF
 			},
 		},
+		{
+			name:  "MATCH WHERE with NULL",
+			input: "MATCH (s:Service) WHERE s.spec.clusterIP = null RETURN s.metadata.name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				EQUALS,
+				NULL,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",                 // MATCH
+				"",                 // LPAREN
+				"s",                // IDENT
+				"",                 // COLON
+				"Service",          // IDENT
+				"",                 // RPAREN
+				"",                 // WHERE
+				"s.spec.clusterIP", // JSONPATH
+				"",                 // EQUALS
+				"null",             // NULL
+				"",                 // RETURN
+				"s.metadata.name",  // JSONPATH
+				"",                 // EOF
+			},
+		},
+		{
+			name:  "MATCH WHERE with NOT NULL",
+			input: "MATCH (s:Service) WHERE s.spec.clusterIP != null RETURN s.metadata.name",
+			wantTokens: []int{
+				MATCH,
+				LPAREN,
+				IDENT,
+				COLON,
+				IDENT,
+				RPAREN,
+				WHERE,
+				JSONPATH,
+				NOT_EQUALS,
+				NULL,
+				RETURN,
+				JSONPATH,
+				EOF,
+			},
+			wantLiterals: []string{
+				"",                 // MATCH
+				"",                 // LPAREN
+				"s",                // IDENT
+				"",                 // COLON
+				"Service",          // IDENT
+				"",                 // RPAREN
+				"",                 // WHERE
+				"s.spec.clusterIP", // JSONPATH
+				"",                 // NOT_EQUALS
+				"null",             // NULL
+				"",                 // RETURN
+				"s.metadata.name",  // JSONPATH
+				"",                 // EOF
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -55,6 +55,7 @@ func debugLog(v ...interface{}) {
 %token REL_NOPROPS_RIGHT REL_NOPROPS_LEFT REL_NOPROPS_BOTH REL_NOPROPS_NONE REL_BEGINPROPS_LEFT REL_BEGINPROPS_NONE REL_ENDPROPS_RIGHT REL_ENDPROPS_NONE
 %token COUNT SUM NOT_EQUALS GREATER_THAN LESS_THAN GREATER_THAN_EQUALS LESS_THAN_EQUALS CONTAINS REGEX_COMPARE
 %token IN
+%token NULL
 
 %type<expression> Expression
 %type<matchClause> MatchClause
@@ -360,20 +361,20 @@ Value:
         $$ = strings.Trim($1, "\"")
     }
     | INT { 
-        // Parse the int from the string
         i, err := strconv.Atoi($1)
         if err != nil {
-            // ... handle error
             panic(err)
         }
         $$ = i
     }
     | BOOLEAN {
-        // Parse the boolean from the string
         $$ = strings.ToUpper($1) == "TRUE"
     }
     | JSONDATA {
         $$ = $1
+    }
+    | NULL {
+        $$ = nil
     }
 ;
 

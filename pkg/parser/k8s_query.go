@@ -1055,8 +1055,21 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				result, err := compiledPath.Lookup(resource)
 				if err != nil {
 					logDebug("Path not found:", filter.Key)
-					// remove the resource from the slice
-					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
+					// Path not found - this means the field doesn't exist
+					// For null equality check, this should match
+					// For null inequality check, this should not match
+					keep := false
+					if filter.Value == nil {
+						if filter.Operator == "EQUALS" {
+							keep = true
+						} else if filter.Operator == "NOT_EQUALS" {
+							keep = false
+						}
+					}
+					// remove the resource from the slice if not keeping
+					if !keep {
+						resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
+					}
 					continue
 				}
 
@@ -1070,9 +1083,19 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 				keep := false
 				switch filter.Operator {
 				case "EQUALS":
-					keep = reflect.DeepEqual(resultValue, filterValue)
+					if filterValue == nil {
+						// Field exists but is explicitly set to null
+						keep = resultValue == nil
+					} else {
+						keep = reflect.DeepEqual(resultValue, filterValue)
+					}
 				case "NOT_EQUALS":
-					keep = !reflect.DeepEqual(resultValue, filterValue)
+					if filterValue == nil {
+						// Field exists but is not null
+						keep = resultValue != nil
+					} else {
+						keep = !reflect.DeepEqual(resultValue, filterValue)
+					}
 				case "CONTAINS":
 					keep = strings.Contains(fmt.Sprintf("%v", resultValue), fmt.Sprintf("%v", filterValue))
 				case "REGEX_COMPARE":
@@ -1195,6 +1218,11 @@ func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 }
 
 func convertToComparableTypes(result, filterValue interface{}) (interface{}, interface{}, error) {
+	// Handle null value comparisons
+	if filterValue == nil {
+		return result, nil, nil
+	}
+
 	// If both are already the same type, return them as is
 	if reflect.TypeOf(result) == reflect.TypeOf(filterValue) {
 		return result, filterValue, nil
