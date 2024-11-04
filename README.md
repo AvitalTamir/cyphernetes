@@ -13,30 +13,25 @@ Cyphernetes turns this: 😣
 # find all Ingresses routing to these deployments -
 # for each Ingress change it's ingress class to 'inactive':
 
-kubectl get deployments -A -o json | jq -r '.items[] | select(.spec.replicas == 0) | \
-[.metadata.namespace, .metadata.name, (.spec.selector | to_entries | map("\(.key)=\(.value)") | \
-join(","))] | @tsv' | while read -r ns dep selector; do kubectl get services -n "$ns" -o json | \
-jq -r --arg selector "$selector" '.items[] | select((.spec.selector | to_entries | \
-map("\(.key)=\(.value)") | join(",")) == $selector) | .metadata.name' | \
-while read -r svc; do kubectl get ingresses -n "$ns" -o json | jq -r --arg svc "$svc" '.items[] | \
-select(.spec.rules[].http.paths[].backend.service.name == $svc) | .metadata.name' | \
-xargs -I {} kubectl patch ingress {} -n "$ns" --type=json -p \
-'[{"op": "replace", "path": "/spec/ingressClassName", "value": "inactive"}]'; done; done
+kubectl get pods --all-namespaces --field-selector 'status.phase!=Running' \
+-o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' --no-headers | \
+xargs -l bash -c 'kubectl delete pod $2 -n $1' _
 ```
 
 Into this: 🤩 
 ```graphql
 # Do the same thing!
 
-MATCH (d:Deployment)->(s:Service)->(i:Ingress)
-WHERE d.spec.replicas=0
-SET i.spec.ingressClassName="inactive";
+MATCH (p:Pod)
+WHERE p.status.phase != "Running"
+DELETE p;
 ```
 
 ## How?
 
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
-It is a mixture of ASCII-art, SQL and JSON and it lets us express Kubernetes operations in an efficeint way that is also fun and creative.
+Cypher is a mixture of ASCII-art, SQL and JSON and that lets us express graph operations in an efficeint way that is also fun and creative.
+Cyphernetes extends Cypher with Kubernetes-specific syntax and features. It allows you to query and mutate Kubernetes resources in a natural way, works out-of-the-box with your CRDs, supports multi-cluster queries, and more.
 
 There are multiple ways to run Cyphernetes queries:
 1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
