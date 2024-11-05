@@ -59,7 +59,7 @@ func shellPrompt() string {
 		ns = "ALL NAMESPACES"
 	}
 
-	return fmt.Sprintf("\033[%sm(%s) %s »\033[0m ", color, ctx, ns)
+	return fmt.Sprintf("%s » ", wrapInColor(fmt.Sprintf("(%s) %s", ctx, ns), color))
 }
 
 func multiLinePrompt() string {
@@ -68,14 +68,15 @@ func multiLinePrompt() string {
 
 	// strip the color codes from the shell prompt
 	shellPromptLength := len(regexp.MustCompile(`\033\[[0-9;]*m`).ReplaceAllString(shellPrompt(), ""))
-	return fmt.Sprintf("\033[%sm%s%s", color, strings.Repeat(" ", shellPromptLength-3), "»\033[0m ")
+
+	return wrapInColor(fmt.Sprintf("%s»", strings.Repeat(" ", shellPromptLength-3)), color)
 }
 
-func getPromptColor(ns string) string {
+func getPromptColor(ns string) int {
 	if ns == "" {
-		return "31"
+		return 31
 	}
-	return "32"
+	return 32
 }
 
 func SetQueryExecutor(exec *parser.QueryExecutor) {
@@ -116,7 +117,7 @@ var (
 	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
 	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
-	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
+	identifierRegex     = regexp.MustCompile(`(?:0m)?(\w+):(\w+)`)
 	propertiesRegex     = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
 	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
@@ -126,22 +127,22 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	lineStr := string(line)
 
 	// Coloring for brackets ((), {}, [], <>)
-	lineStr = bracketsRegex.ReplaceAllString(lineStr, "\033[37m$0\033[0m") // White for brackets
+	lineStr = bracketsRegex.ReplaceAllString(lineStr, wrapInColor("$0", 37)) // White for brackets
 
 	// Coloring for keywords
 	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := keywordsRegex.FindStringSubmatch(match)
 		if len(parts) == 2 {
-			return "\033[35m" + strings.ToUpper(parts[1]) + "\033[0m"
+			return wrapInColor(strings.ToUpper(parts[1]), 35)
 		}
 		return match
 	})
 
 	// Coloring for quoted variables
-	lineStr = variableRegex.ReplaceAllString(lineStr, "\033[90m$0\033[0m") // Dark grey for quoted variables
+	lineStr = variableRegex.ReplaceAllString(lineStr, wrapInColor("$0", 90)) // Dark grey for quoted variables
 
 	// Coloring for identifiers (left and right of the colon)
-	lineStr = identifierRegex.ReplaceAllString(lineStr, "\033[33m$1\033[0m:\033[94m$2\033[0m") // Orange for left, Light blue for right
+	lineStr = identifierRegex.ReplaceAllString(lineStr, wrapInColor("$1", 33)+":"+wrapInColor("$2", 94)) // Orange for left, Light blue for right
 
 	// Coloring everything after RETURN in purple
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
@@ -149,10 +150,10 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		if len(parts) == 3 {
 			rest := parts[2]
 			// Apply white color to dots and asterisks in the JSONPath list
-			rest = returnJsonPathRegex.ReplaceAllString(rest, "\033[37m$1\033[35m")
+			rest = returnJsonPathRegex.ReplaceAllString(rest, wrapInColor("$1", 37)+wrapInColor("", 35))
 			// Apply white color to commas and keep the rest purple
-			rest = strings.ReplaceAll(rest, ",", "\033[37m,\033[35m")
-			return "\033[35m" + strings.ToUpper(parts[1]) + rest
+			rest = strings.ReplaceAll(rest, ",", wrapInColor(",", 37)+wrapInColor("", 35))
+			return wrapInColor(strings.ToUpper(parts[1]), 35) + rest
 		}
 		return match
 	})
@@ -163,11 +164,18 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	})
 
 	// Ensure color is reset at the end of the entire line
-	lineStr += "\033[0m"
+	if !parser.NoColor {
+		lineStr += "\033[0m"
+	}
+
 	return []rune(lineStr)
 }
 
 func colorizeProperties(obj string) string {
+	if parser.NoColor {
+		return obj
+	}
+
 	// Remove existing color codes
 	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(obj, "")
 
@@ -186,10 +194,10 @@ func colorizeProperties(obj string) string {
 			if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
 				value = colorizeProperties(value) // Recursively colorize nested objects
 			} else {
-				value = "\033[36m" + value + "\033[0m" // Cyan for non-object values
+				value = wrapInColor(value, 36) // Cyan for non-object values
 			}
 
-			return fmt.Sprintf("\033[33m%s\033[0m%s", key, value)
+			return wrapInColor(key, 33) + value
 		}
 		return prop
 	})
@@ -289,7 +297,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
-				if !disableColorJsonOutput {
+				if !disableColorJsonOutput && !parser.NoColor {
 					result = colorizeJson(result)
 				}
 				fmt.Println(result)
@@ -376,8 +384,10 @@ func runShell(cmd *cobra.Command, args []string) {
 				if description == "" {
 					description = "No description provided"
 				}
-				// print a line that looks like this but make it colorful so that the command, args and description have distinct colors: (":%s %v - %s\n", name, macro.Args, description)
-				fmt.Printf("\033[33m:%s\033[0m \033[36m%v\033[0m - \033[35m%s\033[0m\n", name, macro.Args, description)
+				fmt.Printf("%s %s - %s\n",
+					wrapInColor(":"+name, 33),
+					wrapInColor(fmt.Sprint(macro.Args), 36),
+					wrapInColor(description, 35))
 			}
 		} else if input == "\\r" {
 			// Toggle colorized JSON output
@@ -431,7 +441,7 @@ func runShell(cmd *cobra.Command, args []string) {
 					fmt.Println(graphAscii)
 				}
 			}
-			if !disableColorJsonOutput {
+			if !disableColorJsonOutput && !parser.NoColor {
 				result = colorizeJson(result)
 			}
 			if result != "{}" {
@@ -626,6 +636,10 @@ func init() {
 	if namespace != "" && namespace != "default" {
 		parser.Namespace = namespace
 	}
+
+	if _, exists := os.LookupEnv("NO_COLOR"); exists {
+		parser.NoColor = true
+	}
 }
 
 func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
@@ -643,4 +657,11 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 	*cmds = []string{}
 	rl.SetPrompt(shellPrompt())
 	rl.Refresh()
+}
+
+func wrapInColor(input string, color int) string {
+	if parser.NoColor {
+		return input
+	}
+	return fmt.Sprintf("\033[%dm%s\033[0m", color, input)
 }
