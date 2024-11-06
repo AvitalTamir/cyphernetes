@@ -93,8 +93,7 @@ Global Flags:
   -A, --all-namespaces     Query all namespaces
   -l, --loglevel string    The log level to use (debug, info, warn, error, fatal, panic) (default "info")
   -n, --namespace string   The namespace to query against (default "default")
-      --no-color           Turn off color formatting
-  `
+      --no-color           Turn off color formatting`
 	checkOutput(t, stdout, expectedContent, "\"cyphernetes shell -h\"")
 }
 
