@@ -36,6 +36,37 @@ func TestShellPrompt(t *testing.T) {
 	}
 }
 
+func TestShellPromptNoColor(t *testing.T) {
+	// Save the original namespace and noColor options and restore it after the test
+	originalNamespace := parser.Namespace
+	originalNoColor := parser.NoColor
+	defer func() {
+		parser.Namespace = originalNamespace
+		parser.NoColor = originalNoColor
+	}()
+
+	tests := []struct {
+		name      string
+		namespace string
+		want      string
+	}{
+		{"Default namespace", "default", "\\(.*\\) default » "},
+		{"Custom namespace", "custom-ns", "\\(.*\\) custom-ns »"},
+		{"All namespaces", "", "\\(.*\\) ALL NAMESPACES » "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser.NoColor = true
+			parser.Namespace = tt.namespace
+			got := shellPrompt()
+			if !regexp.MustCompile(tt.want).MatchString(got) {
+				t.Errorf("shellPrompt() = %v, does not match regex %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetCurrentContext(t *testing.T) {
 	originalFunc := getCurrentContextFunc
 	defer func() { getCurrentContextFunc = originalFunc }()

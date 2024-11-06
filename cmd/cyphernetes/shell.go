@@ -114,7 +114,7 @@ var (
 	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
 	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex       = regexp.MustCompile(`"(.*?)"`)
-	identifierRegex     = regexp.MustCompile(`(?:0m)?(\w+):(\w+)`)
+	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
 	propertiesRegex     = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
 	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
@@ -130,7 +130,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := keywordsRegex.FindStringSubmatch(match)
 		if len(parts) == 2 {
-			return wrapInColor(strings.ToUpper(parts[1]), 35)
+			return wrapInColor(strings.ToUpper(parts[1]), 35) // Purple for keywords
 		}
 		return match
 	})
@@ -141,22 +141,27 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	// Coloring for identifiers (left and right of the colon)
 	lineStr = identifierRegex.ReplaceAllString(lineStr, wrapInColor("$1", 33)+":"+wrapInColor("$2", 94)) // Orange for left, Light blue for right
 
-	// Coloring everything after RETURN in purple
+	// Coloring everything after `return` in purple with dots in white
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := returnRegex.FindStringSubmatch(match)
 		if len(parts) == 3 {
 			rest := parts[2]
-			// Apply white color to dots and asterisks in the JSONPath list
-			rest = returnJsonPathRegex.ReplaceAllString(rest, wrapInColor("$1", 37)+wrapInColor("", 35))
-			// Apply white color to commas and keep the rest purple
-			rest = strings.ReplaceAll(rest, ",", wrapInColor(",", 37)+wrapInColor("", 35))
-			return wrapInColor(strings.ToUpper(parts[1]), 35) + rest
+
+			// Apply purple to words and white to dots
+			coloredRest := regexp.MustCompile(`(\w+)|(\.)`).ReplaceAllStringFunc(rest, func(submatch string) string {
+				if submatch == "." {
+					return wrapInColor(".", 37) // White for dots
+				}
+				return wrapInColor(submatch, 35) // Purple for words
+			})
+
+			return wrapInColor(strings.ToUpper(parts[1]), 35) + coloredRest
 		}
 		return match
 	})
 
 	// Colorize properties
-	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
+	lineStr = propertiesRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		return colorizeProperties(match)
 	})
 
