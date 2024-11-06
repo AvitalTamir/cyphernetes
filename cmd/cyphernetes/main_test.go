@@ -136,7 +136,7 @@ func TestCyphernetesShellWithLogLevelFlagHelper(t *testing.T) {
 }
 
 func TestCyphernetesShellNoColorFlag(t *testing.T) {
-	stdout, _ := runTestCommand(t, "TestCyphernetesShellNoColorFlag", "TEST_SHELL_NO_COLOR_FLAG")
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithNoColorFlag", "TEST_SHELL_NO_COLOR_FLAG")
 	checkOutput(t, stdout, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell\"")
-	checkPrompt(t, stdout, "(.*\\)default »", "\"cyphernetes shell --no-color\"")
+	checkPrompt(t, stdout, "(.*) default » ", "\"cyphernetes shell --no-color\"")
 }
