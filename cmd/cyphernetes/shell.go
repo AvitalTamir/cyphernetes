@@ -54,22 +54,19 @@ func filterInput(r rune) (rune, bool) {
 
 func shellPrompt() string {
 	ns := parser.Namespace
-	color := getPromptColor(ns)
 	if ns == "" {
 		ns = "ALL NAMESPACES"
 	}
 
-	return fmt.Sprintf("%s » ", wrapInColor(fmt.Sprintf("(%s) %s", ctx, ns), color))
+	color := getPromptColor(ns)
+	prompt := fmt.Sprintf("(%s) %s »", ctx, ns)
+	return wrapInColor(prompt, color) + " "
 }
 
 func multiLinePrompt() string {
-	ns := parser.Namespace
-	color := getPromptColor(ns)
-
-	// strip the color codes from the shell prompt
 	shellPromptLength := len(regexp.MustCompile(`\033\[[0-9;]*m`).ReplaceAllString(shellPrompt(), ""))
-
-	return wrapInColor(fmt.Sprintf("%s»", strings.Repeat(" ", shellPromptLength-3)), color)
+	prompt := fmt.Sprintf("%s»", strings.Repeat(" ", shellPromptLength-3))
+	return wrapInColor(prompt, getPromptColor(parser.Namespace)) + " "
 }
 
 func getPromptColor(ns string) int {
