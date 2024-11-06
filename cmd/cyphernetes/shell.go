@@ -37,7 +37,7 @@ var executor *parser.QueryExecutor
 var execTime time.Duration
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
-var disableColorJsonOutput bool = false
+var returnUnformattedJsonOutput bool = false
 var disableGraphOutput bool = true
 var graphLayoutLR bool = true
 var multiLineInput bool = true
@@ -297,8 +297,8 @@ func runShell(cmd *cobra.Command, args []string) {
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
-				if !disableColorJsonOutput && !parser.NoColor {
-					result = colorizeJson(result)
+				if !returnUnformattedJsonOutput {
+					result = formatJson(result)
 				}
 				fmt.Println(result)
 				if printQueryExecutionTime {
@@ -393,8 +393,8 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 		} else if input == "\\r" {
 			// Toggle colorized JSON output
-			disableColorJsonOutput = !disableColorJsonOutput
-			fmt.Printf("Raw output mode: %t\n", disableColorJsonOutput)
+			returnUnformattedJsonOutput = !returnUnformattedJsonOutput
+			fmt.Printf("Raw output mode: %t\n", returnUnformattedJsonOutput)
 		} else if input == "\\m" {
 			// Toggle multi-line input mode
 			multiLineInput = !multiLineInput
@@ -443,8 +443,8 @@ func runShell(cmd *cobra.Command, args []string) {
 					fmt.Println(graphAscii)
 				}
 			}
-			if !disableColorJsonOutput && !parser.NoColor {
-				result = colorizeJson(result)
+			if !returnUnformattedJsonOutput {
+				result = formatJson(result)
 			}
 			if result != "{}" {
 				fmt.Println(result)
@@ -584,13 +584,22 @@ func executeStatement(query string) (string, error) {
 	return string(json), nil
 }
 
-func colorizeJson(jsonString string) string {
+func formatJson(jsonString string) string {
 	var obj interface{}
 	err := json.Unmarshal([]byte(jsonString), &obj)
 	if err != nil {
 		// Not a valid JSON object, likely an empty response.
 		// We simply return the non-colorized payload.
 		return jsonString
+	}
+
+	if parser.NoColor {
+		s, err := json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			fmt.Println("Error marshalling json: ", err)
+			return jsonString
+		}
+		return string(s)
 	}
 
 	f := colorjson.NewFormatter()
