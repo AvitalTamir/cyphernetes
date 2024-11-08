@@ -111,13 +111,12 @@ func getCurrentContextFromConfig() (string, string, error) {
 type syntaxHighlighter struct{}
 
 var (
-	keywordsRegex       = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
-	bracketsRegex       = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
-	variableRegex       = regexp.MustCompile(`"(.*?)"`)
-	identifierRegex     = regexp.MustCompile(`0m(\w+):(\w+)`)
-	propertiesRegex     = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
-	returnRegex         = regexp.MustCompile(`(?i)(return)(\s+.*)`)
-	returnJsonPathRegex = regexp.MustCompile(`(\.|\*)`)
+	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
+	bracketsRegex   = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
+	variableRegex   = regexp.MustCompile(`"(.*?)"`)
+	identifierRegex = regexp.MustCompile(`0m(\w+):(\w+)`)
+	propertiesRegex = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
+	returnRegex     = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 )
 
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
@@ -141,18 +140,15 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	// Coloring for identifiers (left and right of the colon)
 	lineStr = identifierRegex.ReplaceAllString(lineStr, wrapInColor("$1", 33)+":"+wrapInColor("$2", 94)) // Orange for left, Light blue for right
 
-	// Coloring everything after RETURN in purple but dots in white
+	// Color RETURN keyword and its arguments
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := returnRegex.FindStringSubmatch(match)
 		if len(parts) == 3 {
 			rest := parts[2]
 
-			// Apply purple to words and white to dots
-			coloredRest := regexp.MustCompile(`(\w+)|(\.)`).ReplaceAllStringFunc(rest, func(submatch string) string {
-				if submatch == "." {
-					return wrapInColor(".", 37) // White for dots
-				}
-				return wrapInColor(submatch, 35) // Purple for words
+			nonAsterisksOrDotsRegex := `[^*.,]+`
+			coloredRest := regexp.MustCompile(nonAsterisksOrDotsRegex).ReplaceAllStringFunc(rest, func(submatch string) string {
+				return wrapInColor(submatch, 35) // Purple for non-asterisks or dots
 			})
 
 			return wrapInColor(strings.ToUpper(parts[1]), 35) + coloredRest
