@@ -141,7 +141,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	// Coloring for identifiers (left and right of the colon)
 	lineStr = identifierRegex.ReplaceAllString(lineStr, wrapInColor("$1", 33)+":"+wrapInColor("$2", 94)) // Orange for left, Light blue for right
 
-	// Coloring everything after `return` in purple with dots in white
+	// Coloring everything after RETURN in purple but dots in white
 	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := returnRegex.FindStringSubmatch(match)
 		if len(parts) == 3 {
@@ -160,15 +160,9 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		return match
 	})
 
-	// Colorize properties
-	lineStr = propertiesRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
 		return colorizeProperties(match)
 	})
-
-	// Ensure color is reset at the end of the entire line
-	if !parser.NoColor {
-		lineStr += "\033[0m"
-	}
 
 	return []rune(lineStr)
 }
@@ -394,7 +388,7 @@ func runShell(cmd *cobra.Command, args []string) {
 					wrapInColor(description, 35))
 			}
 		} else if input == "\\r" {
-			// Toggle colorized JSON output
+			// Toggle raw json output
 			returnRawJsonOutput = !returnRawJsonOutput
 			fmt.Printf("Raw output mode: %t\n", returnRawJsonOutput)
 		} else if input == "\\m" {
