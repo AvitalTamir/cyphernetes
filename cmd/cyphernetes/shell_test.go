@@ -140,6 +140,11 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 			input:    "RETURN n.name, n.age",
 			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.\x1b[35mname\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35mage\x1b[0m",
 		},
+		{
+			name:     "Multi return with JSONPaths and aliases",
+			input:    "RETURN n.name, n.age as age, n.email",
+			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.\x1b[35mname\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35mage \x1b[35mAS\x1b[0m age\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35memail\x1b[0m",
+		},
 	}
 
 	for _, tt := range tests {
