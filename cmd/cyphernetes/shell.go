@@ -377,7 +377,7 @@ func runShell(cmd *cobra.Command, args []string) {
 					description = "No description provided"
 				}
 
-				// print a line that looks like this but make it colorful so that the command, args and description have distinct colors: (":%s %v - %s\n", name, macro.Args, description)
+				// print a line that looks like this but make it colorful (in case color is enabled) so that the command, args and description have distinct colors: (":%s %v - %s\n", name, macro.Args, description)
 				fmt.Printf("%s %s - %s\n",
 					wrapInColor(":"+name, 33),
 					wrapInColor(fmt.Sprint(macro.Args), 36),
