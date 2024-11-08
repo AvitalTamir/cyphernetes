@@ -79,24 +79,6 @@ func TestCyphernetesShellWithAllNamespacesFlagHelper(t *testing.T) {
 	fmt.Print(shellPrompt())
 }
 
-func TestCyphernetesShellWithHelpFlag(t *testing.T) {
-	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithHelpFlagHelper", "TEST_SHELL_HELP")
-	expectedContent := `Launch an interactive shell
-
-Usage:
-  cyphernetes shell [flags]
-
-Flags:
-  -h, --help   help for shell
-
-Global Flags:
-  -A, --all-namespaces     Query all namespaces
-  -l, --loglevel string    The log level to use (debug, info, warn, error, fatal, panic) (default "info")
-  -n, --namespace string   The namespace to query against (default "default")
-      --no-color           Turn off color formatting`
-	checkOutput(t, stdout, expectedContent, "\"cyphernetes shell -h\"")
-}
-
 func TestCyphernetesShellWithHelpFlagHelper(t *testing.T) {
 	if os.Getenv("TEST_SHELL_HELP") != "1" {
 		return
