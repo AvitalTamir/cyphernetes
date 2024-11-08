@@ -37,7 +37,7 @@ var executor *parser.QueryExecutor
 var execTime time.Duration
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
-var returnUnformattedJsonOutput bool = false
+var returnRawJsonOutput bool = false
 var disableGraphOutput bool = true
 var graphLayoutLR bool = true
 var multiLineInput bool = true
@@ -299,7 +299,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 			} else {
-				if !returnUnformattedJsonOutput {
+				if !returnRawJsonOutput {
 					result = formatJson(result)
 				}
 				fmt.Println(result)
@@ -395,8 +395,8 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 		} else if input == "\\r" {
 			// Toggle colorized JSON output
-			returnUnformattedJsonOutput = !returnUnformattedJsonOutput
-			fmt.Printf("Raw output mode: %t\n", returnUnformattedJsonOutput)
+			returnRawJsonOutput = !returnRawJsonOutput
+			fmt.Printf("Raw output mode: %t\n", returnRawJsonOutput)
 		} else if input == "\\m" {
 			// Toggle multi-line input mode
 			multiLineInput = !multiLineInput
@@ -445,7 +445,7 @@ func runShell(cmd *cobra.Command, args []string) {
 					fmt.Println(graphAscii)
 				}
 			}
-			if !returnUnformattedJsonOutput {
+			if !returnRawJsonOutput {
 				result = formatJson(result)
 			}
 			if result != "{}" {

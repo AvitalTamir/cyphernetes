@@ -58,7 +58,7 @@ func runQuery(args []string, w io.Writer) {
 		fmt.Fprintln(w, "Error marshalling results: ", err)
 		return
 	}
-	if !returnUnformattedJsonOutput {
+	if !returnRawJsonOutput {
 		json = []byte(formatJson(string(json)))
 	}
 
@@ -69,5 +69,5 @@ func runQuery(args []string, w io.Writer) {
 
 func init() {
 	rootCmd.AddCommand(queryCmd)
-	queryCmd.PersistentFlags().BoolVarP(&returnUnformattedJsonOutput, "raw-output", "r", false, "Disable colorized JSON output")
+	queryCmd.PersistentFlags().BoolVarP(&returnRawJsonOutput, "raw-output", "r", false, "Disable colorized JSON output")
 }
