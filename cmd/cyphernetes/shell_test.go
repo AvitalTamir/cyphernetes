@@ -128,17 +128,17 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 		{
 			name:     "Keywords",
 			input:    "MATCH (n:Node) WHERE n.property = 'value' RETURN n",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN n\x1b[0m",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m",
 		},
 		{
 			name:     "Properties",
 			input:    "MATCH (n:Node {key: \"value\"})",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m\x1b[0m",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m",
 		},
 		{
 			name:     "Return with JSONPath",
 			input:    "RETURN n.name, n.age",
-			expected: "\x1b[35mRETURN n\x1b[37m.\x1b[35mname\x1b[37m,\x1b[35m n\x1b[37m.\x1b[35mage\x1b[0m",
+			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.\x1b[35mname\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35mage\x1b[0m",
 		},
 	}
 
