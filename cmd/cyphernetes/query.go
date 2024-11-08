@@ -69,5 +69,5 @@ func runQuery(args []string, w io.Writer) {
 
 func init() {
 	rootCmd.AddCommand(queryCmd)
-	queryCmd.PersistentFlags().BoolVarP(&returnRawJsonOutput, "raw-output", "r", false, "Disable colorized JSON output")
+	queryCmd.PersistentFlags().BoolVarP(&returnRawJsonOutput, "raw-output", "r", false, "Disable JSON output formatting")
 }
