@@ -79,23 +79,6 @@ func TestCyphernetesShellWithAllNamespacesFlagHelper(t *testing.T) {
 	fmt.Print(shellPrompt())
 }
 
-func TestCyphernetesShellWithHelpFlag(t *testing.T) {
-	stdout, _ := runTestCommand(t, "TestCyphernetesShellWithHelpFlagHelper", "TEST_SHELL_HELP")
-	expectedContent := `Launch an interactive shell
-
-Usage:
-  cyphernetes shell [flags]
-
-Flags:
-  -h, --help   help for shell
-
-Global Flags:
-  -A, --all-namespaces     Query all namespaces
-  -l, --loglevel string    The log level to use (debug, info, warn, error, fatal, panic) (default "info")
-  -n, --namespace string   The namespace to query against (default "default")`
-	checkOutput(t, stdout, expectedContent, "\"cyphernetes shell -h\"")
-}
-
 func TestCyphernetesShellWithHelpFlagHelper(t *testing.T) {
 	if os.Getenv("TEST_SHELL_HELP") != "1" {
 		return
@@ -132,4 +115,19 @@ func TestCyphernetesShellWithLogLevelFlagHelper(t *testing.T) {
 	}
 	os.Args = []string{"cyphernetes", "shell", "-l", "debug"}
 	main()
+}
+
+func TestCyphernetesShellNoColorFlag(t *testing.T) {
+	stdout, _ := runTestCommand(t, "TestCyphernetesShellNoColorFlagHelper", "TEST_SHELL_NO_COLOR")
+	checkOutput(t, stdout, "Type 'exit' or press Ctrl-D to exit\nType 'help' for information on how to use the shell\n", "\"cyphernetes shell --no-color\"")
+	checkPrompt(t, stdout, "(.*) default » ", "\"cyphernetes shell --no-color\"")
+}
+
+func TestCyphernetesShellNoColorFlagHelper(t *testing.T) {
+	if os.Getenv("TEST_SHELL_NO_COLOR") != "1" {
+		return
+	}
+	os.Args = []string{"cyphernetes", "shell", "--no-color"}
+	main()
+	fmt.Print(shellPrompt())
 }

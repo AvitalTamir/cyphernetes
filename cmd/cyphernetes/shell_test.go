@@ -36,6 +36,37 @@ func TestShellPrompt(t *testing.T) {
 	}
 }
 
+func TestShellPromptNoColor(t *testing.T) {
+	// Save the original namespace and noColor options and restore it after the test
+	originalNamespace := parser.Namespace
+	originalNoColor := parser.NoColor
+	defer func() {
+		parser.Namespace = originalNamespace
+		parser.NoColor = originalNoColor
+	}()
+
+	tests := []struct {
+		name      string
+		namespace string
+		want      string
+	}{
+		{"Default namespace", "default", "\\(.*\\) default » "},
+		{"Custom namespace", "custom-ns", "\\(.*\\) custom-ns »"},
+		{"All namespaces", "", "\\(.*\\) ALL NAMESPACES » "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser.NoColor = true
+			parser.Namespace = tt.namespace
+			got := shellPrompt()
+			if !regexp.MustCompile(tt.want).MatchString(got) {
+				t.Errorf("shellPrompt() = %v, does not match regex %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetCurrentContext(t *testing.T) {
 	originalFunc := getCurrentContextFunc
 	defer func() { getCurrentContextFunc = originalFunc }()
@@ -97,17 +128,27 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 		{
 			name:     "Keywords",
 			input:    "MATCH (n:Node) WHERE n.property = 'value' RETURN n",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN n\x1b[0m",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m",
 		},
 		{
 			name:     "Properties",
 			input:    "MATCH (n:Node {key: \"value\"})",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m\x1b[0m",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m",
 		},
 		{
 			name:     "Return with JSONPath",
 			input:    "RETURN n.name, n.age",
-			expected: "\x1b[35mRETURN n\x1b[37m.\x1b[35mname\x1b[37m,\x1b[35m n\x1b[37m.\x1b[35mage\x1b[0m",
+			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.\x1b[35mname\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35mage\x1b[0m",
+		},
+		{
+			name:     "Multi return with JSONPaths and aliases",
+			input:    "RETURN n.name, n.age as age, n.email",
+			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.\x1b[35mname\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35mage \x1b[35mAS\x1b[0m age\x1b[0m,\x1b[35m n\x1b[0m.\x1b[35memail\x1b[0m",
+		},
+		{
+			name:     "Return with JSONPath and asterisk",
+			input:    "RETURN n.*",
+			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.*",
 		},
 	}
 
