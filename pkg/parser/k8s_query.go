@@ -1373,8 +1373,7 @@ func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patche
 	resourceNamespace := resource["metadata"].(map[string]interface{})["namespace"].(string)
 
 	if dryRun {
-		patchJSON, _ := json.MarshalIndent(patchesJSON, "", "  ")
-		fmt.Printf("Skipping patching of %s %s in namespace %s due to dry run mode.\n\nPatch JSON:\n%s\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, string(patchJSON))
+		fmt.Printf("Skipping patching of %s %s in namespace %s due to dry run mode.\n\nPatch JSON:\n%s\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, string(patchesJSON))
 		return nil
 	}
 
