@@ -28,7 +28,7 @@ DELETE p;
 ## How?
 
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
-Cypher is a mixture of ASCII-art, SQL and JSON and that lets us express graph operations in an efficeint way that is also fun and creative.
+Cypher is a mixture of ASCII-art, SQL and JSON that lets us express graph operations in an efficeint way that is also fun and creative.
 Cyphernetes extends Cypher with Kubernetes-specific syntax and features. It allows you to query and mutate Kubernetes resources in a natural way, works out-of-the-box with your CRDs, supports multi-cluster queries, and more.
 
 There are multiple ways to run Cyphernetes queries:
