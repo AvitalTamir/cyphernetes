@@ -48,6 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&parser.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().BoolVarP(&parser.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&parser.NoColor, "no-color", false, "Disable colored output in shell and query results")
+	rootCmd.PersistentFlags().BoolVar(&parser.DryRun, "dry-run", false, "Simulate the execution of a query without making any changes")
 
 	// Add the web command
 	rootCmd.AddCommand(WebCmd)

@@ -44,14 +44,20 @@ type QueryResult struct {
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
-func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
-	if len(ast.Contexts) > 0 {
-		return ExecuteMultiContextQuery(ast, namespace)
+func (q *QueryExecutor) Execute(ast *Expression, namespace string, dryRun ...bool) (QueryResult, error) {
+	dryRunValue := false
+	if len(dryRun) > 0 {
+		dryRunValue = dryRun[0]
 	}
-	return q.ExecuteSingleQuery(ast, namespace)
+
+	if len(ast.Contexts) > 0 {
+		return ExecuteMultiContextQuery(ast, namespace, dryRunValue)
+	}
+
+	return q.ExecuteSingleQuery(ast, namespace, dryRunValue)
 }
 
-func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
+func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string, dryRun bool) (QueryResult, error) {
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
@@ -124,7 +130,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 
 					// Apply the patches to the resource
-					err = q.patchK8sResource(resource, patchJSON)
+					err = q.patchK8sResource(resource, patchJSON, dryRun)
 					if err != nil {
 						return *results, fmt.Errorf("error patching resource: %s", err)
 					}
@@ -141,7 +147,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				if resultMap[nodeId] == nil {
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
-				err := q.deleteK8sResources(nodeId)
+				err := q.deleteK8sResources(nodeId, dryRun)
 				if err != nil {
 					return *results, fmt.Errorf("error deleting resource >> %s", err)
 				}
@@ -336,7 +342,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 
 					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
-					err = q.createK8sResource(node, resourceTemplate, name)
+					err = q.createK8sResource(node, resourceTemplate, name, dryRun)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
@@ -369,7 +375,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
-					err = q.createK8sResource(node, resourceTemplate, name)
+					err = q.createK8sResource(node, resourceTemplate, name, dryRun)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
@@ -882,7 +888,7 @@ func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceN
 	return name
 }
 
-func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string]interface{}, name string) error {
+func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string]interface{}, name string, dryRun bool) error {
 	// Look up the resource kind and name in the cache
 	gvr, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
 	if err != nil {
@@ -901,6 +907,12 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 	resource["metadata"] = make(map[string]interface{})
 	resource["metadata"].(map[string]interface{})["name"] = name
 	resource["metadata"].(map[string]interface{})["namespace"] = Namespace
+
+	if dryRun {
+		templateJSON, _ := json.MarshalIndent(resource, "", "  ")
+		fmt.Printf("Skipping creation of %s %s in namespace %s due to dry run mode.\n\nTemplate JSON:\n%s\n", strings.ToLower(kind), name, Namespace, string(templateJSON))
+		return nil
+	}
 
 	// Create the resource
 	_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Create(context.Background(), &unstructured.Unstructured{Object: resource}, metav1.CreateOptions{})
@@ -931,7 +943,7 @@ func (q *QueryExecutor) getSingularNameForGVR(gvr schema.GroupVersionResource) s
 	return ""
 }
 
-func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
+func (q *QueryExecutor) deleteK8sResources(nodeId string, dryRun bool) error {
 	resources := resultMap[nodeId].([]map[string]interface{})
 
 	for i := range resources {
@@ -943,11 +955,20 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
 		resourceName := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
 		resourceNamespace := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
 
+		if dryRun {
+			fmt.Printf("Skipping deletion of %s %s in namespace %s due to dry run mode.\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace)
+			continue
+		}
+
 		err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("error deleting resource >> %v", err)
 		}
 		fmt.Printf("Deleted %s/%s\n", gvr.Resource, resourceName)
+	}
+
+	if dryRun {
+		return nil
 	}
 
 	// remove the resource from the result map
@@ -1343,13 +1364,19 @@ func updateResultMap(resource map[string]interface{}, path []string, value inter
 	}
 }
 
-func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patchesJSON []byte) error {
+func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patchesJSON []byte, dryRun bool) error {
 	gvr, err := FindGVR(q.Clientset, resource["kind"].(string))
 	if err != nil {
 		return fmt.Errorf("error finding API resource: %v", err)
 	}
 	resourceName := resource["metadata"].(map[string]interface{})["name"].(string)
 	resourceNamespace := resource["metadata"].(map[string]interface{})["namespace"].(string)
+
+	if dryRun {
+		patchJSON, _ := json.MarshalIndent(patchesJSON, "", "  ")
+		fmt.Printf("Skipping patching of %s %s in namespace %s due to dry run mode.\n\nPatch JSON:\n%s\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, string(patchJSON))
+		return nil
+	}
 
 	_, err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Patch(
 		context.Background(),
@@ -1589,7 +1616,7 @@ func sumMemoryBytes(memStrs []string) (int64, error) {
 }
 
 // Add new function to handle multi-context execution
-func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
+func ExecuteMultiContextQuery(ast *Expression, namespace string, dryRun bool) (QueryResult, error) {
 	if len(ast.Contexts) == 0 {
 		return QueryResult{}, fmt.Errorf("no contexts provided for multi-context query")
 	}
@@ -1614,7 +1641,7 @@ func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, e
 		modifiedAst := prefixVariables(ast, context)
 
 		// Use ExecuteSingleQuery instead of Execute
-		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace)
+		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace, dryRun)
 		if err != nil {
 			return combinedResults, fmt.Errorf("error executing query in context %s: %v", context, err)
 		}
