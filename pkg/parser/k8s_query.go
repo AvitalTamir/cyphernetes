@@ -44,17 +44,12 @@ type QueryResult struct {
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
-func (q *QueryExecutor) Execute(ast *Expression, namespace string, dryRun ...bool) (QueryResult, error) {
-	dryRunValue := false
-	if len(dryRun) > 0 {
-		dryRunValue = dryRun[0]
-	}
-
+func (q *QueryExecutor) Execute(ast *Expression, namespace string, dryRun bool) (QueryResult, error) {
 	if len(ast.Contexts) > 0 {
-		return ExecuteMultiContextQuery(ast, namespace, dryRunValue)
+		return ExecuteMultiContextQuery(ast, namespace, dryRun)
 	}
 
-	return q.ExecuteSingleQuery(ast, namespace, dryRunValue)
+	return q.ExecuteSingleQuery(ast, namespace, dryRun)
 }
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string, dryRun bool) (QueryResult, error) {

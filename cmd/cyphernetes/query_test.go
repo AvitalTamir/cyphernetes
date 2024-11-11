@@ -89,13 +89,8 @@ func TestRunQuery(t *testing.T) {
 			}
 
 			// Replace the Execute method
-			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression, namespace string, dryRun ...bool) (parser.QueryResult, error) {
-				dryRunValue := false
-				if len(dryRun) > 0 {
-					dryRunValue = dryRun[0]
-				}
-
-				return mockExecutor.Execute(expr, "")
+			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression, namespace string, dryRun bool) (parser.QueryResult, error) {
+				return mockExecutor.Execute(expr, "", false)
 			}
 
 			// Restore original functions after test

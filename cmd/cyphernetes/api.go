@@ -51,7 +51,7 @@ func handleQuery(c *gin.Context) {
 	}
 
 	// Execute the query using the parser
-	result, err := executor.Execute(ast, namespace)
+	result, err := executor.Execute(ast, namespace, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
