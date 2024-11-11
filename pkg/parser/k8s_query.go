@@ -910,7 +910,10 @@ func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string
 
 	if dryRun {
 		templateJSON, _ := json.MarshalIndent(resource, "", "  ")
-		fmt.Printf("Skipping creation of %s %s in namespace %s due to dry run mode.\n\nTemplate JSON:\n%s\n", strings.ToLower(kind), name, Namespace, string(templateJSON))
+		fmt.Printf(
+			"Dry run: Skipped creating %s %s in namespace %s.\nJSON:\n%s\n",
+			strings.ToLower(kind), name, Namespace, templateJSON,
+		)
 		return nil
 	}
 
@@ -956,7 +959,10 @@ func (q *QueryExecutor) deleteK8sResources(nodeId string, dryRun bool) error {
 		resourceNamespace := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
 
 		if dryRun {
-			fmt.Printf("Skipping deletion of %s %s in namespace %s due to dry run mode.\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace)
+			fmt.Printf(
+				"Dry run: Skipped deleting %s %s in namespace %s.\n",
+				strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace,
+			)
 			continue
 		}
 
@@ -1373,7 +1379,10 @@ func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patche
 	resourceNamespace := resource["metadata"].(map[string]interface{})["namespace"].(string)
 
 	if dryRun {
-		fmt.Printf("Skipping patching of %s %s in namespace %s due to dry run mode.\n\nPatch JSON:\n%s\n", strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, string(patchesJSON))
+		fmt.Printf(
+			"Dry run: Skipped patching %s %s in namespace %s.\nJSON Patch:\n%s\n",
+			strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, patchesJSON
+		)
 		return nil
 	}
 
