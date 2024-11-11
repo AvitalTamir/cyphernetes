@@ -403,6 +403,10 @@ func runShell(cmd *cobra.Command, args []string) {
 			} else {
 				fmt.Println("Graph layout: Top to Bottom")
 			}
+		} else if input == "\\dr" {
+			// Toggle dry run mode
+			parser.DryRun = !parser.DryRun
+			fmt.Printf("Dry run mode: %t\n", parser.DryRun)
 		} else if input == "help" {
 			fmt.Println("Cyphernetes Interactive Shell")
 			fmt.Println("exit               - Exit the shell")
@@ -417,6 +421,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println("\\cc                - Clear the cache")
 			fmt.Println("\\pc                - Print the cache")
 			fmt.Println("\\lm                - List all registered macros")
+			fmt.Println("\\dr                - Tooggle dry run mode")
 			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
 			executing = true
