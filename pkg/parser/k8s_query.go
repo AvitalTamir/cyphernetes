@@ -1376,7 +1376,7 @@ func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patche
 	if dryRun {
 		fmt.Printf(
 			"Dry run: Skipped patching %s %s in namespace %s.\nJSON Patch:\n%s\n",
-			strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, patchesJSON
+			strings.ToLower(q.getSingularNameForGVR(gvr)), resourceName, resourceNamespace, patchesJSON,
 		)
 		return nil
 	}
