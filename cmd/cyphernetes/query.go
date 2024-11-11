@@ -46,7 +46,7 @@ func runQuery(args []string, w io.Writer) {
 		fmt.Fprintln(w, "Error creating query executor: ", err)
 		return
 	}
-	results, err := executeMethod(executor, ast, "")
+	results, err := executeMethod(executor, ast, "", parser.DryRun)
 	if err != nil {
 		fmt.Fprintln(w, "Error executing query: ", err)
 		return

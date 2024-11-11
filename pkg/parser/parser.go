@@ -12,6 +12,7 @@ var LogLevel string
 var AllNamespaces bool
 var CleanOutput bool
 var NoColor bool
+var DryRun bool
 
 type Expression struct {
 	Clauses  []Clause
