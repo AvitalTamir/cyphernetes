@@ -17,7 +17,14 @@ var (
 )
 
 func getVersionInfo() string {
-	return fmt.Sprintf("Version: %s\nGo Version: %s\n", Version, runtime.Version())
+	return fmt.Sprintf(
+		"Cyphernetes %s\n"+
+			"Go Version: %s\n"+
+			"License: Apache 2.0\n"+
+			"Source: https://github.com/avitaltamir/cyphernetes\n",
+		Version,
+		runtime.Version(),
+	)
 }
 
 // rootCmd represents the base command when called without any subcommands
