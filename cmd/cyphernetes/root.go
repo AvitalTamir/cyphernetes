@@ -40,6 +40,23 @@ func Execute() {
 	}
 }
 
+// TestExecute is a helper function for testing the Execute function
+func TestExecute(args []string) error {
+	// Save the original os.Args
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	// Set up the new os.Args for testing
+	os.Args = append([]string{"cmd"}, args...)
+
+	// Create a new root command for testing
+	cmd := &cobra.Command{Use: "test"}
+	cmd.AddCommand(rootCmd)
+
+	// Execute the command
+	return cmd.Execute()
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&parser.Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().StringVarP(&parser.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
