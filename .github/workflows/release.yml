@@ -3,114 +3,116 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: go.mod
-    - name: Install goyacc
-      run: go install golang.org/x/tools/cmd/goyacc@latest
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    - name: Login to DockerHub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_PASSWORD }}
-    - name: Extract version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-    - name: Build and push operator image
-      env:
-        IMG: fatliverfreddy/cyphernetes-operator:${{ steps.get_version.outputs.VERSION }}
-      run: |
-        make -C operator docker-build IMG=$IMG
-        docker push $IMG
-        docker tag $IMG fatliverfreddy/cyphernetes-operator:latest
-        docker push fatliverfreddy/cyphernetes-operator:latest
-    - name: Set up Helm
-      uses: azure/setup-helm@v3
-      with:
-        version: v3.12.0
-    - name: Package and push Helm chart
-      run: |
-        helm package operator/helm/cyphernetes-operator
-        echo ${{ secrets.PACKAGES_PUSH_TOKEN }} | helm registry login ghcr.io -u avitaltamir --password-stdin
-        helm push cyphernetes-operator-*.tgz oci://ghcr.io/avitaltamir/cyphernetes
-    - name: Build CLI for all platforms
-      run: |
-        make operator-manifests build-all-platforms
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: ${{ github.ref }}
-        draft: true
-        prerelease: false
-    - name: Upload Release Asset - Linux AMD64
-      id: upload-release-asset-linux-amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-        asset_path: ./dist/cyphernetes-linux-amd64
-        asset_name: cyphernetes-linux-amd64
-        asset_content_type: application/octet-stream
-    - name: Upload Release Asset - Linux ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-linux-arm64
-        asset_name: cyphernetes-linux-arm64
-        asset_content_type: application/octet-stream
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install goyacc
+        run: go install golang.org/x/tools/cmd/goyacc@latest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Extract version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Build and push operator image
+        env:
+          IMG: fatliverfreddy/cyphernetes-operator:${{ steps.get_version.outputs.VERSION }}
+        run: |
+          make -C operator docker-build IMG=$IMG
+          docker push $IMG
+          docker tag $IMG fatliverfreddy/cyphernetes-operator:latest
+          docker push fatliverfreddy/cyphernetes-operator:latest
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+      - name: Package and push Helm chart
+        run: |
+          helm package operator/helm/cyphernetes-operator
+          echo ${{ secrets.PACKAGES_PUSH_TOKEN }} | helm registry login ghcr.io -u avitaltamir --password-stdin
+          helm push cyphernetes-operator-*.tgz oci://ghcr.io/avitaltamir/cyphernetes
+      - name: Build CLI for all platforms
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          make operator-manifests build-all-platforms
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: true
+          prerelease: false
+      - name: Upload Release Asset - Linux AMD64
+        id: upload-release-asset-linux-amd64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./dist/cyphernetes-linux-amd64
+          asset_name: cyphernetes-linux-amd64
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset - Linux ARM64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/cyphernetes-linux-arm64
+          asset_name: cyphernetes-linux-arm64
+          asset_content_type: application/octet-stream
 
-    - name: Upload Release Asset - Darwin AMD64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-darwin-amd64
-        asset_name: cyphernetes-darwin-amd64
-        asset_content_type: application/octet-stream
+      - name: Upload Release Asset - Darwin AMD64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/cyphernetes-darwin-amd64
+          asset_name: cyphernetes-darwin-amd64
+          asset_content_type: application/octet-stream
 
-    - name: Upload Release Asset - Darwin ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-darwin-arm64
-        asset_name: cyphernetes-darwin-arm64
-        asset_content_type: application/octet-stream
-    - name: Upload Release Asset - Windows AMD64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-windows-amd64
-        asset_name: cyphernetes-windows-amd64.exe
-        asset_content_type: application/octet-stream
+      - name: Upload Release Asset - Darwin ARM64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/cyphernetes-darwin-arm64
+          asset_name: cyphernetes-darwin-arm64
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset - Windows AMD64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/cyphernetes-windows-amd64
+          asset_name: cyphernetes-windows-amd64.exe
+          asset_content_type: application/octet-stream
 
-    - name: Upload Release Asset - Windows ARM64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/cyphernetes-windows-arm64
-        asset_name: cyphernetes-windows-arm64.exe
-        asset_content_type: application/octet-stream
+      - name: Upload Release Asset - Windows ARM64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/cyphernetes-windows-arm64
+          asset_name: cyphernetes-windows-arm64.exe
+          asset_content_type: application/octet-stream
