@@ -33,6 +33,13 @@ var rootCmd = &cobra.Command{
 		}
 		cmd.Help()
 	},
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		versionFlag, _ := cmd.Flags().GetBool("version")
+		if versionFlag {
+			fmt.Print(getVersionInfo())
+			os.Exit(0)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -66,7 +73,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&parser.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().BoolVarP(&parser.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&parser.NoColor, "no-color", false, "Disable colored output in shell and query results")
-	rootCmd.Flags().BoolP("version", "v", false, "Show version and exit")
+	rootCmd.PersistentFlags().BoolP("version", "v", false, "Show version and exit")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
