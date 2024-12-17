@@ -67,7 +67,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&parser.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&parser.NoColor, "no-color", false, "Disable colored output in shell and query results")
 	rootCmd.Flags().BoolP("version", "v", false, "Show version and exit")
-	rootCmd.MarkFlagsMutuallyExclusive("version", "v")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
