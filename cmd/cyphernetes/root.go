@@ -20,6 +20,7 @@ func getVersionInfo() string {
 	return fmt.Sprintf("Version: %s\nGo Version: %s\n", Version, runtime.Version())
 }
 
+// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cyphernetes",
 	Short: "Cyphernetes is a tool for querying Kubernetes resources",
