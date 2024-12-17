@@ -73,5 +73,6 @@ func init() {
 		},
 	})
 
+	// Add the web command
 	rootCmd.AddCommand(WebCmd)
 }
