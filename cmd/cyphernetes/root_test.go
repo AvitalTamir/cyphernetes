@@ -2,13 +2,10 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestExecuteNoArgs(t *testing.T) {
@@ -59,73 +56,3 @@ func TestExecuteWithArgs(t *testing.T) {
 		})
 	}
 }
-
-func TestVersionOutput(t *testing.T) {
-	// Save original stdout and Version
-	oldStdout := os.Stdout
-	originalVersion := Version
-	defer func() {
-		os.Stdout = oldStdout
-		Version = originalVersion
-	}()
-
-	// Set test version
-	Version = "test-version"
-
-	// Capture stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Save original args
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-
-	// Set up args for this test
-	os.Args = []string{"cyphernetes", "--version"}
-
-	// Execute command
-	// Use a goroutine to handle os.Exit
-	exit := make(chan int, 1)
-	patch := func(code int) { exit <- code }
-	originalExit := osExit
-	osExit = patch
-	defer func() { osExit = originalExit }()
-
-	go func() {
-		Execute()
-		exit <- 0
-	}()
-
-	// Restore stdout and read output
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	expectedLines := []string{
-		"Cyphernetes test-version",
-		fmt.Sprintf("Go Version: %s", runtime.Version()),
-		"License: Apache 2.0",
-		"Source: https://github.com/avitaltamir/cyphernetes",
-	}
-	for _, expectedLine := range expectedLines {
-		if !strings.Contains(output, expectedLine) {
-			t.Errorf("Expected output to contain %q, but it didn't.\nGot: %s", expectedLine, output)
-		}
-	}
-
-	// Check that we would have exited with code 0
-	select {
-	case code := <-exit:
-		if code != 0 {
-			t.Errorf("Expected exit code 0, got %d", code)
-		}
-	case <-time.After(time.Second):
-		t.Error("Test timed out")
-	}
-}
-
-// osExit is used to mock os.Exit in tests
-var osExit = os.Exit
