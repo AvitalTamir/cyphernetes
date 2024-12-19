@@ -2,6 +2,8 @@
 BINARY_NAME=cyphernetes
 TARGET_KERNELS=darwin linux windows
 TARGET_ARCHS=amd64 arm64
+VERSION ?= dev
+
 # Define the default make target
 all: operator-manifests bt
 	@echo "🎉 Done!"
@@ -12,7 +14,7 @@ bt: build test
 # Define how to build the project
 build: gen-parser web-build
 	@echo "👷 Building ${BINARY_NAME}..."
-	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
+	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null)
 	mkdir -p dist/
 	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes
 
@@ -21,7 +23,7 @@ build-all-platforms:
 	@for kernel in $(TARGET_KERNELS); do \
 		for arch in $(TARGET_ARCHS); do \
 			echo "   - $$kernel/$$arch"; \
-			cd cmd/cyphernetes && GOOS=$$kernel GOARCH=$$arch go build -o ${BINARY_NAME} > /dev/null; \
+			cd cmd/cyphernetes && GOOS=$$kernel GOARCH=$$arch go build -o ${BINARY_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null; \
 			mkdir -p ../../dist/; \
 			mv ${BINARY_NAME} ../../dist/cyphernetes-$$kernel-$$arch; \
 			cd ../..; \

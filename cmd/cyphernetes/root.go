@@ -4,17 +4,49 @@ Copyright © 2023 Avital Tamir <avital.osog@gmail.com>
 package main
 
 import (
+	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/spf13/cobra"
 )
+
+var (
+	Version = "dev"
+)
+
+func getVersionInfo() string {
+	return fmt.Sprintf(
+		"Cyphernetes %s\n"+
+			"Go Version: %s\n"+
+			"License: Apache 2.0\n"+
+			"Source: https://github.com/avitaltamir/cyphernetes\n",
+		Version,
+		runtime.Version(),
+	)
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cyphernetes",
 	Short: "Cyphernetes is a tool for querying Kubernetes resources",
 	Long:  `Cyphernetes allows you to query Kubernetes resources using a Cypher-like query language.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		versionFlag, _ := cmd.Flags().GetBool("version")
+		if versionFlag {
+			fmt.Print(getVersionInfo())
+			os.Exit(0)
+		}
+		cmd.Help()
+	},
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		versionFlag, _ := cmd.Flags().GetBool("version")
+		if versionFlag {
+			fmt.Print(getVersionInfo())
+			os.Exit(0)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -48,6 +80,15 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&parser.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().BoolVarP(&parser.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&parser.NoColor, "no-color", false, "Disable colored output in shell and query results")
+	rootCmd.PersistentFlags().BoolP("version", "v", false, "Show version and exit")
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Show version information",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Print(getVersionInfo())
+		},
+	})
 
 	// Add the web command
 	rootCmd.AddCommand(WebCmd)
