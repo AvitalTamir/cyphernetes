@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/avitaltamir/cyphernetes/pkg/parser"
 	"github.com/spf13/cobra"
@@ -19,11 +18,9 @@ var (
 func getVersionInfo() string {
 	return fmt.Sprintf(
 		"Cyphernetes %s\n"+
-			"Go Version: %s\n"+
 			"License: Apache 2.0\n"+
 			"Source: https://github.com/avitaltamir/cyphernetes\n",
 		Version,
-		runtime.Version(),
 	)
 }
 
