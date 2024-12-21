@@ -1,0 +1,56 @@
+package parser
+
+const (
+	ILLEGAL TokenType = iota
+	EOF
+
+	// Keywords
+	MATCH
+	CREATE
+	WHERE
+	SET
+	DELETE
+	RETURN
+	IN
+	AS
+
+	// Identifiers and literals
+	IDENT
+	STRING
+	INT
+	BOOLEAN
+	JSONPATH
+	JSONDATA
+
+	// Delimiters
+	LPAREN // (
+	RPAREN // )
+	LBRACE // {
+	RBRACE // }
+	COLON  // :
+	COMMA  // ,
+
+	// Operators
+	EQUALS
+	NOT_EQUALS
+	GREATER_THAN
+	LESS_THAN
+	GREATER_THAN_EQUALS
+	LESS_THAN_EQUALS
+	CONTAINS
+	REGEX_COMPARE
+
+	// Relationship tokens
+	REL_NOPROPS_RIGHT
+	REL_NOPROPS_LEFT
+	REL_NOPROPS_BOTH
+	REL_NOPROPS_NONE
+	REL_BEGINPROPS_LEFT
+	REL_BEGINPROPS_NONE
+	REL_ENDPROPS_RIGHT
+	REL_ENDPROPS_NONE
+
+	// Aggregation functions
+	COUNT
+	SUM
+)
