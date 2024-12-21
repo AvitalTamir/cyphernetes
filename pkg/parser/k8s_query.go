@@ -460,22 +460,22 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									if isCPUResource {
 										v1Cpu, err := convertToMilliCPU(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
 										}
 										v2Cpu, err := convertToMilliCPU(v2.String())
 										if err != nil {
-											return *results, fmt.Errorf("Error processing cpu resources value: %v", err)
+											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
 										}
 
 										aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
 									} else if isMemoryResource {
 										v1Mem, err := convertMemoryToBytes(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
+											return *results, fmt.Errorf("error processing memory resources value: %v", err)
 										}
 										v2Mem, err := convertMemoryToBytes(v2.String())
 										if err != nil {
-											return *results, fmt.Errorf("Error processing memory resources value: %v", err)
+											return *results, fmt.Errorf("error processing memory resources value: %v", err)
 										}
 
 										aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
@@ -763,7 +763,7 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 			// error out
 			return fmt.Errorf("must specify kind for all nodes in match clause")
 		}
-		debugLog("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
+		logDebug("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
 		// check if the node has already been fetched
 		if resultCache[q.resourcePropertyName(node)] == nil {
 			err := getNodeResources(node, q, c.ExtraFilters)

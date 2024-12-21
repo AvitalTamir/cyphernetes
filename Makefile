@@ -10,7 +10,7 @@ all: operator-manifests bt
 bt: build test
 
 # Define how to build the project
-build: gen-parser web-build
+build: web-build
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/

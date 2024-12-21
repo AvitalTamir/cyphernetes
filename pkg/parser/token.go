@@ -3,6 +3,7 @@ package parser
 const (
 	ILLEGAL TokenType = iota
 	EOF
+	NULL
 
 	// Keywords
 	MATCH
@@ -18,17 +19,21 @@ const (
 	IDENT
 	STRING
 	INT
+	NUMBER
 	BOOLEAN
 	JSONPATH
 	JSONDATA
 
 	// Delimiters
-	LPAREN // (
-	RPAREN // )
-	LBRACE // {
-	RBRACE // }
-	COLON  // :
-	COMMA  // ,
+	LPAREN   // (
+	RPAREN   // )
+	LBRACE   // {
+	RBRACE   // }
+	LBRACKET // [
+	RBRACKET // ]
+	COLON    // :
+	COMMA    // ,
+	DOT      // .
 
 	// Operators
 	EQUALS
