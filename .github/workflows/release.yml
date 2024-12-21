@@ -14,8 +14,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
-    - name: Install goyacc
-      run: go install golang.org/x/tools/cmd/goyacc@latest
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
     - name: Login to DockerHub

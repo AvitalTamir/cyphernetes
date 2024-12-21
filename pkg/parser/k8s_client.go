@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -20,6 +21,11 @@ import (
 )
 
 var (
+	Namespace        string
+	LogLevel         string
+	AllNamespaces    bool
+	CleanOutput      bool
+	NoColor          bool
 	executorInstance *QueryExecutor
 	contextExecutors map[string]*QueryExecutor
 	executorsLock    sync.RWMutex
@@ -665,5 +671,47 @@ func createRelationshipRule(parent string, schemaName string, path string) {
 			FieldB:         fieldB,
 			ComparisonType: ExactMatch,
 		})
+	}
+}
+
+func logDebug(v ...interface{}) {
+	if LogLevel == "debug" {
+		log.Println(append([]interface{}{"[DEBUG] "}, v...)...)
+	}
+}
+
+func logError(v ...interface{}) {
+	if LogLevel == "error" {
+		log.Println(append([]interface{}{"[ERROR] "}, v...)...)
+	}
+}
+
+func ClearCache() {
+	GvrCacheMutex.Lock()
+	GvrCache = make(map[string]schema.GroupVersionResource)
+	GvrCacheMutex.Unlock()
+
+	apiResourceListCache = nil
+
+	// Clear the resultCache
+	resultCache = make(map[string]interface{})
+}
+
+func PrintCache() {
+	fmt.Println("GVR Cache:")
+	for k, v := range GvrCache {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+	fmt.Println("API Resource List Cache:")
+	for _, v := range apiResourceListCache {
+		fmt.Printf("%s\n", v)
+	}
+	fmt.Println("Result Cache:")
+	for k, v := range resultCache {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+	fmt.Println("Result Map:")
+	for k, v := range resultMap {
+		fmt.Printf("%s: %s\n", k, v)
 	}
 }

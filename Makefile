@@ -34,11 +34,6 @@ test:
 	@echo "🧪 Running tests..."
 	go test ./...
 
-# Define how to generate the grammar parser
-gen-parser:
-	@echo "🧠 Generating parser..."
-	goyacc -o pkg/parser/cyphernetes.go -p "yy" grammar/cyphernetes.y &> /dev/null
-
 operator-manifests:
 	@echo "🤖 Creating operator manifests..."
 	$(MAKE) -C operator deployment-manifests > /dev/null
