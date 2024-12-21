@@ -92,5 +92,4 @@ help:
 	@echo "  all          - Build the project."
 	@echo "  build        - Compile the project into a binary."
 	@echo "  test         - Run tests."
-	@echo "  gen-parser   - Generate the grammar parser using Pigeon."
 	@echo "  clean        - Remove binary and clean up."
