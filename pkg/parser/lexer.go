@@ -67,6 +67,8 @@ func (l *Lexer) NextToken() Token {
 			return Token{Type: COUNT, Literal: lit}
 		case "SUM":
 			return Token{Type: SUM, Literal: lit}
+		case "CONTAINS":
+			return Token{Type: CONTAINS, Literal: lit}
 		case "TRUE", "FALSE":
 			return Token{Type: BOOLEAN, Literal: lit}
 		case "NULL":
@@ -149,9 +151,11 @@ func (l *Lexer) NextToken() Token {
 		case '=':
 			l.s.Next()
 			return Token{Type: LESS_THAN_EQUALS, Literal: "<="}
+		case '<':
+			l.s.Next()
+			return Token{Type: ILLEGAL, Literal: "<<"}
 		default:
-			// Any other combination with < is illegal
-			return Token{Type: ILLEGAL, Literal: "<" + string(l.s.Peek())}
+			return Token{Type: LESS_THAN, Literal: "<"}
 		}
 
 	case '>':
