@@ -322,20 +322,56 @@ func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, erro
 
 	if p.current.Type == LBRACE {
 		p.advance()
-		if p.current.Type == JSONDATA {
-			jsonData = p.current.Literal
-			p.advance()
+		// Check if this is a JSON object
+		if p.current.Type == STRING {
+			// Collect all tokens until matching closing brace
+			var jsonBuilder strings.Builder
+			jsonBuilder.WriteString("{")
+			braceCount := 1
+
+			for braceCount > 0 {
+				switch p.current.Type {
+				case LBRACE:
+					braceCount++
+					jsonBuilder.WriteString("{")
+				case RBRACE:
+					braceCount--
+					if braceCount >= 0 {
+						jsonBuilder.WriteString("}")
+					}
+				case STRING:
+					jsonBuilder.WriteString(p.current.Literal)
+				case COLON:
+					jsonBuilder.WriteString(":")
+				case COMMA:
+					jsonBuilder.WriteString(",")
+				case LBRACKET:
+					jsonBuilder.WriteString("[")
+				case RBRACKET:
+					jsonBuilder.WriteString("]")
+				case NUMBER:
+					jsonBuilder.WriteString(p.current.Literal)
+				default:
+					return nil, fmt.Errorf("unexpected token in JSON: %v", p.current)
+				}
+				if braceCount > 0 {
+					p.advance()
+				}
+			}
+			jsonData = jsonBuilder.String()
+			p.advance() // consume final }
 		} else {
+			// Parse as regular properties
 			props, err := p.parseProperties()
 			if err != nil {
 				return nil, err
 			}
 			properties = props
+			if p.current.Type != RBRACE {
+				return nil, fmt.Errorf("expected }, got %v", p.current)
+			}
+			p.advance()
 		}
-		if p.current.Type != RBRACE {
-			return nil, fmt.Errorf("expected }, got %v", p.current)
-		}
-		p.advance()
 	}
 
 	return &ResourceProperties{

@@ -274,6 +274,193 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "create with complex json",
+			input: `CREATE (d:Deployment {
+				"metadata": {
+					"name": "child-of-test",
+					"labels": {
+						"app": "child-of-test"
+					}
+				},
+				"spec": {
+					"selector": {
+						"matchLabels": {
+							"app": "child-of-test"
+						}
+					},
+					"template": {
+						"metadata": {
+							"labels": {
+								"app": "child-of-test"
+							}
+						},
+						"spec": {
+							"containers": [
+								{
+									"name": "child-of-test",
+									"image": "nginx:latest"
+								}
+							]
+						}
+					}
+				}
+			})`,
+			want: &Expression{
+				Clauses: []Clause{
+					&CreateClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+									JsonData: `{
+										"metadata": {
+											"name": "child-of-test",
+											"labels": {
+												"app": "child-of-test"
+											}
+										},
+										"spec": {
+											"selector": {
+												"matchLabels": {
+													"app": "child-of-test"
+												}
+											},
+											"template": {
+												"metadata": {
+													"labels": {
+														"app": "child-of-test"
+													}
+												},
+												"spec": {
+													"containers": [
+														{
+															"name": "child-of-test",
+															"image": "nginx:latest"
+														}
+													]
+												}
+											}
+										}
+									}`,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match and create relationship",
+			input: `MATCH (d:Deployment {name: "child-of-test"}) CREATE (d)->(s:Service)`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "name", Value: "child-of-test"},
+										},
+									},
+								},
+							},
+						},
+					},
+					&CreateClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "s",
+									Kind: "Service",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "d",
+										Kind: "",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "Service",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match and delete with relationship",
+			input: `MATCH (d:Deployment {name: "child-of-test"})->(s:Service) DELETE d, s`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "name", Value: "child-of-test"},
+										},
+									},
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "s",
+									Kind: "Service",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "d",
+										Kind: "Deployment",
+										Properties: &Properties{
+											PropertyList: []*Property{
+												{Key: "name", Value: "child-of-test"},
+											},
+										},
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "Service",
+									},
+								},
+							},
+						},
+					},
+					&DeleteClause{
+						NodeIds: []string{"d", "s"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -284,9 +471,32 @@ func TestRecursiveParser(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				gotJSON, _ := json.MarshalIndent(got, "", "  ")
-				wantJSON, _ := json.MarshalIndent(tt.want, "", "  ")
-				t.Errorf("ParseQuery() mismatch:\nGOT:\n%s\n\nWANT:\n%s", string(gotJSON), string(wantJSON))
+				// Special handling for JSON data comparison
+				if len(got.Clauses) > 0 && len(tt.want.Clauses) > 0 {
+					if createClause, ok := got.Clauses[0].(*CreateClause); ok {
+						if wantCreateClause, ok := tt.want.Clauses[0].(*CreateClause); ok {
+							if len(createClause.Nodes) > 0 && len(wantCreateClause.Nodes) > 0 {
+								// Normalize the JSON data
+								var gotJSON, wantJSON interface{}
+								if err := json.Unmarshal([]byte(createClause.Nodes[0].ResourceProperties.JsonData), &gotJSON); err == nil {
+									if err := json.Unmarshal([]byte(wantCreateClause.Nodes[0].ResourceProperties.JsonData), &wantJSON); err == nil {
+										if reflect.DeepEqual(gotJSON, wantJSON) {
+											// If the JSON content matches, update the JsonData to match formatting
+											createClause.Nodes[0].ResourceProperties.JsonData = wantCreateClause.Nodes[0].ResourceProperties.JsonData
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				// Now do the final comparison
+				if !reflect.DeepEqual(got, tt.want) {
+					gotJSON, _ := json.MarshalIndent(got, "", "  ")
+					wantJSON, _ := json.MarshalIndent(tt.want, "", "  ")
+					t.Errorf("ParseQuery() mismatch:\nGOT:\n%s\n\nWANT:\n%s", string(gotJSON), string(wantJSON))
+				}
 			}
 		})
 	}
