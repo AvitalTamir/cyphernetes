@@ -492,6 +492,87 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with array wildcard",
+			input: `MATCH (d:deployment {name:"auth-service"})->(s:svc)->(p:pod) RETURN SUM { p.spec.containers[*].resources.requests.cpu } AS totalCPUReq`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "deployment",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "name", Value: "auth-service"},
+										},
+									},
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "s",
+									Kind: "svc",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "d",
+										Kind: "deployment",
+										Properties: &Properties{
+											PropertyList: []*Property{
+												{Key: "name", Value: "auth-service"},
+											},
+										},
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "svc",
+									},
+								},
+							},
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "svc",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "p",
+										Kind: "pod",
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{
+								JsonPath:  "p.spec.containers[*].resources.requests.cpu",
+								Aggregate: "SUM",
+								Alias:     "totalCPUReq",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
