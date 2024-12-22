@@ -40,7 +40,7 @@ func (p *Parser) Parse() (*Expression, error) {
 
 	// Parse first clause (must be MATCH or CREATE)
 	if p.current.Type != MATCH && p.current.Type != CREATE {
-		return nil, fmt.Errorf("expected MATCH or CREATE, got %v", p.current)
+		return nil, fmt.Errorf("expected MATCH or CREATE, got \"%v\"", p.current.Literal)
 	}
 
 	firstClause, err := p.parseFirstClause()
@@ -124,16 +124,16 @@ func (p *Parser) Parse() (*Expression, error) {
 	// Check for invalid tokens first
 	if p.current.Type == '<' {
 		debugLog("Found invalid token '<' before EOF")
-		return nil, fmt.Errorf("unexpected relationship token: %v", p.current)
+		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
 	// Then check for EOF
 	debugLog("Checking for EOF, current token: %v", p.current)
 	if p.current.Type != EOF {
 		if p.current.Type == ILLEGAL && strings.HasPrefix(p.current.Literal, "<") {
-			return nil, fmt.Errorf("unexpected relationship token: %v", p.current.Literal)
+			return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 		}
-		return nil, fmt.Errorf("unexpected token after expression: %v", p.current)
+		return nil, fmt.Errorf("unexpected token after expression: \"%v\"", p.current.Literal)
 	}
 
 	// Check for incomplete expression last
@@ -160,14 +160,14 @@ func (p *Parser) parseFirstClause() (Clause, error) {
 	case CREATE:
 		return p.parseCreateClause()
 	default:
-		return nil, fmt.Errorf("expected MATCH or CREATE, got %v", p.current)
+		return nil, fmt.Errorf("expected MATCH or CREATE, got \"%v\"", p.current.Literal)
 	}
 }
 
 // parseMatchClause parses: MATCH NodeRelationshipList (WHERE KeyValuePairs)?
 func (p *Parser) parseMatchClause() (*MatchClause, error) {
 	if p.current.Type != MATCH {
-		return nil, fmt.Errorf("expected MATCH, got %v", p.current)
+		return nil, fmt.Errorf("expected MATCH, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
@@ -195,7 +195,7 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 // parseCreateClause parses: CREATE NodeRelationshipList
 func (p *Parser) parseCreateClause() (*CreateClause, error) {
 	if p.current.Type != CREATE {
-		return nil, fmt.Errorf("expected CREATE, got %v", p.current)
+		return nil, fmt.Errorf("expected CREATE, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
@@ -215,7 +215,7 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 	var nodes []*NodePattern
 	var relationships []*Relationship
 
-	debugLog("Parsing node relationship list, current token: %v", p.current)
+	debugLog("Parsing node relationship list, current token: %v", p.current.Literal)
 
 	// Parse first node
 	node, err := p.parseNodePattern()
@@ -226,13 +226,13 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 
 	// Check for invalid relationship tokens before entering the loop
 	if p.current.Type == '<' || (p.current.Type == '<' && p.lexer.Peek() == '<') {
-		debugLog("Found invalid relationship token: %v", p.current)
-		return nil, fmt.Errorf("unexpected relationship token: %v", p.current)
+		debugLog("Found invalid relationship token: \"%v\"", p.current.Literal)
+		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
 	// Parse subsequent relationships and nodes
 	for {
-		debugLog("In relationship loop, current token: %v", p.current)
+		debugLog("In relationship loop, current token: %v", p.current.Literal)
 
 		if isRelationshipStart(p.current.Type) {
 			rel, rightNode, err := p.parseRelationshipAndNode()
@@ -267,14 +267,14 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 
 // parseNodePattern parses: LPAREN ResourceProperties RPAREN | LPAREN IDENT RPAREN
 func (p *Parser) parseNodePattern() (*NodePattern, error) {
-	debugLog("Parsing node pattern, current token: %v", p.current)
+	debugLog("Parsing node pattern, current token: \"%v\"", p.current.Literal)
 	if p.current.Type != LPAREN {
-		return nil, fmt.Errorf("expected (, got %v", p.current)
+		return nil, fmt.Errorf("expected (, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
 	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected identifier, got %v", p.current)
+		return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 	}
 	name := p.current.Literal
 	p.advance()
@@ -288,22 +288,22 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 			return nil, err
 		}
 		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got %v", p.current)
+			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
 		}
 		p.advance()
 	} else {
 		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got %v", p.current)
+			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
 		}
 		p.advance()
 		resourceProps = &ResourceProperties{Name: name}
 	}
 
 	// Check for invalid relationship tokens immediately after closing parenthesis
-	debugLog("After node pattern, checking next token: %v", p.current)
+	debugLog("After node pattern, checking next token: \"%v\"", p.current.Literal)
 	if p.current.Type == '<' {
 		debugLog("Found invalid relationship token after node pattern")
-		return nil, fmt.Errorf("unexpected relationship token: %v", p.current)
+		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
 	return &NodePattern{ResourceProperties: resourceProps}, nil
@@ -312,7 +312,7 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 // parseResourceProperties parses the properties of a node or relationship
 func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, error) {
 	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected kind identifier, got %v", p.current)
+		return nil, fmt.Errorf("expected kind identifier, got \"%v\"", p.current.Literal)
 	}
 	kind := p.current.Literal
 	p.advance()
@@ -352,7 +352,7 @@ func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, erro
 				case NUMBER:
 					jsonBuilder.WriteString(p.current.Literal)
 				default:
-					return nil, fmt.Errorf("unexpected token in JSON: %v", p.current)
+					return nil, fmt.Errorf("unexpected token in JSON: \"%v\"", p.current.Literal)
 				}
 				if braceCount > 0 {
 					p.advance()
@@ -368,7 +368,7 @@ func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, erro
 			}
 			properties = props
 			if p.current.Type != RBRACE {
-				return nil, fmt.Errorf("expected }, got %v", p.current)
+				return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
 			}
 			p.advance()
 		}
@@ -423,7 +423,7 @@ func (p *Parser) parseRelationshipAndNode() (*Relationship, *NodePattern, error)
 			return nil, nil, err
 		}
 		if p.current.Type != REL_ENDPROPS_NONE {
-			return nil, nil, fmt.Errorf("expected relationship end token, got %v", p.current)
+			return nil, nil, fmt.Errorf("expected relationship end token, got \"%v\"", p.current.Literal)
 		}
 	case REL_BEGINPROPS_NONE:
 		direction = Right
@@ -434,10 +434,10 @@ func (p *Parser) parseRelationshipAndNode() (*Relationship, *NodePattern, error)
 			return nil, nil, err
 		}
 		if p.current.Type != REL_ENDPROPS_RIGHT {
-			return nil, nil, fmt.Errorf("expected relationship end token, got %v", p.current)
+			return nil, nil, fmt.Errorf("expected relationship end token, got \"%v\"", p.current.Literal)
 		}
 	default:
-		return nil, nil, fmt.Errorf("unexpected relationship token: %v", p.current)
+		return nil, nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
@@ -458,7 +458,7 @@ func (p *Parser) parseRelationshipAndNode() (*Relationship, *NodePattern, error)
 // parseSetClause parses: SET KeyValuePairs
 func (p *Parser) parseSetClause() (*SetClause, error) {
 	if p.current.Type != SET {
-		return nil, fmt.Errorf("expected SET, got %v", p.current)
+		return nil, fmt.Errorf("expected SET, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
@@ -473,14 +473,14 @@ func (p *Parser) parseSetClause() (*SetClause, error) {
 // parseDeleteClause parses: DELETE NodeIds
 func (p *Parser) parseDeleteClause() (*DeleteClause, error) {
 	if p.current.Type != DELETE {
-		return nil, fmt.Errorf("expected DELETE, got %v", p.current)
+		return nil, fmt.Errorf("expected DELETE, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
 	var nodeIds []string
 	for {
 		if p.current.Type != IDENT {
-			return nil, fmt.Errorf("expected identifier, got %v", p.current)
+			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
 		nodeIds = append(nodeIds, p.current.Literal)
 		p.advance()
@@ -497,7 +497,7 @@ func (p *Parser) parseDeleteClause() (*DeleteClause, error) {
 // parseReturnClause parses: RETURN ReturnItems
 func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 	if p.current.Type != RETURN {
-		return nil, fmt.Errorf("expected RETURN, got %v", p.current)
+		return nil, fmt.Errorf("expected RETURN, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
@@ -522,14 +522,14 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 			p.advance()
 
 			if p.current.Type != LBRACE {
-				return nil, fmt.Errorf("expected {, got %v", p.current)
+				return nil, fmt.Errorf("expected {, got \"%v\"", p.current.Literal)
 			}
 			p.advance()
 		}
 
 		// Parse node reference
 		if p.current.Type != IDENT {
-			return nil, fmt.Errorf("expected identifier, got %v", p.current)
+			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
 		nodeRef := p.current.Literal
 		p.advance()
@@ -543,7 +543,7 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 
 			for {
 				if p.current.Type != IDENT {
-					return nil, fmt.Errorf("expected identifier, got %v", p.current)
+					return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 				}
 				path.WriteString(p.current.Literal)
 				p.advance()
@@ -553,12 +553,12 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 					p.advance()
 					path.WriteString("[")
 					if p.current.Type != NUMBER {
-						return nil, fmt.Errorf("expected number in array index, got %v", p.current)
+						return nil, fmt.Errorf("expected number in array index, got \"%v\"", p.current.Literal)
 					}
 					path.WriteString(p.current.Literal)
 					p.advance()
 					if p.current.Type != RBRACKET {
-						return nil, fmt.Errorf("expected closing bracket, got %v", p.current)
+						return nil, fmt.Errorf("expected closing bracket, got \"%v\"", p.current.Literal)
 					}
 					path.WriteString("]")
 					p.advance()
@@ -578,7 +578,7 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 		// Handle closing brace for aggregation
 		if item.Aggregate != "" {
 			if p.current.Type != RBRACE {
-				return nil, fmt.Errorf("expected }, got %v", p.current)
+				return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
 			}
 			p.advance()
 		}
@@ -587,7 +587,7 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 		if p.current.Type == AS {
 			p.advance()
 			if p.current.Type != IDENT {
-				return nil, fmt.Errorf("expected identifier after AS, got %v", p.current)
+				return nil, fmt.Errorf("expected identifier after AS, got \"%v\"", p.current.Literal)
 			}
 			item.Alias = p.current.Literal
 			p.advance()
@@ -610,7 +610,7 @@ func (p *Parser) parseContexts() ([]string, error) {
 
 	for {
 		if p.current.Type != IDENT {
-			return nil, fmt.Errorf("expected identifier, got %v", p.current)
+			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
 		contexts = append(contexts, p.current.Literal)
 		p.advance()
@@ -630,13 +630,13 @@ func (p *Parser) parseProperties() (*Properties, error) {
 
 	for {
 		if p.current.Type != IDENT && p.current.Type != STRING {
-			return nil, fmt.Errorf("expected property key, got %v", p.current)
+			return nil, fmt.Errorf("expected property key, got \"%v\"", p.current.Literal)
 		}
 		key := p.current.Literal
 		p.advance()
 
 		if p.current.Type != COLON {
-			return nil, fmt.Errorf("expected :, got %v", p.current)
+			return nil, fmt.Errorf("expected :, got \"%v\"", p.current.Literal)
 		}
 		p.advance()
 
@@ -665,7 +665,7 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 
 	for {
 		if p.current.Type != IDENT {
-			return nil, fmt.Errorf("expected identifier, got %v", p.current)
+			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
 		var path strings.Builder
 		path.WriteString(p.current.Literal)
@@ -676,7 +676,7 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 				p.advance()
 				path.WriteString(".")
 				if p.current.Type != IDENT {
-					return nil, fmt.Errorf("expected identifier after dot, got %v", p.current)
+					return nil, fmt.Errorf("expected identifier after dot, got \"%v\"", p.current.Literal)
 				}
 				path.WriteString(p.current.Literal)
 				p.advance()
@@ -684,12 +684,12 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 				p.advance()
 				path.WriteString("[")
 				if p.current.Type != NUMBER {
-					return nil, fmt.Errorf("expected number in array index, got %v", p.current)
+					return nil, fmt.Errorf("expected number in array index, got \"%v\"", p.current.Literal)
 				}
 				path.WriteString(p.current.Literal)
 				p.advance()
 				if p.current.Type != RBRACKET {
-					return nil, fmt.Errorf("expected closing bracket, got %v", p.current)
+					return nil, fmt.Errorf("expected closing bracket, got \"%v\"", p.current.Literal)
 				}
 				path.WriteString("]")
 				p.advance()
@@ -754,7 +754,7 @@ func (p *Parser) parseOperator() (string, error) {
 		p.advance()
 		return "REGEX_COMPARE", nil
 	default:
-		return "", fmt.Errorf("expected operator, got %v", p.current)
+		return "", fmt.Errorf("expected operator, got \"%v\"", p.current.Literal)
 	}
 }
 
@@ -786,25 +786,25 @@ func (p *Parser) parseValue() (interface{}, error) {
 		p.advance()
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("expected value, got %v", p.current)
+		return nil, fmt.Errorf("expected value, got \"%v\"", p.current.Literal)
 	}
 }
 
 // parseRelationshipProperties parses the properties of a relationship
 func (p *Parser) parseRelationshipProperties() (*ResourceProperties, error) {
 	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected identifier, got %v", p.current)
+		return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 	}
 	name := p.current.Literal
 	p.advance()
 
 	if p.current.Type != COLON {
-		return nil, fmt.Errorf("expected :, got %v", p.current)
+		return nil, fmt.Errorf("expected :, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
 	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected kind identifier, got %v", p.current)
+		return nil, fmt.Errorf("expected kind identifier, got \"%v\"", p.current.Literal)
 	}
 	kind := p.current.Literal
 	p.advance()
@@ -825,7 +825,7 @@ func (p *Parser) parseRelationshipProperties() (*ResourceProperties, error) {
 			properties = props
 		}
 		if p.current.Type != RBRACE {
-			return nil, fmt.Errorf("expected }, got %v", p.current)
+			return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
 		}
 		p.advance()
 	}

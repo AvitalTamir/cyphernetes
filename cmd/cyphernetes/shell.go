@@ -338,6 +338,11 @@ func runShell(cmd *cobra.Command, args []string) {
 			break
 		}
 
+		if input == "\\n" {
+			fmt.Println("Namespace cannot be empty. Usage: \\n <namespace>|all")
+			continue
+		}
+
 		if strings.HasPrefix(input, "\\n ") {
 			input = strings.TrimPrefix(input, "\\n ")
 			if strings.ToLower(input) == "all" {
