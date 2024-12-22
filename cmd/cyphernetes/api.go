@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -40,11 +40,11 @@ func handleQuery(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	executor := parser.GetQueryExecutorInstance()
+	executor := core.GetQueryExecutorInstance()
 
 	namespace := "default"
 
-	ast, err := parser.ParseQuery(req.Query)
+	ast, err := core.ParseQuery(req.Query)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -112,9 +112,9 @@ func handleConvertResourceName(c *gin.Context) {
 		return
 	}
 
-	executor := parser.GetQueryExecutorInstance()
+	executor := core.GetQueryExecutorInstance()
 	// Use the FindGVR function to get the singular form
-	gvr, err := parser.FindGVR(executor.Clientset, resourceName)
+	gvr, err := core.FindGVR(executor.Clientset, resourceName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

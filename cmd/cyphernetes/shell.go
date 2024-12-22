@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	colorjson "github.com/TylerBrock/colorjson"
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -33,7 +33,7 @@ var ShellCmd = &cobra.Command{
 	Run:   runShell,
 }
 
-var executor *parser.QueryExecutor
+var executor *core.QueryExecutor
 var execTime time.Duration
 var completer = &CyphernetesCompleter{}
 var printQueryExecutionTime bool = true
@@ -53,7 +53,7 @@ func filterInput(r rune) (rune, bool) {
 }
 
 func shellPrompt() string {
-	ns := parser.Namespace
+	ns := core.Namespace
 	color := getPromptColor(ns)
 	if ns == "" {
 		ns = "ALL NAMESPACES"
@@ -66,7 +66,7 @@ func shellPrompt() string {
 func multiLinePrompt() string {
 	shellPromptLength := len(regexp.MustCompile(`\033\[[0-9;]*m`).ReplaceAllString(shellPrompt(), ""))
 	prompt := fmt.Sprintf("%s»", strings.Repeat(" ", shellPromptLength-3))
-	return wrapInColor(prompt, getPromptColor(parser.Namespace)) + " "
+	return wrapInColor(prompt, getPromptColor(core.Namespace)) + " "
 }
 
 func getPromptColor(ns string) int {
@@ -76,7 +76,7 @@ func getPromptColor(ns string) int {
 	return 32
 }
 
-func SetQueryExecutor(exec *parser.QueryExecutor) {
+func SetQueryExecutor(exec *core.QueryExecutor) {
 	executor = exec
 }
 
@@ -164,7 +164,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 }
 
 func colorizeProperties(obj string) string {
-	if parser.NoColor {
+	if core.NoColor {
 		return obj
 	}
 
@@ -203,9 +203,9 @@ type Listener interface {
 }
 
 func runShell(cmd *cobra.Command, args []string) {
-	if parser.AllNamespaces {
-		parser.Namespace = ""
-		parser.AllNamespaces = false
+	if core.AllNamespaces {
+		core.Namespace = ""
+		core.AllNamespaces = false
 	}
 
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
@@ -244,12 +244,12 @@ func runShell(cmd *cobra.Command, args []string) {
 	fmt.Println("")
 
 	// Initialize the GRV cache
-	executor = parser.GetQueryExecutorInstance()
+	executor = core.GetQueryExecutorInstance()
 	if executor == nil {
 		os.Exit(1)
 	}
-	parser.FetchAndCacheGVRs(executor.Clientset)
-	parser.InitResourceSpecs()
+	core.FetchAndCacheGVRs(executor.Clientset)
+	core.InitResourceSpecs()
 	initResourceSpecs()
 
 	fmt.Println("")
@@ -346,19 +346,19 @@ func runShell(cmd *cobra.Command, args []string) {
 		if strings.HasPrefix(input, "\\n ") {
 			input = strings.TrimPrefix(input, "\\n ")
 			if strings.ToLower(input) == "all" {
-				parser.Namespace = ""
+				core.Namespace = ""
 			} else {
-				parser.Namespace = strings.ToLower(input)
+				core.Namespace = strings.ToLower(input)
 			}
 			rl.SetPrompt(shellPrompt())
 		} else if input == "\\d" {
 			// Toggle debug mode
-			if parser.LogLevel == "debug" {
-				parser.LogLevel = "info"
+			if core.LogLevel == "debug" {
+				core.LogLevel = "info"
 			} else {
-				parser.LogLevel = "debug"
+				core.LogLevel = "debug"
 			}
-			fmt.Printf("Debug mode: %s\n", parser.LogLevel)
+			fmt.Printf("Debug mode: %s\n", core.LogLevel)
 		} else if input == "\\q" {
 			// Toggle print query execution time
 			if printQueryExecutionTime {
@@ -369,10 +369,10 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
 		} else if input == "\\pc" {
 			// Print the cache
-			parser.PrintCache()
+			core.PrintCache()
 		} else if input == "\\cc" {
 			// Clear the cache
-			parser.ClearCache()
+			core.ClearCache()
 			fmt.Println("Cache cleared")
 		} else if input == "\\lm" {
 			fmt.Println("Registered macros:")
@@ -453,13 +453,13 @@ func runShell(cmd *cobra.Command, args []string) {
 	}
 }
 
-func processQuery(query string) (string, parser.Graph, error) {
+func processQuery(query string) (string, core.Graph, error) {
 	startTime := time.Now()
 
 	query = strings.TrimSuffix(query, ";")
 
 	var result string
-	var graph parser.Graph
+	var graph core.Graph
 	var err error
 
 	if strings.HasPrefix(query, ":") {
@@ -470,22 +470,22 @@ func processQuery(query string) (string, parser.Graph, error) {
 
 		statements, err := macroManager.ExecuteMacro(macroName, args)
 		if err != nil {
-			return "", parser.Graph{}, err
+			return "", core.Graph{}, err
 		}
 
 		var results []string
-		var graphInternal parser.Graph
+		var graphInternal core.Graph
 		for i, stmt := range statements {
 			result, err := executeStatementFunc(stmt)
 			if err != nil {
-				return "", parser.Graph{}, fmt.Errorf("error executing statement %d: %w", i+1, err)
+				return "", core.Graph{}, fmt.Errorf("error executing statement %d: %w", i+1, err)
 			}
 
 			// unmarshal the result into a map[string]interface{}
 			var resultMap map[string]interface{}
 			err = json.Unmarshal([]byte(result), &resultMap)
 			if err != nil {
-				return "", parser.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
+				return "", core.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
 			}
 
 			buildDataAndGraph(resultMap, &result, &graphInternal)
@@ -503,12 +503,12 @@ func processQuery(query string) (string, parser.Graph, error) {
 	} else {
 		res, err := executeStatement(query)
 		if err != nil {
-			return "", parser.Graph{}, err
+			return "", core.Graph{}, err
 		}
 		var resultMap map[string]interface{}
 		err = json.Unmarshal([]byte(res), &resultMap)
 		if err != nil {
-			return "", parser.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
+			return "", core.Graph{}, fmt.Errorf("error unmarshalling result: %w", err)
 		}
 
 		buildDataAndGraph(resultMap, &result, &graph)
@@ -518,14 +518,14 @@ func processQuery(query string) (string, parser.Graph, error) {
 	return result, graph, err
 }
 
-func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *parser.Graph) error {
+func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *core.Graph) error {
 	// check if interface is nil
 	if graphInternal, ok := resultMap["Graph"]; ok {
 		// check that graphInternal has "Nodes" and "Edges"
 		if nodes, ok := graphInternal.(map[string]interface{})["Nodes"]; ok {
 			nodeIds := nodes.([]interface{})
 			for _, nodeId := range nodeIds {
-				graph.Nodes = append(graph.Nodes, parser.Node{
+				graph.Nodes = append(graph.Nodes, core.Node{
 					Id:   nodeId.(map[string]interface{})["Id"].(string),
 					Name: nodeId.(map[string]interface{})["Name"].(string),
 					Kind: nodeId.(map[string]interface{})["Kind"].(string),
@@ -536,7 +536,7 @@ func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *
 			for _, edge := range edges.([]interface{}) {
 				// check LeftNode and RightNode are not nil
 				if edge.(map[string]interface{})["From"] != nil && edge.(map[string]interface{})["To"] != nil && edge.(map[string]interface{})["Type"] != nil {
-					graph.Edges = append(graph.Edges, parser.Edge{
+					graph.Edges = append(graph.Edges, core.Edge{
 						From: edge.(map[string]interface{})["From"].(string),
 						To:   edge.(map[string]interface{})["To"].(string),
 						Type: edge.(map[string]interface{})["Type"].(string),
@@ -559,7 +559,7 @@ func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *
 }
 
 func executeStatement(query string) (string, error) {
-	ast, err := parser.ParseQuery(query)
+	ast, err := core.ParseQuery(query)
 	if err != nil {
 		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
@@ -590,7 +590,7 @@ func formatJson(jsonString string) string {
 		return jsonString
 	}
 
-	if parser.NoColor {
+	if core.NoColor {
 		s, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {
 			fmt.Println("Error marshalling json: ", err)
@@ -642,11 +642,11 @@ func init() {
 	ctx = contextName
 
 	if namespace != "" && namespace != "default" {
-		parser.Namespace = namespace
+		core.Namespace = namespace
 	}
 
 	if _, exists := os.LookupEnv("NO_COLOR"); exists {
-		parser.NoColor = true
+		core.NoColor = true
 	}
 }
 
@@ -668,7 +668,7 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 }
 
 func wrapInColor(input string, color int) string {
-	if parser.NoColor {
+	if core.NoColor {
 		return input
 	}
 	return fmt.Sprintf("\033[%dm%s\033[0m", color, input)

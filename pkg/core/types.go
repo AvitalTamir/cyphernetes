@@ -1,4 +1,4 @@
-package parser
+package core
 
 // Direction represents the direction of a relationship
 type Direction string

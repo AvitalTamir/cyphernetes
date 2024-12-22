@@ -27,7 +27,7 @@ import (
 
 	"github.com/AvitalTamir/jsonpath"
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
+	core "github.com/avitaltamir/cyphernetes/pkg/core"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -168,7 +168,7 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
-	queryExecutor, err := parser.NewQueryExecutor()
+	queryExecutor, err := core.NewQueryExecutor()
 	if err != nil {
 		return fmt.Errorf("failed to create query executor: %w", err)
 	}
@@ -490,7 +490,7 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 	sanitizedStatement = strings.TrimSpace(sanitizedStatement)
 	sanitizedStatement = strings.ReplaceAll(sanitizedStatement, "\n", " ")
 
-	ast, err := parser.ParseQuery(sanitizedStatement)
+	ast, err := core.ParseQuery(sanitizedStatement)
 	if err != nil {
 		return err
 	}
@@ -509,8 +509,8 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 
 	// Check if we need to add owner references to created resources
 	if createClause := findCreateClause(ast); createClause != nil {
-		var nodesToAddOwnerRef []*parser.NodePattern
-		var matchCreateNode *parser.NodePattern
+		var nodesToAddOwnerRef []*core.NodePattern
+		var matchCreateNode *core.NodePattern
 
 		matchClause := findMatchClause(ast)
 		if matchClause == nil {
@@ -611,16 +611,16 @@ func removeString(slice []string, s string) []string {
 type RealGVRFinder struct{}
 
 func (f *RealGVRFinder) FindGVR(clientset interface{}, resourceKind string) (schema.GroupVersionResource, error) {
-	return parser.FindGVR(clientset.(*kubernetes.Clientset), resourceKind)
+	return core.FindGVR(clientset.(*kubernetes.Clientset), resourceKind)
 }
 
 type QueryExecutorInterface interface {
-	Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error)
+	Execute(expr *core.Expression, namespace string) (core.QueryResult, error)
 	GetClientset() kubernetes.Interface
 	GetDynamicClient() dynamic.Interface
 }
 
-func (r *DynamicOperatorReconciler) addOwnerReference(result parser.QueryResult, node *parser.NodePattern, matchCreateNode *parser.NodePattern, ownerObj map[string]interface{}, namespace string) error {
+func (r *DynamicOperatorReconciler) addOwnerReference(result core.QueryResult, node *core.NodePattern, matchCreateNode *core.NodePattern, ownerObj map[string]interface{}, namespace string) error {
 	gvr, err := r.GVRFinder.FindGVR(r.Clientset, node.ResourceProperties.Kind)
 	if err != nil {
 		return fmt.Errorf("failed to find GVR for %s: %v", node.ResourceProperties.Kind, err)
@@ -722,18 +722,18 @@ func (r *DynamicOperatorReconciler) addOwnerReference(result parser.QueryResult,
 }
 
 // Helper functions to find specific clauses in the AST
-func findCreateClause(ast *parser.Expression) *parser.CreateClause {
+func findCreateClause(ast *core.Expression) *core.CreateClause {
 	for _, clause := range ast.Clauses {
-		if createClause, ok := clause.(*parser.CreateClause); ok {
+		if createClause, ok := clause.(*core.CreateClause); ok {
 			return createClause
 		}
 	}
 	return nil
 }
 
-func findMatchClause(ast *parser.Expression) *parser.MatchClause {
+func findMatchClause(ast *core.Expression) *core.MatchClause {
 	for _, clause := range ast.Clauses {
-		if matchClause, ok := clause.(*parser.MatchClause); ok {
+		if matchClause, ok := clause.(*core.MatchClause); ok {
 			return matchClause
 		}
 	}

@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
+	core "github.com/avitaltamir/cyphernetes/pkg/core"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -92,7 +92,7 @@ var _ = Describe("DynamicOperator Controller", func() {
 			dynamicClient, err := dynamic.NewForConfig(k8sConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			queryExecutor, err := parser.NewQueryExecutor()
+			queryExecutor, err := core.NewQueryExecutor()
 			Expect(err).NotTo(HaveOccurred())
 			queryExecutor.Clientset = clientset
 			queryExecutor.DynamicClient = dynamicClient

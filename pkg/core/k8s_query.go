@@ -1,4 +1,4 @@
-package parser
+package core
 
 import (
 	"context"
@@ -124,7 +124,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 
 					// Apply the patches to the resource
-					err = q.patchK8sResource(resource, patchJSON)
+					err = q.PatchK8sResource(resource, patchJSON)
 					if err != nil {
 						return *results, fmt.Errorf("error patching resource: %s", err)
 					}
@@ -141,7 +141,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				if resultMap[nodeId] == nil {
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
-				err := q.deleteK8sResources(nodeId)
+				err := q.DeleteK8sResources(nodeId)
 				if err != nil {
 					return *results, fmt.Errorf("error deleting resource >> %s", err)
 				}
@@ -336,7 +336,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 
 					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
-					err = q.createK8sResource(node, resourceTemplate, name)
+					err = q.CreateK8sResource(node, resourceTemplate, name)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
@@ -369,7 +369,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
-					err = q.createK8sResource(node, resourceTemplate, name)
+					err = q.CreateK8sResource(node, resourceTemplate, name)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %s", err)
 					}
@@ -882,7 +882,7 @@ func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceN
 	return name
 }
 
-func (q *QueryExecutor) createK8sResource(node *NodePattern, template map[string]interface{}, name string) error {
+func (q *QueryExecutor) CreateK8sResource(node *NodePattern, template map[string]interface{}, name string) error {
 	// Look up the resource kind and name in the cache
 	gvr, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
 	if err != nil {
@@ -931,7 +931,7 @@ func (q *QueryExecutor) getSingularNameForGVR(gvr schema.GroupVersionResource) s
 	return ""
 }
 
-func (q *QueryExecutor) deleteK8sResources(nodeId string) error {
+func (q *QueryExecutor) DeleteK8sResources(nodeId string) error {
 	resources := resultMap[nodeId].([]map[string]interface{})
 
 	for i := range resources {
@@ -1165,8 +1165,22 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	return compiledPath
 }
 
+func (q *QueryExecutor) GetK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (*unstructured.UnstructuredList, error) {
+	responseChan := make(chan *apiResponse)
+	q.requestChannel <- &apiRequest{
+		kind:          kind,
+		fieldSelector: fieldSelector,
+		labelSelector: labelSelector,
+		namespace:     namespace,
+		responseChan:  responseChan,
+	}
+
+	response := <-responseChan
+	return response.list, response.err
+}
+
 func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
-	list, err := q.getK8sResources(kind, fieldSelector, labelSelector, namespace)
+	list, err := q.GetK8sResources(kind, fieldSelector, labelSelector, namespace)
 	if err != nil {
 		fmt.Println("Error getting list of resources: ", err)
 		return nil, err
@@ -1343,7 +1357,7 @@ func updateResultMap(resource map[string]interface{}, path []string, value inter
 	}
 }
 
-func (q *QueryExecutor) patchK8sResource(resource map[string]interface{}, patchesJSON []byte) error {
+func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchesJSON []byte) error {
 	gvr, err := FindGVR(q.Clientset, resource["kind"].(string))
 	if err != nil {
 		return fmt.Errorf("error finding API resource: %v", err)

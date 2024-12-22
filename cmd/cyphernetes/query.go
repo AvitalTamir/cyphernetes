@@ -6,14 +6,14 @@ import (
 	"io"
 	"os"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/spf13/cobra"
 )
 
 var (
-	parseQuery       = parser.ParseQuery
-	newQueryExecutor = parser.NewQueryExecutor
-	executeMethod    = (*parser.QueryExecutor).Execute
+	parseQuery       = core.ParseQuery
+	newQueryExecutor = core.NewQueryExecutor
+	executeMethod    = (*core.QueryExecutor).Execute
 )
 
 var queryCmd = &cobra.Command{
@@ -22,12 +22,12 @@ var queryCmd = &cobra.Command{
 	Long:  `Use the 'query' subcommand to execute a single Cypher-inspired query against your Kubernetes resources.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		executor = parser.GetQueryExecutorInstance()
+		executor = core.GetQueryExecutorInstance()
 		if executor == nil {
 			os.Exit(1)
 		}
-		parser.CleanOutput = true
-		parser.InitResourceSpecs()
+		core.CleanOutput = true
+		core.InitResourceSpecs()
 		runQuery(args, os.Stdout)
 	},
 }

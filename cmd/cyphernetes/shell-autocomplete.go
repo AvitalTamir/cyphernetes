@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -14,7 +14,7 @@ var resourceTreeStructureCache = make(map[string][]string)
 var resourceSpecs = make(map[string][]string)
 
 func initResourceSpecs() {
-	resourceSpecs = parser.ResourceSpecs
+	resourceSpecs = core.ResourceSpecs
 }
 
 type CyphernetesCompleter struct {
@@ -168,9 +168,9 @@ func getMacros() []string {
 }
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
-	executor := parser.GetQueryExecutorInstance()
+	executor := core.GetQueryExecutorInstance()
 	// First, get the full GVR for the kind from the GVR cache
-	gvr, err := parser.FindGVR(executor.Clientset, kind)
+	gvr, err := core.FindGVR(executor.Clientset, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, erro
 
 // Helper function to get the kind from GVR
 func getKindFromGVR(gvr schema.GroupVersionResource) (string, error) {
-	discoveryClient := parser.GetQueryExecutorInstance().Clientset.Discovery()
+	discoveryClient := core.GetQueryExecutorInstance().Clientset.Discovery()
 	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
 		return "", err
@@ -253,7 +253,7 @@ func getSchemaName(group, version, kind string) string {
 	}
 
 	// If not found in resourceSpecs, use the dynamic client to get more information
-	gvr, err := parser.FindGVR(parser.GetQueryExecutorInstance().Clientset, kind)
+	gvr, err := core.FindGVR(core.GetQueryExecutorInstance().Clientset, kind)
 	if err == nil {
 		// Construct a potential schema name based on the GVR
 		potentialSchemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", gvr.Group, gvr.Version, kind)
@@ -299,7 +299,7 @@ func getKindForIdentifier(line string, identifier string) string {
 func getResourceKinds(identifier string) []string {
 	// iterate over the gvr cache and return all resource kinds that match the identifier
 	var kinds []string
-	for _, gvr := range parser.GvrCache {
+	for _, gvr := range core.GvrCache {
 		if strings.HasPrefix(gvr.GroupResource().Resource, identifier) {
 			kinds = append(kinds, gvr.Resource)
 		}

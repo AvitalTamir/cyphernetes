@@ -1,4 +1,4 @@
-package parser
+package core
 
 import (
 	"context"
@@ -203,20 +203,6 @@ func (q *QueryExecutor) processRequests() {
 		<-q.semaphore // Release the token
 		request.responseChan <- &apiResponse{list: &list, err: err}
 	}
-}
-
-func (q *QueryExecutor) getK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (*unstructured.UnstructuredList, error) {
-	responseChan := make(chan *apiResponse)
-	q.requestChannel <- &apiRequest{
-		kind:          kind,
-		fieldSelector: fieldSelector,
-		labelSelector: labelSelector,
-		namespace:     namespace,
-		responseChan:  responseChan,
-	}
-
-	response := <-responseChan
-	return response.list, response.err
 }
 
 func (q *QueryExecutor) fetchResources(kind string, fieldSelector string, labelSelector string, namespace string) (unstructured.UnstructuredList, error) {

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
@@ -29,8 +29,8 @@ func runWeb(cmd *cobra.Command, args []string) {
 	port := "8080"
 	url := fmt.Sprintf("http://localhost:%s", port)
 
-	parser.InitResourceSpecs()
-	resourceSpecs = parser.ResourceSpecs
+	core.InitResourceSpecs()
+	resourceSpecs = core.ResourceSpecs
 
 	// Set Gin to release mode to disable logging
 	gin.SetMode(gin.ReleaseMode)
