@@ -461,6 +461,37 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with dashed context names",
+			input: "IN kind-kind, kind-kind-prod MATCH (d:deployments) WHERE d.spec.replicas = 1 RETURN d.spec.replicas",
+			want: &Expression{
+				Contexts: []string{"kind-kind", "kind-kind-prod"},
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "deployments",
+								},
+							},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{
+								Key:      "d.spec.replicas",
+								Value:    1,
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.spec.replicas"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

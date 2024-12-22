@@ -12,12 +12,14 @@ type Lexer struct {
 		lit     string
 		hasNext bool
 	}
+	inContexts bool
 }
 
 func NewLexer(input string) *Lexer {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(input))
 	s.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
+
 	return &Lexer{s: s}
 }
 
@@ -136,6 +138,9 @@ func (l *Lexer) NextToken() Token {
 			l.s.Next()
 			return Token{Type: REL_NOPROPS_NONE, Literal: "--"}
 		default:
+			if l.inContexts {
+				return Token{Type: IDENT, Literal: "-"}
+			}
 			return Token{Type: ILLEGAL, Literal: "-"}
 		}
 
@@ -172,4 +177,9 @@ func (l *Lexer) NextToken() Token {
 // Add Peek method to Lexer
 func (l *Lexer) Peek() rune {
 	return l.s.Peek()
+}
+
+// Add method to set context parsing state
+func (l *Lexer) SetParsingContexts(parsing bool) {
+	l.inContexts = parsing
 }

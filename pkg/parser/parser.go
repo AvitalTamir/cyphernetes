@@ -31,11 +31,13 @@ func (p *Parser) Parse() (*Expression, error) {
 	// Check for IN clause
 	if p.current.Type == IN {
 		p.advance()
+		p.lexer.SetParsingContexts(true)
 		var err error
 		contexts, err = p.parseContexts()
 		if err != nil {
 			return nil, fmt.Errorf("parsing contexts: %w", err)
 		}
+		p.lexer.SetParsingContexts(false)
 	}
 
 	// Parse first clause (must be MATCH or CREATE)
@@ -607,13 +609,31 @@ func (p *Parser) parseReturnItems() ([]*ReturnItem, error) {
 // parseContexts parses a list of context identifiers
 func (p *Parser) parseContexts() ([]string, error) {
 	var contexts []string
+	var currentContext strings.Builder
 
 	for {
 		if p.current.Type != IDENT {
 			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
-		contexts = append(contexts, p.current.Literal)
+
+		// Start building the context name
+		currentContext.WriteString(p.current.Literal)
 		p.advance()
+
+		// Handle dashed names specifically in contexts
+		for p.current.Type == IDENT && p.current.Literal == "-" {
+			currentContext.WriteString("-")
+			p.advance()
+
+			if p.current.Type != IDENT {
+				return nil, fmt.Errorf("expected identifier after dash, got \"%v\"", p.current.Literal)
+			}
+			currentContext.WriteString(p.current.Literal)
+			p.advance()
+		}
+
+		contexts = append(contexts, currentContext.String())
+		currentContext.Reset()
 
 		if p.current.Type != COMMA {
 			break
