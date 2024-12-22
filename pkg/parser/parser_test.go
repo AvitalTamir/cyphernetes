@@ -961,11 +961,27 @@ func TestParserErrors(t *testing.T) {
 			input:   "MATCH (pod:Pod) WHERE pod.spec.containers[a].image = 'nginx' RETURN pod",
 			wantErr: "expected number in array index",
 		},
+		{
+			name:    "invalid relationship property",
+			input:   `MATCH (d:Deployment)-[r:EXPOSES {invalid}]->(s:Service) RETURN d`,
+			wantErr: "expected :",
+		},
+		{
+			name:    "invalid IN clause",
+			input:   `IN production, MATCH (d:Deployment) RETURN d`,
+			wantErr: "expected identifier",
+		},
+		{
+			name:    "invalid array index in SET",
+			input:   `MATCH (d:Deployment) SET d.spec.containers[a].image = "nginx" RETURN d`,
+			wantErr: "expected number in array index",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("Testing input: %q", tt.input)
+
 			parser := NewRecursiveParser(tt.input)
 			_, err := parser.Parse()
 			if err == nil {
