@@ -57,7 +57,7 @@ clean:
 coverage:
 	mkdir -p .coverage
 	@echo "🧪 Generating coverage report for cmd/cyphernetes..."
-	go test ./cmd/cyphernetes -coverprofile=.coverage/coverage.out
+	go test ./... -coverprofile=.coverage/coverage.out
 	go tool cover -func=.coverage/coverage.out | sed 's/^/   /g'
 	go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
 	@echo "🌎 Opening coverage report in browser..."
