@@ -573,6 +573,307 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with COUNT aggregation",
+			input: `MATCH (d:Deployment)->(rs:ReplicaSet)->(p:Pod) RETURN COUNT{p} AS TotalPods`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+							{ResourceProperties: &ResourceProperties{Name: "rs", Kind: "ReplicaSet"}},
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "rs", Kind: "ReplicaSet"}},
+							},
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "rs", Kind: "ReplicaSet"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{
+								JsonPath:  "p",
+								Aggregate: "COUNT",
+								Alias:     "TotalPods",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with various WHERE operators",
+			input: `MATCH (p:Pod) WHERE p.status.phase != "Running", p.metadata.name =~ "^test-.*", p.spec.containers[0].resources.requests.memory CONTAINS "Gi" RETURN p.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{Key: "p.status.phase", Value: "Running", Operator: "NOT_EQUALS"},
+							{Key: "p.metadata.name", Value: "^test-.*", Operator: "REGEX_COMPARE"},
+							{Key: "p.spec.containers[0].resources.requests.memory", Value: "Gi", Operator: "CONTAINS"},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with multiple array wildcards",
+			input: `MATCH (d:Deployment)->(p:Pod) RETURN SUM { p.spec.containers[*].volumeMounts[*].name } AS totalMounts`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{
+								JsonPath:  "p.spec.containers[*].volumeMounts[*].name",
+								Aggregate: "SUM",
+								Alias:     "totalMounts",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with namespace override",
+			input: `MATCH (d:Deployment {namespace: "staging"})->(s:Service {namespace: "staging"}) RETURN d.metadata.name, s.spec.clusterIP`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "namespace", Value: "staging"},
+										},
+									},
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "s",
+									Kind: "Service",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "namespace", Value: "staging"},
+										},
+									},
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "d",
+										Kind: "Deployment",
+										Properties: &Properties{
+											PropertyList: []*Property{
+												{Key: "namespace", Value: "staging"},
+											},
+										},
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "Service",
+										Properties: &Properties{
+											PropertyList: []*Property{
+												{Key: "namespace", Value: "staging"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.metadata.name"},
+							{JsonPath: "s.spec.clusterIP"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with case-insensitive resource kinds",
+			input: `MATCH (p:POD), (d:deployment), (s:SVC) RETURN p.metadata.name, d.metadata.name, s.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "POD"}},
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "deployment"}},
+							{ResourceProperties: &ResourceProperties{Name: "s", Kind: "SVC"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+							{JsonPath: "d.metadata.name"},
+							{JsonPath: "s.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match and set multiple fields",
+			input: `MATCH (d:Deployment) SET d.spec.replicas = 3, d.metadata.labels.updated = "true", d.spec.template.spec.containers[0].image = "nginx:latest" RETURN d.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+						},
+					},
+					&SetClause{
+						KeyValuePairs: []*KeyValuePair{
+							{Key: "d.spec.replicas", Value: 3, Operator: "EQUALS"},
+							{Key: "d.metadata.labels.updated", Value: "true", Operator: "EQUALS"},
+							{Key: "d.spec.template.spec.containers[0].image", Value: "nginx:latest", Operator: "EQUALS"},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match and delete multiple nodes",
+			input: `MATCH (d:Deployment)->(s:Service)->(i:Ingress) DELETE d, s, i`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+							{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+							{ResourceProperties: &ResourceProperties{Name: "i", Kind: "Ingress"}},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+							},
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "i", Kind: "Ingress"}},
+							},
+						},
+					},
+					&DeleteClause{
+						NodeIds: []string{"d", "s", "i"},
+					},
+				},
+			},
+		},
+		{
+			name:  "match and create with relationship",
+			input: `MATCH (d:Deployment {name: "nginx"}) CREATE (d)->(s:Service) RETURN s.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+									Properties: &Properties{
+										PropertyList: []*Property{
+											{Key: "name", Value: "nginx"},
+										},
+									},
+								},
+							},
+						},
+					},
+					&CreateClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d"}},
+							{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "d"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "s.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with either relationship direction",
+			input: `MATCH (d:Deployment)<-(s:Service) RETURN d.metadata.name, s.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+							{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Left,
+								LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+								RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.metadata.name"},
+							{JsonPath: "s.metadata.name"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
