@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/avitaltamir/jsonpath"
+	"github.com/AvitalTamir/jsonpath"
 )
 
 func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion) bool {

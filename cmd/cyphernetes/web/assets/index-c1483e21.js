@@ -130,4 +130,4 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
    /___/_/ Web Interface
 
 Wanna help build this thing?
-Visit https://github.com/avitaltamir/cyphernetes`);Ag.createRoot(document.getElementById("root")).render(te(Vt.StrictMode,{children:te(Mq,{})}));
+Visit https://github.com/AvitalTamir/cyphernetes`);Ag.createRoot(document.getElementById("root")).render(te(Vt.StrictMode,{children:te(Mq,{})}));

@@ -1,10 +1,10 @@
-module github.com/avitaltamir/cyphernetes/operator
+module github.com/AvitalTamir/cyphernetes/operator
 
 go 1.23.0
 
 require (
-	github.com/avitaltamir/cyphernetes v0.0.0
-	github.com/avitaltamir/jsonpath v0.0.0
+	github.com/AvitalTamir/cyphernetes v0.0.0
+	github.com/AvitalTamir/jsonpath v0.0.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	k8s.io/api v0.31.0
@@ -101,4 +101,4 @@ require (
 )
 
 // Use the local module from the monorepo
-replace github.com/avitaltamir/cyphernetes => ../
+replace github.com/AvitalTamir/cyphernetes => ../

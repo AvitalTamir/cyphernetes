@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/core"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 

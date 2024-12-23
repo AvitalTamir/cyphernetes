@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider"
 	"github.com/golang/protobuf/proto"
 	openapi_v3 "github.com/google/gnostic/openapiv3"
 )

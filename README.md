@@ -2,8 +2,8 @@
 
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
-[![Go Reference](https://pkg.go.dev/badge/github.com/avitaltamir/cyphernetes.svg)](https://pkg.go.dev/github.com/avitaltamir/cyphernetes)
+[![Go Report Card](https://goreportcard.com/badge/github.com/AvitalTamir/cyphernetes)](https://goreportcard.com/report/github.com/AvitalTamir/cyphernetes)
+[![Go Reference](https://pkg.go.dev/badge/github.com/AvitalTamir/cyphernetes.svg)](https://pkg.go.dev/github.com/AvitalTamir/cyphernetes)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/cyphernetes-operator)](https://artifacthub.io/packages/search?repo=cyphernetes-operator)
 
@@ -35,7 +35,7 @@ There are multiple ways to run Cyphernetes queries:
 1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
-4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
+4. Creating a [Cyphernetes DynamicOperator](https://github.com/AvitalTamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
 5. Using the Cyphernetes API in your own Go programs
 
 To learn more about how to use Cyphernetes, refer to these documents:
@@ -88,10 +88,10 @@ brew install cyphernetes
 Using go:
 
 ```bash
-go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
+go install github.com/AvitalTamir/cyphernetes/cmd/cyphernetes@latest
 ```
 
-Alternatively, grab a binary from the [Releases page](https://github.com/avitaltamir/cyphernetes/releases).
+Alternatively, grab a binary from the [Releases page](https://github.com/AvitalTamir/cyphernetes/releases).
 
 ## Development
 
@@ -126,7 +126,7 @@ To get started with development:
 Clone the repository:
 
 ```bash
-git clone https://github.com/avitaltamir/cyphernetes.git
+git clone https://github.com/AvitalTamir/cyphernetes.git
 ```
 
 Navigate to the project directory:
@@ -172,6 +172,6 @@ Cyphernetes is open-sourced under the Apache 2.0 license. See the [LICENSE](LICE
 
 ## Authors
 
-* _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
+* _Initial work_ - [Avital Tamir](https://github.com/AvitalTamir)
 * _Enhancements, Bug fixes_ - [James Kim](https://github.com/jameskim0987)
 * _Enhancements, Bug fixes_ - [Naor Peled](https://github.com/naorpeled)

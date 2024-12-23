@@ -25,11 +25,11 @@ import (
 	"encoding/json"
 	"regexp"
 
-	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	core "github.com/avitaltamir/cyphernetes/pkg/core"
-	"github.com/avitaltamir/cyphernetes/pkg/provider"
-	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
-	"github.com/avitaltamir/jsonpath"
+	operatorv1 "github.com/AvitalTamir/cyphernetes/operator/api/v1"
+	core "github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
+	"github.com/AvitalTamir/jsonpath"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 )

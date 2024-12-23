@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/avitaltamir/cyphernetes/pkg/provider"
-	"github.com/avitaltamir/jsonpath"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider"
+	"github.com/AvitalTamir/jsonpath"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
