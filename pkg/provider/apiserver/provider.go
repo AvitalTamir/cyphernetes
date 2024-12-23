@@ -18,8 +18,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
-	"github.com/golang/protobuf/proto"
 	openapi_v3 "github.com/google/gnostic/openapiv3"
+	"google.golang.org/protobuf/proto"
 )
 
 type APIServerProvider struct {
