@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type QueryRequest struct {
@@ -19,10 +21,18 @@ type QueryResponse struct {
 	Graph  string `json:"graph"`
 }
 
+type ContextInfo struct {
+	Context   string `json:"context"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
 func setupAPIRoutes(router *gin.Engine) {
 	api := router.Group("/api")
 	{
 		api.POST("/query", handleQuery)
+		api.GET("/autocomplete", handleAutocomplete)
+		api.GET("/convert-resource-name", handleConvertResourceName)
+		api.GET("/context", handleGetContext)
 		api.GET("/health", handleHealth)
 	}
 }
@@ -96,6 +106,81 @@ func handleQuery(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func handleAutocomplete(c *gin.Context) {
+	query := c.Query("query")
+	pos := c.Query("position")
+
+	position, err := strconv.Atoi(pos)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid position"})
+		return
+	}
+
+	completer := &CyphernetesCompleter{}
+	suggestions, _ := completer.Do([]rune(query), position)
+
+	// Convert [][]rune to []string
+	stringSuggestions := make([]string, len(suggestions))
+	for i, suggestion := range suggestions {
+		stringSuggestions[i] = string(suggestion)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
+}
+
 func handleHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func handleConvertResourceName(c *gin.Context) {
+	resourceName := c.Query("name")
+	if resourceName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Resource name is required"})
+		return
+	}
+
+	p, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create API server provider"})
+		return
+	}
+	gvr, err := p.FindGVR(resourceName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"singular": gvr.Resource})
+}
+
+func handleGetContext(c *gin.Context) {
+	// Get the kubeconfig loader
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		rules,
+		&clientcmd.ConfigOverrides{},
+	).RawConfig()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load kubeconfig"})
+		return
+	}
+
+	// Get current context
+	currentContext := config.CurrentContext
+	if currentContext == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No current context set"})
+		return
+	}
+
+	// Get namespace from context
+	namespace := "default"
+	if context, exists := config.Contexts[currentContext]; exists && context.Namespace != "" {
+		namespace = context.Namespace
+	}
+
+	c.JSON(http.StatusOK, ContextInfo{
+		Context:   currentContext,
+		Namespace: namespace,
+	})
 }

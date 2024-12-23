@@ -44,11 +44,6 @@ func runWeb(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Initialize resource specs
-	if err := core.InitResourceSpecs(executor.Provider()); err != nil {
-		fmt.Printf("Error initializing resource specs: %v\n", err)
-	}
-
 	// Set Gin to release mode to disable logging
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
