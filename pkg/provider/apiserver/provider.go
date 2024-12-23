@@ -297,6 +297,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body 
 }
 
 func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
+	fmt.Print("🔎 fetching resource specs... ")
 	if p.openAPIDoc == nil {
 		// Get OpenAPI V3 client
 		openAPIV3Client := p.clientset.Discovery().OpenAPIV3()
@@ -357,6 +358,7 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 		}
 	}
 
+	fmt.Println("done!")
 	return specs, nil
 }
 

@@ -4,11 +4,14 @@ Copyright © 2023 Avital Tamir <avital.osog@gmail.com>
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/AvitalTamir/cyphernetes/pkg/core"
 	"github.com/spf13/cobra"
 )
+
+var LogLevel = "info"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -44,11 +47,23 @@ func TestExecute(args []string) error {
 }
 
 func init() {
+	// First set the log level
+	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
+	// Add a PreRun hook to set LogLevel after flag parsing
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		LogLevel = cmd.Flag("loglevel").Value.String()
+		core.LogLevel = LogLevel
+	}
 	rootCmd.PersistentFlags().StringVarP(&core.Namespace, "namespace", "n", "default", "The namespace to query against")
-	rootCmd.PersistentFlags().StringVarP(&core.LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().BoolVarP(&core.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&core.NoColor, "no-color", false, "Disable colored output in shell and query results")
 
 	// Add the web command
 	rootCmd.AddCommand(WebCmd)
+}
+
+func logDebug(v ...interface{}) {
+	if core.LogLevel == "debug" {
+		fmt.Println(append([]interface{}{"[DEBUG] "}, v...)...)
+	}
 }

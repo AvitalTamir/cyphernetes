@@ -192,9 +192,15 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 			}
 		}
 	}
+
+	err := loadCustomRelationships()
+	if err != nil {
+		fmt.Println("Error loading custom relationships:", err)
+	}
 }
 
 func loadCustomRelationships() error {
+	counter := 0
 	// Get user's home directory
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -245,8 +251,15 @@ func loadCustomRelationships() error {
 		}
 
 		// Add to global relationships
+		counter++
 		AddRelationshipRule(rule)
 	}
+
+	suffix := ""
+	if counter > 0 {
+		suffix = "s"
+	}
+	fmt.Printf("💡 added %d custom relationship%s\n", counter, suffix)
 
 	return nil
 }

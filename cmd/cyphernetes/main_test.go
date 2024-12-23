@@ -102,12 +102,12 @@ func TestCyphernetesShellWithNamespaceFlagHelper(t *testing.T) {
 	fmt.Print(shellPrompt())
 }
 
-// func TestCyphernetesShellWithLogLevelFlag(t *testing.T) {
-// 	if os.Getenv("CI") != "true" {
-// 		_, stderr := runTestCommand(t, "TestCyphernetesShellWithLogLevelFlagHelper", "TEST_SHELL_LOG_LEVEL")
-// 		checkOutput(t, stderr, "[DEBUG]", "\"cyphernetes shell -l debug\"")
-// 	}
-// }
+func TestCyphernetesShellWithLogLevelFlag(t *testing.T) {
+	if os.Getenv("CI") != "true" {
+		stdout, _ := runTestCommand(t, "TestCyphernetesShellWithLogLevelFlagHelper", "TEST_SHELL_LOG_LEVEL")
+		checkOutput(t, stdout, "[DEBUG]", "\"cyphernetes shell -l debug\"")
+	}
+}
 
 func TestCyphernetesShellWithLogLevelFlagHelper(t *testing.T) {
 	if os.Getenv("TEST_SHELL_LOG_LEVEL") != "1" {

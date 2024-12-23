@@ -47,9 +47,7 @@ type QueryExecutor struct {
 	semaphore      chan struct{}
 }
 
-// Add these at the top of the file, after the imports
 var (
-	// Global configuration variables
 	Namespace     string
 	LogLevel      string
 	AllNamespaces bool
@@ -472,7 +470,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					result, err := jsonpath.JsonPathLookup(resource, pathStr)
 					if err != nil {
-						// logDebug("Path not found:", item.JsonPath)
+						logDebug("Path not found:", item.JsonPath)
 						result = nil
 					}
 
@@ -631,7 +629,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 }
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
-	// logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
+	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
@@ -829,9 +827,9 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
-	// logDebug(fmt.Sprintln("Building graph"))
-	// logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
-	// logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
+	logDebug(fmt.Sprintln("Building graph"))
+	logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
+	logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
 
 	nodeMap := make(map[string]bool)
 	edgeMap := make(map[string]bool)
@@ -1587,9 +1585,6 @@ func InitResourceSpecs(p provider.Provider) error {
 
 	ResourceSpecs = specs
 
-	// Initialize relationships after populating ResourceSpecs
-	InitializeRelationships(ResourceSpecs)
-
 	return nil
 }
 
@@ -1599,4 +1594,10 @@ func extractKindFromSchemaName(schemaName string) string {
 		return parts[len(parts)-1]
 	}
 	return ""
+}
+
+func logDebug(v ...interface{}) {
+	if LogLevel == "debug" {
+		fmt.Println(append([]interface{}{"[DEBUG] "}, v...)...)
+	}
 }

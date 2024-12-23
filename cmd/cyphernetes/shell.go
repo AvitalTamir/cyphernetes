@@ -211,6 +211,8 @@ func runShell(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	showSplash()
+
 	// Initialize the executor instance with the provider
 	executor = core.GetQueryExecutorInstance(p)
 	if executor == nil {
@@ -274,14 +276,6 @@ func runShell(cmd *cobra.Command, args []string) {
 	// Set up a channel to receive interrupt signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	fmt.Println(`
-                __                    __        
- ______ _____  / /  ___ _______  ___ / /____ ___
-/ __/ // / _ \/ _ \/ -_) __/ _ \/ -_) __/ -_|_-<
-\__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
-   /___/_/ Interactive Shell`)
-	fmt.Println("")
 
 	fmt.Println("")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
@@ -712,5 +706,15 @@ func InitShell() {
 	if err := core.InitResourceSpecs(executor.Provider()); err != nil {
 		fmt.Printf("Error initializing resource specs: %v\n", err)
 	}
-	// ... rest of the function
+}
+
+func showSplash() {
+	logDebug("Showing splash")
+	fmt.Println(`
+                __                    __        
+ ______ _____  / /  ___ _______  ___ / /____ ___
+/ __/ // / _ \/ _ \/ -_) __/ _ \/ -_) __/ -_|_-<
+\__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
+   /___/_/ Interactive Shell`)
+	fmt.Println("")
 }
