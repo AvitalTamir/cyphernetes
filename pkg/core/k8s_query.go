@@ -58,28 +58,7 @@ var (
 )
 
 // Add the apiRequest type definition
-type apiRequest struct {
-	kind          string
-	fieldSelector string
-	labelSelector string
-	namespace     string
-	responseChan  chan *apiResponse
-}
-
-type apiResponse struct {
-	list interface{}
-	err  error
-}
-
-// Update the QueryExecutor struct to include a processRequests method
-func (q *QueryExecutor) processRequests() {
-	for request := range q.requestChannel {
-		q.semaphore <- struct{}{} // Acquire a token
-		list, err := q.provider.GetK8sResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
-		<-q.semaphore // Release the token
-		request.responseChan <- &apiResponse{list: list, err: err}
-	}
-}
+type apiRequest struct{}
 
 func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
 	if p == nil {
@@ -164,7 +143,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				resources := resultMap[resultMapKey].([]map[string]interface{})
 				for _, resource := range resources {
 					// Create a single patch that works with the existing structure
-					patches := createCompatiblePatch(resource, path, kvp.Value)
+					patches := createCompatiblePatch(path, kvp.Value)
 
 					// Marshal the patches to JSON
 					patchJSON, err := json.Marshal(patches)
@@ -1007,22 +986,7 @@ func toFloat64(v interface{}) (float64, error) {
 	}
 }
 
-func compareNumbers(a, b float64, operator string) bool {
-	switch operator {
-	case "GREATER_THAN":
-		return a > b
-	case "LESS_THAN":
-		return a < b
-	case "GREATER_THAN_EQUALS":
-		return a >= b
-	case "LESS_THAN_EQUALS":
-		return a <= b
-	default:
-		return false
-	}
-}
-
-func createCompatiblePatch(resource map[string]interface{}, path []string, value interface{}) []interface{} {
+func createCompatiblePatch(path []string, value interface{}) []interface{} {
 	// Create a JSON Patch operation
 	patch := map[string]interface{}{
 		"op":    "replace",
@@ -1031,20 +995,6 @@ func createCompatiblePatch(resource map[string]interface{}, path []string, value
 	}
 
 	return []interface{}{patch}
-}
-
-func getNestedValue(resource map[string]interface{}, path []string) (interface{}, bool) {
-	current := resource
-	for _, key := range path {
-		if next, ok := current[key].(map[string]interface{}); ok {
-			current = next
-		} else if value, exists := current[key]; exists {
-			return value, true
-		} else {
-			return nil, false
-		}
-	}
-	return current, true
 }
 
 func updateResultMap(resource map[string]interface{}, path []string, value interface{}) {
@@ -1333,206 +1283,6 @@ func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, e
 	return *results, nil
 }
 
-// Helper function to prefix variables in the AST
-func prefixVariables(ast *Expression, context string) *Expression {
-	modified := &Expression{
-		Clauses:  make([]Clause, len(ast.Clauses)),
-		Contexts: ast.Contexts,
-	}
-
-	for i, clause := range ast.Clauses {
-		switch c := clause.(type) {
-		case *MatchClause:
-			modified.Clauses[i] = prefixMatchClause(c, context)
-		case *ReturnClause:
-			modified.Clauses[i] = prefixReturnClause(c, context)
-		case *SetClause:
-			modified.Clauses[i] = prefixSetClause(c, context)
-		case *DeleteClause:
-			modified.Clauses[i] = prefixDeleteClause(c, context)
-		case *CreateClause:
-			modified.Clauses[i] = prefixCreateClause(c, context)
-		}
-	}
-
-	return modified
-}
-
-// Helper functions to prefix variables in each clause type
-func prefixMatchClause(c *MatchClause, context string) *MatchClause {
-	modified := &MatchClause{
-		Nodes:         make([]*NodePattern, len(c.Nodes)),
-		Relationships: make([]*Relationship, len(c.Relationships)),
-		ExtraFilters:  make([]*KeyValuePair, len(c.ExtraFilters)),
-	}
-
-	// Prefix node names
-	for i, node := range c.Nodes {
-		modified.Nodes[i] = &NodePattern{
-			ResourceProperties: &ResourceProperties{
-				Name:       context + "_" + node.ResourceProperties.Name,
-				Kind:       node.ResourceProperties.Kind,
-				Properties: node.ResourceProperties.Properties,
-				JsonData:   node.ResourceProperties.JsonData,
-			},
-		}
-	}
-
-	// Prefix relationships
-	for i, rel := range c.Relationships {
-		modified.Relationships[i] = &Relationship{
-			ResourceProperties: rel.ResourceProperties,
-			Direction:          rel.Direction,
-			LeftNode: &NodePattern{
-				ResourceProperties: &ResourceProperties{
-					Name:       context + "_" + rel.LeftNode.ResourceProperties.Name,
-					Kind:       rel.LeftNode.ResourceProperties.Kind,
-					Properties: rel.LeftNode.ResourceProperties.Properties,
-					JsonData:   rel.LeftNode.ResourceProperties.JsonData,
-				},
-			},
-			RightNode: &NodePattern{
-				ResourceProperties: &ResourceProperties{
-					Name:       context + "_" + rel.RightNode.ResourceProperties.Name,
-					Kind:       rel.RightNode.ResourceProperties.Kind,
-					Properties: rel.RightNode.ResourceProperties.Properties,
-					JsonData:   rel.RightNode.ResourceProperties.JsonData,
-				},
-			},
-		}
-	}
-
-	// Prefix filter variables
-	for i, filter := range c.ExtraFilters {
-		parts := strings.Split(filter.Key, ".")
-		if len(parts) > 0 {
-			parts[0] = context + "_" + parts[0]
-		}
-		modified.ExtraFilters[i] = &KeyValuePair{
-			Key:      strings.Join(parts, "."),
-			Value:    filter.Value,
-			Operator: filter.Operator,
-		}
-	}
-
-	return modified
-}
-
-// Add similar prefix functions for other clause types...
-
-func prefixReturnClause(c *ReturnClause, context string) *ReturnClause {
-	modified := &ReturnClause{
-		Items: make([]*ReturnItem, len(c.Items)),
-	}
-
-	for i, item := range c.Items {
-		// Split the JsonPath to prefix the variable name
-		parts := strings.Split(item.JsonPath, ".")
-		if len(parts) > 0 {
-			parts[0] = context + "_" + parts[0]
-		}
-
-		modified.Items[i] = &ReturnItem{
-			JsonPath:  strings.Join(parts, "."),
-			Alias:     item.Alias,
-			Aggregate: item.Aggregate,
-		}
-	}
-
-	return modified
-}
-
-func prefixSetClause(c *SetClause, context string) *SetClause {
-	modified := &SetClause{
-		KeyValuePairs: make([]*KeyValuePair, len(c.KeyValuePairs)),
-	}
-
-	for i, kvp := range c.KeyValuePairs {
-		// Split the key to prefix the variable name
-		parts := strings.Split(kvp.Key, ".")
-		if len(parts) > 0 {
-			parts[0] = context + "_" + parts[0]
-		}
-
-		modified.KeyValuePairs[i] = &KeyValuePair{
-			Key:      strings.Join(parts, "."),
-			Value:    kvp.Value,
-			Operator: kvp.Operator,
-		}
-	}
-
-	return modified
-}
-
-func prefixDeleteClause(c *DeleteClause, context string) *DeleteClause {
-	modified := &DeleteClause{
-		NodeIds: make([]string, len(c.NodeIds)),
-	}
-
-	for i, nodeId := range c.NodeIds {
-		modified.NodeIds[i] = context + "_" + nodeId
-	}
-
-	return modified
-}
-
-func prefixCreateClause(c *CreateClause, context string) *CreateClause {
-	modified := &CreateClause{
-		Nodes:         make([]*NodePattern, len(c.Nodes)),
-		Relationships: make([]*Relationship, len(c.Relationships)),
-	}
-
-	// Prefix node names
-	for i, node := range c.Nodes {
-		modified.Nodes[i] = &NodePattern{
-			ResourceProperties: &ResourceProperties{
-				Name:       context + "_" + node.ResourceProperties.Name,
-				Kind:       node.ResourceProperties.Kind,
-				Properties: node.ResourceProperties.Properties,
-				JsonData:   node.ResourceProperties.JsonData,
-			},
-		}
-	}
-
-	// Prefix relationship node references
-	for i, rel := range c.Relationships {
-		modified.Relationships[i] = &Relationship{
-			ResourceProperties: rel.ResourceProperties,
-			Direction:          rel.Direction,
-			LeftNode: &NodePattern{
-				ResourceProperties: &ResourceProperties{
-					Name:       context + "_" + rel.LeftNode.ResourceProperties.Name,
-					Kind:       rel.LeftNode.ResourceProperties.Kind,
-					Properties: rel.LeftNode.ResourceProperties.Properties,
-					JsonData:   rel.LeftNode.ResourceProperties.JsonData,
-				},
-			},
-			RightNode: &NodePattern{
-				ResourceProperties: &ResourceProperties{
-					Name:       context + "_" + rel.RightNode.ResourceProperties.Name,
-					Kind:       rel.RightNode.ResourceProperties.Kind,
-					Properties: rel.RightNode.ResourceProperties.Properties,
-					JsonData:   rel.RightNode.ResourceProperties.JsonData,
-				},
-			},
-		}
-	}
-
-	return modified
-}
-
-func (q *QueryExecutor) deleteResource(kind string, name string, namespace string) error {
-	return q.provider.DeleteK8sResources(kind, name, namespace)
-}
-
-func (q *QueryExecutor) createResource(kind string, name string, namespace string, body interface{}) error {
-	return q.provider.CreateK8sResource(kind, name, namespace, body)
-}
-
-func (q *QueryExecutor) patchResource(kind string, name string, namespace string, body interface{}) error {
-	return q.provider.PatchK8sResource(kind, name, namespace, body)
-}
-
 func (q *QueryExecutor) findGVR(kind string) (schema.GroupVersionResource, error) {
 	return q.provider.FindGVR(kind)
 }
@@ -1598,10 +1348,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	namespace := Namespace
 
 	// Create a copy of ResourceProperties
-	resourcePropertiesCopy := &ResourceProperties{
-		Kind: n.ResourceProperties.Kind,
-		Name: n.ResourceProperties.Name,
-	}
+	resourcePropertiesCopy := &ResourceProperties{}
 	if n.ResourceProperties.Properties != nil {
 		resourcePropertiesCopy.Properties = &Properties{
 			PropertyList: make([]*Property, len(n.ResourceProperties.Properties.PropertyList)),
@@ -1844,17 +1591,6 @@ func InitResourceSpecs(p provider.Provider) error {
 	InitializeRelationships(ResourceSpecs)
 
 	return nil
-}
-
-func findRuleByKinds(kindA, kindB string) (*RelationshipRule, error) {
-	for i := range relationshipRules {
-		rule := &relationshipRules[i]
-		if (rule.KindA == kindA && rule.KindB == kindB) ||
-			(rule.KindA == kindB && rule.KindB == kindA) {
-			return rule, nil
-		}
-	}
-	return nil, fmt.Errorf("no rule found for kinds %s and %s", kindA, kindB)
 }
 
 func extractKindFromSchemaName(schemaName string) string {

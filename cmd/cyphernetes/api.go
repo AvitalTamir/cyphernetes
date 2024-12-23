@@ -34,8 +34,6 @@ func handleQuery(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("Received query: %s\n", req.Query)
-
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProvider()
 	if err != nil {
