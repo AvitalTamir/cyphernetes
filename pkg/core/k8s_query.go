@@ -1,21 +1,18 @@
 package core
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/AvitalTamir/cyphernetes/pkg/provider"
 	"github.com/AvitalTamir/jsonpath"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type Node struct {
@@ -43,6 +40,58 @@ type QueryResult struct {
 
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
+
+type QueryExecutor struct {
+	provider       provider.Provider
+	requestChannel chan *apiRequest
+	semaphore      chan struct{}
+}
+
+// Add these at the top of the file, after the imports
+var (
+	// Global configuration variables
+	Namespace     string
+	LogLevel      string
+	AllNamespaces bool
+	CleanOutput   bool
+	NoColor       bool
+)
+
+// Add the apiRequest type definition
+type apiRequest struct {
+	kind          string
+	fieldSelector string
+	labelSelector string
+	namespace     string
+	responseChan  chan *apiResponse
+}
+
+type apiResponse struct {
+	list interface{}
+	err  error
+}
+
+// Update the QueryExecutor struct to include a processRequests method
+func (q *QueryExecutor) processRequests() {
+	for request := range q.requestChannel {
+		q.semaphore <- struct{}{} // Acquire a token
+		list, err := q.provider.GetK8sResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
+		<-q.semaphore // Release the token
+		request.responseChan <- &apiResponse{list: list, err: err}
+	}
+}
+
+func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
+	if p == nil {
+		return nil, fmt.Errorf("provider cannot be nil")
+	}
+
+	return &QueryExecutor{
+		provider:       p,
+		requestChannel: make(chan *apiRequest),
+		semaphore:      make(chan struct{}, 1),
+	}, nil
+}
 
 func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
 	if len(ast.Contexts) > 0 {
@@ -141,10 +190,23 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				if resultMap[nodeId] == nil {
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
-				err := q.DeleteK8sResources(nodeId)
-				if err != nil {
-					return *results, fmt.Errorf("error deleting resource >> %s", err)
+
+				// Get the resources to delete
+				resources := resultMap[nodeId].([]map[string]interface{})
+				for _, resource := range resources {
+					kind := resource["kind"].(string)
+					metadata := resource["metadata"].(map[string]interface{})
+					name := metadata["name"].(string)
+					namespace := getNamespaceName(metadata)
+
+					err := q.provider.DeleteK8sResources(kind, name, namespace)
+					if err != nil {
+						return *results, fmt.Errorf("error deleting resource %s/%s: %v", kind, name, err)
+					}
 				}
+
+				// Remove from result map after successful deletion
+				delete(resultMap, nodeId)
 			}
 
 		case *CreateClause:
@@ -184,12 +246,12 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				foreignNode.ResourceProperties.Kind = resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]["kind"].(string)
 
 				var relType RelationshipType
-				targetGVR, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
+				targetGVR, err := q.findGVR(node.ResourceProperties.Kind)
 				if err != nil {
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
 
 				}
-				foreignGVR, err := FindGVR(q.Clientset, foreignNode.ResourceProperties.Kind)
+				foreignGVR, err := q.findGVR(foreignNode.ResourceProperties.Kind)
 				if err != nil {
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
 				}
@@ -336,9 +398,14 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 
 					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
-					err = q.CreateK8sResource(node, resourceTemplate, name)
+					err = q.provider.CreateK8sResource(
+						node.ResourceProperties.Kind,
+						name,
+						Namespace,
+						resourceTemplate,
+					)
 					if err != nil {
-						return *results, fmt.Errorf("error creating resource >> %s", err)
+						return *results, fmt.Errorf("error creating resource >> %v", err)
 					}
 				}
 			}
@@ -369,9 +436,14 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
-					err = q.CreateK8sResource(node, resourceTemplate, name)
+					err = q.provider.CreateK8sResource(
+						node.ResourceProperties.Kind,
+						name,
+						Namespace,
+						resourceTemplate,
+					)
 					if err != nil {
-						return *results, fmt.Errorf("error creating resource >> %s", err)
+						return *results, fmt.Errorf("error creating resource >> %v", err)
 					}
 				}
 			}
@@ -421,7 +493,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					result, err := jsonpath.JsonPathLookup(resource, pathStr)
 					if err != nil {
-						logDebug("Path not found:", item.JsonPath)
+						// logDebug("Path not found:", item.JsonPath)
 						result = nil
 					}
 
@@ -580,7 +652,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 }
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
-	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
+	// logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
@@ -588,11 +660,11 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		// error out
 		return false, fmt.Errorf("must specify kind for all nodes in match clause")
 	}
-	leftKind, err := FindGVR(q.Clientset, rel.LeftNode.ResourceProperties.Kind)
+	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
 		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
-	rightKind, err := FindGVR(q.Clientset, rel.RightNode.ResourceProperties.Kind)
+	rightKind, err := q.findGVR(rel.RightNode.ResourceProperties.Kind)
 	if err != nil {
 		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
@@ -672,7 +744,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 	}
 
-	logDebug(fmt.Sprintf("Matched resources: %+v\n", matchedResources))
+	// logDebug(fmt.Sprintf("Matched resources: %+v\n", matchedResources))
 
 	if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
 		for idx, rightResource := range rightResources {
@@ -758,45 +830,52 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 }
 
 func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
+	// Process each node in the match clause
 	for _, node := range c.Nodes {
-		if node.ResourceProperties.Kind == "" {
-			// error out
-			return fmt.Errorf("must specify kind for all nodes in match clause")
+		// Skip if the node has already been processed
+		if resultMap[node.ResourceProperties.Name] != nil {
+			continue
 		}
-		logDebug("Node pattern found. Name:", node.ResourceProperties.Name, "Kind:", node.ResourceProperties.Kind)
-		// check if the node has already been fetched
-		if resultCache[q.resourcePropertyName(node)] == nil {
-			err := getNodeResources(node, q, c.ExtraFilters)
-			if err != nil {
-				return fmt.Errorf("error getting node resources >> %s", err)
+
+		// Get the extra filters from the match clause
+		var extraFilters []*KeyValuePair
+		for _, filter := range c.ExtraFilters {
+			// Only include filters that apply to this node
+			if strings.HasPrefix(filter.Key, node.ResourceProperties.Name+".") {
+				// Remove the node name prefix from the filter key
+				filterCopy := *filter
+				// Remove the node identifier and keep only the path
+				filterCopy.Key = strings.TrimPrefix(filter.Key, node.ResourceProperties.Name+".")
+				extraFilters = append(extraFilters, &filterCopy)
 			}
-			resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
+		}
+
+		// Get resources for this node with the extra filters
+		err := getNodeResources(node, q, extraFilters)
+		if err != nil {
+			return fmt.Errorf("error getting resources for node %s: %v", node.ResourceProperties.Name, err)
+		}
+
+		// Add to graph
+		if resources, ok := resultMap[node.ResourceProperties.Name].([]map[string]interface{}); ok {
 			for _, resource := range resources {
-				metadata, ok := resource["metadata"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-				node := Node{
-					Id:   node.ResourceProperties.Name,
-					Kind: resource["kind"].(string),
-					Name: metadata["name"].(string),
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
+				metadata := resource["metadata"].(map[string]interface{})
+				results.Graph.Nodes = append(results.Graph.Nodes, Node{
+					Id:        node.ResourceProperties.Name,
+					Kind:      node.ResourceProperties.Kind,
+					Name:      metadata["name"].(string),
+					Namespace: getNamespaceName(metadata),
+				})
 			}
-		} else if resultMap[node.ResourceProperties.Name] == nil {
-			resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
 		}
 	}
 	return nil
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
-	logDebug(fmt.Sprintln("Building graph"))
-	logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
-	logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
+	// logDebug(fmt.Sprintln("Building graph"))
+	// logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
+	// logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
 
 	nodeMap := make(map[string]bool)
 	edgeMap := make(map[string]bool)
@@ -882,321 +961,10 @@ func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceN
 	return name
 }
 
-func (q *QueryExecutor) CreateK8sResource(node *NodePattern, template map[string]interface{}, name string) error {
-	// Look up the resource kind and name in the cache
-	gvr, err := FindGVR(q.Clientset, node.ResourceProperties.Kind)
-	if err != nil {
-		return fmt.Errorf("error finding API resource >> %v", err)
-	}
-	kind := q.getSingularNameForGVR(gvr)
-	if kind == "" {
-		return fmt.Errorf("error finding singular name for resource >> %v", err)
-	}
-
-	// Construct the resource from the spec
-	//resource := make(map[string]interface{})
-	resource := template
-	resource["apiVersion"] = gvr.GroupVersion().String()
-	resource["kind"] = kind
-	resource["metadata"] = make(map[string]interface{})
-	resource["metadata"].(map[string]interface{})["name"] = name
-	resource["metadata"].(map[string]interface{})["namespace"] = Namespace
-
-	// Create the resource
-	_, err = q.DynamicClient.Resource(gvr).Namespace(Namespace).Create(context.Background(), &unstructured.Unstructured{Object: resource}, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Created %s/%s\n", gvr.Resource, name)
-
-	return nil
-}
-
-func (q *QueryExecutor) getSingularNameForGVR(gvr schema.GroupVersionResource) string {
-	// Get the singular name for the resource
-	// This is a workaround for the fact that the k8s API doesn't provide a way to get the singular name
-	// See
-	apiResourceList, err := q.Clientset.DiscoveryClient.ServerPreferredResources()
-	if err != nil {
-		panic(err.Error())
-	}
-	for _, resourceGroup := range apiResourceList {
-		for _, resource := range resourceGroup.APIResources {
-			if resource.Name == gvr.Resource {
-				return resource.Kind
-			}
-		}
-	}
-
-	return ""
-}
-
-func (q *QueryExecutor) DeleteK8sResources(nodeId string) error {
-	resources := resultMap[nodeId].([]map[string]interface{})
-
-	for i := range resources {
-		// Look up the resource kind and name in the cache
-		gvr, err := FindGVR(q.Clientset, resources[i]["kind"].(string))
-		if err != nil {
-			return fmt.Errorf("error finding API resource >> %v", err)
-		}
-		resourceName := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["name"].(string)
-		resourceNamespace := resultMap[nodeId].([]map[string]interface{})[i]["metadata"].(map[string]interface{})["namespace"].(string)
-
-		err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Delete(context.Background(), resourceName, metav1.DeleteOptions{})
-		if err != nil {
-			return fmt.Errorf("error deleting resource >> %v", err)
-		}
-		fmt.Printf("Deleted %s/%s\n", gvr.Resource, resourceName)
-	}
-
-	// remove the resource from the result map
-	delete(resultMap, nodeId)
-	return nil
-}
-
-func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
-	namespace := Namespace
-
-	// Create a copy of ResourceProperties
-	resourcePropertiesCopy := &ResourceProperties{
-		Kind: n.ResourceProperties.Kind,
-		Name: n.ResourceProperties.Name,
-	}
-	if n.ResourceProperties.Properties != nil {
-		resourcePropertiesCopy.Properties = &Properties{
-			PropertyList: make([]*Property, len(n.ResourceProperties.Properties.PropertyList)),
-		}
-		copy(resourcePropertiesCopy.Properties.PropertyList, n.ResourceProperties.Properties.PropertyList)
-	}
-
-	if resourcePropertiesCopy.Properties != nil && len(resourcePropertiesCopy.Properties.PropertyList) > 0 {
-		for i, prop := range resourcePropertiesCopy.Properties.PropertyList {
-			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-				namespace = prop.Value.(string)
-				// Remove the namespace slice from the properties
-				resourcePropertiesCopy.Properties.PropertyList = append(resourcePropertiesCopy.Properties.PropertyList[:i], resourcePropertiesCopy.Properties.PropertyList[i+1:]...)
-			}
-		}
-	}
-
-	var fieldSelector string
-	var labelSelector string
-	var hasNameSelector bool
-	var hasLabelSelector bool
-
-	if resourcePropertiesCopy.Properties != nil {
-		for _, prop := range resourcePropertiesCopy.Properties.PropertyList {
-			if prop.Key == "name" || prop.Key == "metadata.name" || prop.Key == `"name"` || prop.Key == `"metadata.name"` {
-				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
-				hasNameSelector = true
-			} else {
-				hasLabelSelector = true
-				labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
-			}
-		}
-		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
-		labelSelector = strings.TrimSuffix(labelSelector, ",")
-	}
-	if hasNameSelector && hasLabelSelector {
-		// both name and label selectors are specified, error out
-		return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
-	}
-
-	// Check if the resource has already been fetched
-	if resultCache[q.resourcePropertyName(n)] == nil {
-		// Get the list of resources of the specified kind.
-		resultCache[q.resourcePropertyName(n)], err = q.getResources(resourcePropertiesCopy.Kind, fieldSelector, labelSelector, namespace)
-		if err != nil {
-			fmt.Println("Error marshalling results to JSON: ", err)
-			return err
-		}
-	}
-
-	resultMap[resourcePropertiesCopy.Name] = resultCache[q.resourcePropertyName(n)]
-
-	// Apply extra filters
-	for _, filter := range extraFilters {
-		// The first part of the key is the node name
-		var resultMapKey string
-		dotIndex := strings.Index(filter.Key, ".")
-		if dotIndex != -1 {
-			resultMapKey = filter.Key[:dotIndex]
-		} else {
-			resultMapKey = filter.Key
-		}
-		// Handle escaped dots
-		for strings.HasSuffix(resultMapKey, "\\") {
-			// remove one backslash
-			nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
-			if nextDotIndex == -1 {
-				resultMapKey = filter.Key
-				break
-			}
-			resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
-		}
-		if resultMap[resultMapKey] == nil {
-			logDebug(fmt.Sprintf("node identifier %s not found in where clause", resultMapKey))
-		} else if resultMapKey == resourcePropertiesCopy.Name {
-			path := filter.Key
-			path = strings.Replace(path, resultMapKey+".", "$.", 1)
-
-			compiledPath, err := jsonpath.Compile(path)
-			if err != nil {
-				logDebug("Error compiling JSONPath:", path)
-				continue
-			}
-
-			// we'll iterate on each resource in the resultMap[node.ResourceProperties.Name] and if the resource doesn't match the filter, we'll remove it from the slice
-			for j, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
-				// Fix compiledPath to handle escaped dots
-				compiledPath = fixCompiledPath(compiledPath)
-				// Drill down to create nested map structure
-				result, err := compiledPath.Lookup(resource)
-				if err != nil {
-					logDebug("Path not found:", filter.Key)
-					// Path not found - this means the field doesn't exist
-					// For null equality check, this should match
-					// For null inequality check, this should not match
-					keep := false
-					if filter.Value == nil {
-						if filter.Operator == "EQUALS" {
-							keep = true
-						} else if filter.Operator == "NOT_EQUALS" {
-							keep = false
-						}
-					}
-					// remove the resource from the slice if not keeping
-					if !keep {
-						resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
-					}
-					continue
-				}
-
-				// Convert result and filter.Value to comparable types
-				resultValue, filterValue, err := convertToComparableTypes(result, filter.Value)
-				if err != nil {
-					logDebug(fmt.Sprintf("Error converting types: %v", err))
-					continue
-				}
-
-				keep := false
-				switch filter.Operator {
-				case "EQUALS":
-					if filterValue == nil {
-						// Field exists but is explicitly set to null
-						keep = resultValue == nil
-					} else {
-						keep = reflect.DeepEqual(resultValue, filterValue)
-					}
-				case "NOT_EQUALS":
-					if filterValue == nil {
-						// Field exists but is not null
-						keep = resultValue != nil
-					} else {
-						keep = !reflect.DeepEqual(resultValue, filterValue)
-					}
-				case "CONTAINS":
-					keep = strings.Contains(fmt.Sprintf("%v", resultValue), fmt.Sprintf("%v", filterValue))
-				case "REGEX_COMPARE":
-					if filterValueStr, ok := filterValue.(string); ok {
-						if resultValueStr, ok := resultValue.(string); ok {
-							if regex, err := regexp.Compile(filterValueStr); err == nil {
-								keep = regex.MatchString(resultValueStr)
-							} else {
-								logDebug(fmt.Sprintf("Invalid regex: %v", filterValue))
-							}
-						} else {
-							logDebug(fmt.Sprintf("Invalid comparison: %v is not a string", resultValue))
-						}
-					} else {
-						logDebug(fmt.Sprintf("Invalid comparison: %v is not a string", filterValue))
-					}
-				case "GREATER_THAN", "LESS_THAN", "GREATER_THAN_EQUALS", "LESS_THAN_EQUALS":
-					if resultNum, ok := resultValue.(float64); ok {
-						if filterNum, ok := filterValue.(float64); ok {
-							keep = compareNumbers(resultNum, filterNum, filter.Operator)
-						} else {
-							logDebug(fmt.Sprintf("Invalid comparison: %v is not a number", filterValue))
-						}
-					} else {
-						logDebug(fmt.Sprintf("Invalid comparison: %v is not a number", resultValue))
-					}
-				default:
-					logDebug(fmt.Sprintf("Unknown operator: %s", filter.Operator))
-				}
-
-				if !keep {
-					// remove the resource from the slice
-					resultMap[resourcePropertiesCopy.Name].([]map[string]interface{})[j] = nil
-				}
-			}
-
-			// remove nil values from the slice
-			var filtered []map[string]interface{}
-			for _, resource := range resultMap[resourcePropertiesCopy.Name].([]map[string]interface{}) {
-				if resource != nil {
-					filtered = append(filtered, resource)
-				}
-			}
-
-			resultMap[resourcePropertiesCopy.Name] = filtered
-		}
-	}
-
-	return nil
-}
-
-// This is a lazy fix for the jsonpath library which doesn't handle escaped dots in compiled paths
-// Let's patch the jsonpath library to handle this in the future
-func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
-	i := 0
-	for i < len(compiledPath.Steps) {
-		step := compiledPath.Steps[i]
-		if strings.HasSuffix(step.Key, "\\") && i+1 < len(compiledPath.Steps) {
-			nextStep := compiledPath.Steps[i+1]
-			step.Key = step.Key[:len(step.Key)-1] + "." + nextStep.Key
-			compiledPath.Steps[i] = step
-			compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
-		} else {
-			i++
-		}
-	}
-	return compiledPath
-}
-
-func (q *QueryExecutor) GetK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (*unstructured.UnstructuredList, error) {
-	responseChan := make(chan *apiResponse)
-	q.requestChannel <- &apiRequest{
-		kind:          kind,
-		fieldSelector: fieldSelector,
-		labelSelector: labelSelector,
-		namespace:     namespace,
-		responseChan:  responseChan,
-	}
-
-	response := <-responseChan
-	return response.list, response.err
-}
-
-func (q *QueryExecutor) getResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
-	list, err := q.GetK8sResources(kind, fieldSelector, labelSelector, namespace)
-	if err != nil {
-		fmt.Println("Error getting list of resources: ", err)
-		return nil, err
-	}
-	// merge list into resultCache
-	var converted []map[string]interface{}
-	for _, u := range list.Items {
-		converted = append(converted, u.UnstructuredContent())
-	}
-	return converted, nil
-}
-
 func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 	var ns string
 
-	gvr, err := FindGVR(q.Clientset, n.ResourceProperties.Kind)
+	gvr, err := q.provider.FindGVR(n.ResourceProperties.Kind)
 	if err != nil {
 		fmt.Println("Error finding API resource: ", err)
 		return ""
@@ -1205,30 +973,19 @@ func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 	if n.ResourceProperties.Properties == nil {
 		return fmt.Sprintf("%s_%s", Namespace, gvr.Resource)
 	}
+
 	for _, prop := range n.ResourceProperties.Properties.PropertyList {
 		if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-			ns = fmt.Sprint(prop.Value)
+			ns = prop.Value.(string)
+			break
 		}
 	}
+
 	if ns == "" {
 		ns = Namespace
 	}
 
-	var keyValuePairs []string
-	for _, prop := range n.ResourceProperties.Properties.PropertyList {
-		// Convert the value to a string regardless of its actual type
-		valueStr := fmt.Sprint(prop.Value)
-		keyValuePairs = append(keyValuePairs, prop.Key+"_"+valueStr)
-	}
-
-	// Sort the key-value pairs to ensure consistency
-	sort.Strings(keyValuePairs)
-
-	// Join all key-value pairs with "_"
-	joinedPairs := strings.Join(keyValuePairs, "_")
-
-	// Return the formatted string
-	return fmt.Sprintf("%s_%s_%s", ns, gvr.Resource, joinedPairs)
+	return fmt.Sprintf("%s_%s", ns, gvr.Resource)
 }
 
 func convertToComparableTypes(result, filterValue interface{}) (interface{}, interface{}, error) {
@@ -1288,45 +1045,15 @@ func compareNumbers(a, b float64, operator string) bool {
 	}
 }
 
-func createCompatiblePatch(resource map[string]interface{}, path []string, value interface{}) []map[string]interface{} {
-	var patches []map[string]interface{}
-	currentPath := ""
-	current := resource
-
-	for i, segment := range path {
-		if currentPath == "" {
-			currentPath = "/" + segment
-		} else {
-			currentPath = currentPath + "/" + segment
-		}
-
-		if i == len(path)-1 {
-			// This is the final segment, so we set the value
-			patches = append(patches, map[string]interface{}{
-				"op":    "add",
-				"path":  currentPath,
-				"value": value,
-			})
-		} else {
-			// Check if this path exists
-			if _, exists := getNestedValue(current, []string{segment}); !exists {
-				// This is an intermediate segment that doesn't exist, so we ensure it exists
-				patches = append(patches, map[string]interface{}{
-					"op":    "add",
-					"path":  currentPath,
-					"value": map[string]interface{}{},
-				})
-			}
-			if next, ok := current[segment].(map[string]interface{}); ok {
-				current = next
-			} else {
-				current[segment] = make(map[string]interface{})
-				current = current[segment].(map[string]interface{})
-			}
-		}
+func createCompatiblePatch(resource map[string]interface{}, path []string, value interface{}) []interface{} {
+	// Create a JSON Patch operation
+	patch := map[string]interface{}{
+		"op":    "replace",
+		"path":  "/" + strings.Join(path, "/"),
+		"value": value,
 	}
 
-	return patches
+	return []interface{}{patch}
 }
 
 func getNestedValue(resource map[string]interface{}, path []string) (interface{}, bool) {
@@ -1357,26 +1084,16 @@ func updateResultMap(resource map[string]interface{}, path []string, value inter
 	}
 }
 
-func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchesJSON []byte) error {
-	gvr, err := FindGVR(q.Clientset, resource["kind"].(string))
-	if err != nil {
-		return fmt.Errorf("error finding API resource: %v", err)
+func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJSON []byte) error {
+	// Get the resource details
+	name := resource["metadata"].(map[string]interface{})["name"].(string)
+	namespace := ""
+	if ns, ok := resource["metadata"].(map[string]interface{})["namespace"]; ok {
+		namespace = ns.(string)
 	}
-	resourceName := resource["metadata"].(map[string]interface{})["name"].(string)
-	resourceNamespace := resource["metadata"].(map[string]interface{})["namespace"].(string)
+	kind := resource["kind"].(string)
 
-	_, err = q.DynamicClient.Resource(gvr).Namespace(resourceNamespace).Patch(
-		context.Background(),
-		resourceName,
-		types.JSONPatchType,
-		patchesJSON,
-		metav1.PatchOptions{},
-	)
-	if err != nil {
-		return fmt.Errorf("error patching resource: %v", err)
-	}
-
-	return nil
+	return q.provider.PatchK8sResource(kind, name, namespace, patchJSON)
 }
 
 // convertToMilliCPU converts a CPU value string to milliCPU (integer format).
@@ -1604,12 +1321,7 @@ func sumMemoryBytes(memStrs []string) (int64, error) {
 
 // Add new function to handle multi-context execution
 func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
-	if len(ast.Contexts) == 0 {
-		return QueryResult{}, fmt.Errorf("no contexts provided for multi-context query")
-	}
-
-	// Initialize combined results
-	combinedResults := QueryResult{
+	results := &QueryResult{
 		Data: make(map[string]interface{}),
 		Graph: Graph{
 			Nodes: []Node{},
@@ -1617,31 +1329,31 @@ func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, e
 		},
 	}
 
-	// Execute query for each context
+	// Process each context
 	for _, context := range ast.Contexts {
-		executor, err := GetContextQueryExecutor(context)
+		// Create a new provider for this context
+		contextExecutor, err := GetContextQueryExecutor(context)
 		if err != nil {
-			return combinedResults, fmt.Errorf("error getting executor for context %s: %v", context, err)
+			return QueryResult{}, fmt.Errorf("error getting context executor: %v", err)
 		}
 
-		// Create a modified AST with prefixed variables
-		modifiedAst := prefixVariables(ast, context)
-
-		// Use ExecuteSingleQuery instead of Execute
-		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace)
+		// Execute the query in this context
+		contextResult, err := contextExecutor.ExecuteSingleQuery(ast, namespace)
 		if err != nil {
-			return combinedResults, fmt.Errorf("error executing query in context %s: %v", context, err)
+			return QueryResult{}, fmt.Errorf("error executing query in context %s: %v", context, err)
 		}
 
-		// Merge results
-		for k, v := range result.Data {
-			combinedResults.Data[k] = v
+		// Prefix the results with the context name
+		for key, value := range contextResult.Data {
+			results.Data[context+"_"+key] = value
 		}
-		combinedResults.Graph.Nodes = append(combinedResults.Graph.Nodes, result.Graph.Nodes...)
-		combinedResults.Graph.Edges = append(combinedResults.Graph.Edges, result.Graph.Edges...)
+
+		// Add nodes and edges to the graph
+		results.Graph.Nodes = append(results.Graph.Nodes, contextResult.Graph.Nodes...)
+		results.Graph.Edges = append(results.Graph.Edges, contextResult.Graph.Edges...)
 	}
 
-	return combinedResults, nil
+	return *results, nil
 }
 
 // Helper function to prefix variables in the AST
@@ -1830,4 +1542,325 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	}
 
 	return modified
+}
+
+func (q *QueryExecutor) deleteResource(kind string, name string, namespace string) error {
+	return q.provider.DeleteK8sResources(kind, name, namespace)
+}
+
+func (q *QueryExecutor) createResource(kind string, name string, namespace string, body interface{}) error {
+	return q.provider.CreateK8sResource(kind, name, namespace, body)
+}
+
+func (q *QueryExecutor) patchResource(kind string, name string, namespace string, body interface{}) error {
+	return q.provider.PatchK8sResource(kind, name, namespace, body)
+}
+
+func (q *QueryExecutor) findGVR(kind string) (schema.GroupVersionResource, error) {
+	return q.provider.FindGVR(kind)
+}
+
+func (q *QueryExecutor) GetOpenAPIResourceSpecs() (map[string][]string, error) {
+	specs, err := q.provider.GetOpenAPIResourceSpecs()
+	if err != nil {
+		return nil, fmt.Errorf("error getting OpenAPI resource specs: %w", err)
+	}
+	return specs, nil
+}
+
+// Add these variables at the top with the other vars
+var (
+	executorInstance *QueryExecutor
+	contextExecutors map[string]*QueryExecutor
+	once             sync.Once
+	GvrCache         map[string]schema.GroupVersionResource
+	ResourceSpecs    map[string][]string
+	executorsLock    sync.RWMutex
+)
+
+func GetQueryExecutorInstance(p provider.Provider) *QueryExecutor {
+	once.Do(func() {
+		if p == nil {
+			fmt.Println("Error creating query executor: executor error")
+			return
+		}
+
+		executor, err := NewQueryExecutor(p)
+		if err != nil {
+			fmt.Printf("Error creating QueryExecutor instance: %v\n", err)
+			return
+		}
+
+		executorInstance = executor
+		contextExecutors = make(map[string]*QueryExecutor)
+
+		// Initialize GVR cache
+		if err := InitGVRCache(p); err != nil {
+			fmt.Printf("Error initializing GVR cache: %v\n", err)
+			return
+		}
+
+		// Initialize resource specs
+		if err := InitResourceSpecs(p); err != nil {
+			fmt.Printf("Error initializing resource specs: %v\n", err)
+			return
+		}
+
+		// Initialize relationships
+		InitializeRelationships(ResourceSpecs)
+	})
+	return executorInstance
+}
+
+// Add this getter method for the provider
+func (q *QueryExecutor) Provider() provider.Provider {
+	return q.provider
+}
+
+func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
+	namespace := Namespace
+
+	// Create a copy of ResourceProperties
+	resourcePropertiesCopy := &ResourceProperties{
+		Kind: n.ResourceProperties.Kind,
+		Name: n.ResourceProperties.Name,
+	}
+	if n.ResourceProperties.Properties != nil {
+		resourcePropertiesCopy.Properties = &Properties{
+			PropertyList: make([]*Property, len(n.ResourceProperties.Properties.PropertyList)),
+		}
+		copy(resourcePropertiesCopy.Properties.PropertyList, n.ResourceProperties.Properties.PropertyList)
+	}
+
+	if resourcePropertiesCopy.Properties != nil && len(resourcePropertiesCopy.Properties.PropertyList) > 0 {
+		for i, prop := range resourcePropertiesCopy.Properties.PropertyList {
+			if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
+				namespace = prop.Value.(string)
+				// Remove the namespace slice from the properties
+				resourcePropertiesCopy.Properties.PropertyList = append(resourcePropertiesCopy.Properties.PropertyList[:i], resourcePropertiesCopy.Properties.PropertyList[i+1:]...)
+			}
+		}
+	}
+
+	var fieldSelector string
+	var labelSelector string
+	var hasNameSelector bool
+	var hasLabelSelector bool
+
+	if resourcePropertiesCopy.Properties != nil {
+		for _, prop := range resourcePropertiesCopy.Properties.PropertyList {
+			if prop.Key == "name" || prop.Key == "metadata.name" || prop.Key == `"name"` || prop.Key == `"metadata.name"` {
+				fieldSelector += fmt.Sprintf("metadata.name=%s,", prop.Value)
+				hasNameSelector = true
+			} else {
+				hasLabelSelector = true
+				labelSelector += fmt.Sprintf("%s=%s,", prop.Key, prop.Value)
+			}
+		}
+		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
+		labelSelector = strings.TrimSuffix(labelSelector, ",")
+	}
+	if hasNameSelector && hasLabelSelector {
+		// both name and label selectors are specified, error out
+		return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
+	}
+
+	// Check if the resource has already been fetched
+	cacheKey := q.resourcePropertyName(n)
+	if resultCache[cacheKey] == nil {
+		// Get resources using the provider
+		resources, err := q.provider.GetK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector, namespace)
+		if err != nil {
+			return fmt.Errorf("error getting resources: %v", err)
+		}
+
+		// Apply extra filters from WHERE clause
+		resourceList := resources.([]map[string]interface{})
+		var filtered []map[string]interface{}
+
+		// Process each resource
+		for _, resource := range resourceList {
+			keep := true
+			// Apply extra filters
+			for _, filter := range extraFilters {
+				// Extract node name from filter key
+				var resultMapKey string
+				dotIndex := strings.Index(filter.Key, ".")
+				if dotIndex != -1 {
+					resultMapKey = filter.Key[:dotIndex]
+				} else {
+					resultMapKey = filter.Key
+				}
+
+				// Handle escaped dots
+				for strings.HasSuffix(resultMapKey, "\\") {
+					nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
+					if nextDotIndex == -1 {
+						resultMapKey = filter.Key
+						break
+					}
+					resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
+				}
+
+				if resultMapKey == n.ResourceProperties.Name {
+					// Transform path
+					path := filter.Key
+					path = strings.Replace(path, resultMapKey+".", "$.", 1)
+
+					// Get value using jsonpath
+					value, err := jsonpath.JsonPathLookup(resource, path)
+					if err != nil {
+						keep = false
+						break
+					}
+
+					// Convert and compare values
+					resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+					if err != nil {
+						keep = false
+						break
+					}
+
+					// Compare based on operator
+					switch filter.Operator {
+					case "EQUALS", "=", "==":
+						if resourceValue != filterValue {
+							keep = false
+						}
+					case "GREATER_THAN", ">":
+						if rv, ok := resourceValue.(float64); ok {
+							if fv, ok := filterValue.(float64); ok {
+								if rv <= fv {
+									keep = false
+								}
+							}
+						}
+					case "LESS_THAN", "<":
+						if rv, ok := resourceValue.(float64); ok {
+							if fv, ok := filterValue.(float64); ok {
+								if rv >= fv {
+									keep = false
+								}
+							}
+						}
+					case "GREATER_THAN_EQUALS", ">=":
+						if rv, ok := resourceValue.(float64); ok {
+							if fv, ok := filterValue.(float64); ok {
+								if rv < fv {
+									keep = false
+								}
+							}
+						}
+					case "LESS_THAN_EQUALS", "<=":
+						if rv, ok := resourceValue.(float64); ok {
+							if fv, ok := filterValue.(float64); ok {
+								if rv > fv {
+									keep = false
+								}
+							}
+						}
+					case "NOT_EQUALS", "!=":
+						if resourceValue == filterValue {
+							keep = false
+						}
+					case "CONTAINS":
+						strA := fmt.Sprintf("%v", resourceValue)
+						strB := fmt.Sprintf("%v", filterValue)
+						if !strings.Contains(strA, strB) {
+							keep = false
+						}
+					case "REGEX_COMPARE":
+						if filterValueStr, ok := filterValue.(string); ok {
+							if resultValueStr, ok := resourceValue.(string); ok {
+								if regex, err := regexp.Compile(filterValueStr); err == nil {
+									if !regex.MatchString(resultValueStr) {
+										keep = false
+									}
+								}
+							}
+						}
+					}
+
+					if !keep {
+						break
+					}
+				}
+			}
+
+			if keep {
+				filtered = append(filtered, resource)
+			}
+		}
+
+		// Cache the filtered results
+		resultCache[cacheKey] = filtered
+		resultMap[n.ResourceProperties.Name] = filtered
+	} else {
+		resultMap[n.ResourceProperties.Name] = resultCache[cacheKey]
+	}
+
+	return nil
+}
+
+func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
+	executorsLock.RLock()
+	if executor, exists := contextExecutors[context]; exists {
+		executorsLock.RUnlock()
+		return executor, nil
+	}
+	executorsLock.RUnlock()
+
+	// Create new executor for this context
+	executorsLock.Lock()
+	defer executorsLock.Unlock()
+
+	// Double-check after acquiring write lock
+	if executor, exists := contextExecutors[context]; exists {
+		return executor, nil
+	}
+
+	// Get the provider from the main executor instance
+	if executorInstance == nil {
+		return nil, fmt.Errorf("main executor instance not initialized")
+	}
+
+	executor, err := NewQueryExecutor(executorInstance.provider)
+	if err != nil {
+		return nil, fmt.Errorf("error creating query executor for context %s: %v", context, err)
+	}
+
+	if contextExecutors == nil {
+		contextExecutors = make(map[string]*QueryExecutor)
+	}
+	contextExecutors[context] = executor
+	return executor, nil
+}
+
+// Add these functions back
+func InitGVRCache(p provider.Provider) error {
+	if GvrCache == nil {
+		GvrCache = make(map[string]schema.GroupVersionResource)
+	}
+
+	cache, err := p.GetGVRCache()
+	if err != nil {
+		return fmt.Errorf("error getting GVR cache: %w", err)
+	}
+
+	GvrCache = cache
+	return nil
+}
+
+func InitResourceSpecs(p provider.Provider) error {
+	if ResourceSpecs == nil {
+		ResourceSpecs = make(map[string][]string)
+	}
+
+	specs, err := p.GetOpenAPIResourceSpecs()
+	if err != nil {
+		return fmt.Errorf("error getting resource specs: %w", err)
+	}
+
+	ResourceSpecs = specs
+	return nil
 }

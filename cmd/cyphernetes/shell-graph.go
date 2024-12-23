@@ -10,7 +10,7 @@ import (
 
 	"slices"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/core"
 )
 
 func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {

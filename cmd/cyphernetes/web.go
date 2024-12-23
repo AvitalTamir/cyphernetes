@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
@@ -29,8 +30,24 @@ func runWeb(cmd *cobra.Command, args []string) {
 	port := "8080"
 	url := fmt.Sprintf("http://localhost:%s", port)
 
-	core.InitResourceSpecs()
-	resourceSpecs = core.ResourceSpecs
+	// Create the API server provider
+	p, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		fmt.Printf("Error creating provider: %v\n", err)
+		return
+	}
+
+	// Initialize the executor instance with the provider
+	executor = core.GetQueryExecutorInstance(p)
+	if executor == nil {
+		fmt.Printf("Error initializing query executor\n")
+		return
+	}
+
+	// Initialize resource specs
+	if err := core.InitResourceSpecs(executor.Provider()); err != nil {
+		fmt.Printf("Error initializing resource specs: %v\n", err)
+	}
 
 	// Set Gin to release mode to disable logging
 	gin.SetMode(gin.ReleaseMode)

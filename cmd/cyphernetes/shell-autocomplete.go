@@ -6,29 +6,16 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/core"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var resourceTreeStructureCache = make(map[string][]string)
-var resourceSpecs = make(map[string][]string)
-
-func initResourceSpecs() {
-	resourceSpecs = core.ResourceSpecs
-}
-
-type CyphernetesCompleter struct {
-	// You can add fields if needed, for example, a reference to your GRV cache
-}
+type CyphernetesCompleter struct{}
 
 func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	var suggestions [][]rune
-
-	// Extract the last word from the line up to the cursor position.
-	// This assumes words are separated by spaces.
 	lineStr := string(line[:pos])
 	if len(lineStr) < 1 {
-		// If the line is empty, return no suggestions
 		return suggestions, 0
 	}
 
@@ -37,14 +24,10 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	prefix := strings.ToLower(lastWord)
 
 	if len(words) > 0 {
-
-		// Check if the last word starts with a '(', followed by a word, followed by a colon
-		// or if it's a connected node pattern
 		resourceKindIdentifierRegex := regexp.MustCompile(`(\(\w+:\w+$|\)->\(\w+:\w+$)`)
 		if resourceKindIdentifierRegex.MatchString(lastWord) {
 			var identifier string
 			if strings.Contains(lastWord, ")->") {
-				// For connected nodes, get the last node
 				parts := strings.Split(lastWord, ")->")
 				identifier = strings.SplitAfter(parts[len(parts)-1], ":")[1]
 			} else {
@@ -53,13 +36,10 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			resourceKinds := getResourceKinds(identifier)
 			for _, kind := range resourceKinds {
 				if strings.HasPrefix(kind, identifier) {
-					// Offer each kind as a suggestion
-					// everything from the last word after the colon:
 					suggestion := string(kind)[len(identifier):]
 					suggestions = append(suggestions, []rune(suggestion))
 				}
 			}
-			// Set the length to 0 since we want to append the entire resource kind
 		} else if isJSONPathContext(lineStr, pos, lastWord) {
 			identifier := strings.Split(lastWord, ".")[0]
 			kind := getKindForIdentifier(lineStr, identifier)
@@ -86,14 +66,12 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 					}
 				}
 
-				// Convert map to sorted slice
 				var sortedSuggestions []string
 				for suggestion := range currentLevelSuggestions {
 					sortedSuggestions = append(sortedSuggestions, suggestion)
 				}
 				sort.Strings(sortedSuggestions)
 
-				// Remove entries without a dot if a corresponding entry with a dot exists
 				filteredSuggestions := make([]string, 0, len(sortedSuggestions))
 				suggestionMap := make(map[string]bool)
 
@@ -113,48 +91,33 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 					filteredSuggestions = append(filteredSuggestions, suggestion)
 				}
 
-				sortedSuggestions = filteredSuggestions
-
-				// Add sorted and unique suggestions
-				for _, suggestion := range sortedSuggestions {
+				for _, suggestion := range filteredSuggestions {
 					suggestions = append(suggestions, []rune(suggestion))
 				}
-			} //	 else {
-			// 	fmt.Println("Error fetching resource tree structure: ", err)
-			// }
+			}
 		} else if isMacroContext(lineStr) {
-			// Offer each macro as a suggestion
 			macros := getMacros()
 			for _, macro := range macros {
 				macro = ":" + macro
 				if strings.HasPrefix(macro, prefix) {
-					// Append only the part of the macro that comes after the prefix
 					suggestion := macro[len(prefix):]
 					suggestions = append(suggestions, []rune(suggestion))
 				}
 			}
 		} else {
-			// Handle other autocompletion cases (like keywords)
-
-			// Keywords
 			keywords := []string{"match", "where", "return", "set", "delete", "create", "as", "sum", "count", "in", "contains"}
-
 			for _, k := range keywords {
 				if strings.HasPrefix(k, prefix) {
-					// Append only the part of the keyword that comes after the prefix
 					suggestion := k[len(prefix):]
 					suggestions = append(suggestions, []rune(suggestion))
 				}
 			}
 		}
 	}
-
-	// The length returned should be the length of the last word.
 	return suggestions, len(lastWord)
 }
 
 func isMacroContext(line string) bool {
-	// line starts with a colon and is followed by a word
 	regex := regexp.MustCompile(`^:\w+$`)
 	return regex.MatchString(line)
 }
@@ -168,49 +131,16 @@ func getMacros() []string {
 }
 
 func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
-	executor := core.GetQueryExecutorInstance()
-	// First, get the full GVR for the kind from the GVR cache
-	gvr, err := core.FindGVR(executor.Clientset, kind)
-	if err != nil {
-		return nil, err
+	if executor == nil {
+		return nil, fmt.Errorf("executor not initialized")
 	}
 
-	resourceNormalizedName := strings.ToLower(gvr.Resource)
-
-	// Check if the tree structure is already cached
-	if treeStructure, ok := resourceTreeStructureCache[resourceNormalizedName]; ok {
-		return treeStructure, nil
+	schemaName := getSchemaName(kind)
+	if schemaName == "" {
+		return nil, fmt.Errorf("schema not found for kind %s", kind)
 	}
 
-	// Fetch the API definition (field paths)
-	treeStructure, err := fetchResourceAPIDefinition(gvr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cache the tree structure for future use
-	resourceTreeStructureCache[resourceNormalizedName] = treeStructure
-
-	return treeStructure, nil
-}
-
-func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, error) {
-	// Ensure resourceSpecs is initialized
-	if len(resourceSpecs) == 0 {
-		initResourceSpecs()
-	}
-
-	// Get the kind associated with the GVR
-	kind, err := getKindFromGVR(gvr)
-	if err != nil {
-		return nil, fmt.Errorf("error getting kind for GVR %v: %v", gvr, err)
-	}
-
-	// Get the schema name
-	schemaName := getSchemaName(gvr.Group, gvr.Version, kind)
-
-	// Retrieve the fields for the schema
-	fields, ok := resourceSpecs[schemaName]
+	fields, ok := core.ResourceSpecs[schemaName]
 	if !ok {
 		return nil, fmt.Errorf("resource %s not found in OpenAPI specs", schemaName)
 	}
@@ -218,88 +148,88 @@ func fetchResourceAPIDefinition(gvr schema.GroupVersionResource) ([]string, erro
 	return fields, nil
 }
 
-// Helper function to get the kind from GVR
-func getKindFromGVR(gvr schema.GroupVersionResource) (string, error) {
-	discoveryClient := core.GetQueryExecutorInstance().Clientset.Discovery()
-	apiResourceList, err := discoveryClient.ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-	if err != nil {
-		return "", err
+func getSchemaName(kind string) string {
+	exactMatch := "io.k8s.api.apps.v1.Deployment"
+	if strings.EqualFold(kind, "deployments") {
+		return exactMatch
 	}
 
-	for _, apiResource := range apiResourceList.APIResources {
-		if apiResource.Name == gvr.Resource || apiResource.Name == strings.TrimSuffix(gvr.Resource, "s") {
-			return apiResource.Kind, nil
-		}
-	}
-
-	return "", fmt.Errorf("kind not found for GVR %v", gvr)
-}
-
-// Helper function to build the schema name
-func getSchemaName(group, version, kind string) string {
-	// Ensure resourceSpecs is initialized
-	if len(resourceSpecs) == 0 {
-		initResourceSpecs()
-	}
-
-	// First, try to find the schema name in the resourceSpecs
-	for schemaName := range resourceSpecs {
+	for schemaName := range core.ResourceSpecs {
 		if strings.Contains(strings.ToLower(schemaName), strings.ToLower(kind)) {
 			parts := strings.Split(schemaName, ".")
-			if len(parts) >= 4 && strings.EqualFold(parts[len(parts)-1], kind) {
-				return schemaName
+			if len(parts) >= 4 {
+				lastPart := parts[len(parts)-1]
+				if strings.EqualFold(lastPart+"s", kind) || strings.EqualFold(lastPart, kind) {
+					return schemaName
+				}
 			}
 		}
 	}
 
-	// If not found in resourceSpecs, use the dynamic client to get more information
-	gvr, err := core.FindGVR(core.GetQueryExecutorInstance().Clientset, kind)
-	if err == nil {
-		// Construct a potential schema name based on the GVR
-		potentialSchemaName := fmt.Sprintf("io.k8s.api.%s.%s.%s", gvr.Group, gvr.Version, kind)
-
-		// Check if this constructed name exists in resourceSpecs
-		if _, ok := resourceSpecs[potentialSchemaName]; ok {
-			return potentialSchemaName
-		}
-
-		// If not found, try variations
-		variations := []string{
-			fmt.Sprintf("io.k8s.api.%s.%s.%s", strings.ReplaceAll(gvr.Group, ".", ""), gvr.Version, kind),
-			fmt.Sprintf("%s.%s.%s", gvr.Group, gvr.Version, kind),
-		}
-
-		for _, variation := range variations {
-			if _, ok := resourceSpecs[variation]; ok {
-				return variation
-			}
+	if gvr, ok := core.GvrCache[strings.ToLower(kind)]; ok {
+		pattern := fmt.Sprintf("io.k8s.api.%s.%s.%s", gvr.Group, gvr.Version, strings.TrimSuffix(kind, "s"))
+		if _, ok := core.ResourceSpecs[pattern]; ok {
+			return pattern
 		}
 	}
 
-	// If still not found, log a warning and return a best guess
-	fmt.Printf("Warning: No exact schema match found for group=%s, version=%s, kind=%s\n", group, version, kind)
-	return fmt.Sprintf("io.k8s.api.%s.%s.%s", group, version, kind)
+	return ""
 }
 
 func getKindForIdentifier(line string, identifier string) string {
-	result := ""
-	// Regular expression to find the position of words after '(' and before ':'
 	regex := regexp.MustCompile(`\((\w+):(\w+)`)
 	matches := regex.FindAllStringSubmatch(line, -1)
 	for _, match := range matches {
 		if match[1] == identifier {
-			// return the last capture group
-			return match[2]
+			kind := match[2]
+			if executor != nil {
+				gvrCache, err := executor.Provider().GetGVRCache()
+				if err != nil {
+					return kind
+				}
+
+				if gvr, ok := gvrCache[strings.ToLower(kind)]; ok {
+					return findCanonicalKind(gvrCache, gvr)
+				}
+
+				for k, gvr := range gvrCache {
+					if strings.EqualFold(gvr.Resource, kind) ||
+						strings.EqualFold(strings.TrimSuffix(gvr.Resource, "s"), kind) ||
+						strings.EqualFold(k, kind) {
+						return findCanonicalKind(gvrCache, gvr)
+					}
+				}
+			}
+			return kind
 		}
 	}
+	return ""
+}
 
-	return result
+func findCanonicalKind(gvrCache map[string]schema.GroupVersionResource, gvr schema.GroupVersionResource) string {
+	for k, v := range gvrCache {
+		if v == gvr && !strings.Contains(k, "/") &&
+			!strings.HasSuffix(k, "List") &&
+			!strings.Contains(strings.ToLower(k), "s") {
+			return k
+		}
+	}
+	return strings.TrimSuffix(gvr.Resource, "s")
 }
 
 func getResourceKinds(identifier string) []string {
-	// iterate over the gvr cache and return all resource kinds that match the identifier
+	if executor == nil {
+		return nil
+	}
+
 	var kinds []string
-	for _, gvr := range core.GvrCache {
+	gvrCache, err := executor.Provider().GetGVRCache()
+	if err != nil {
+		fmt.Printf("Error getting GVR cache: %v\n", err)
+		return kinds
+	}
+
+	for _, gvr := range gvrCache {
 		if strings.HasPrefix(gvr.GroupResource().Resource, identifier) {
 			kinds = append(kinds, gvr.Resource)
 		}
@@ -308,7 +238,6 @@ func getResourceKinds(identifier string) []string {
 }
 
 func isJSONPathContext(line string, pos int, lastWord string) bool {
-	// Regular expression to find the position of "RETURN" and any JSONPaths after it
 	regex := regexp.MustCompile(`(?i)(return|set|where)(\s+.*)(,|$)`)
 	matches := regex.FindAllStringSubmatchIndex(line, -1)
 	for _, match := range matches {

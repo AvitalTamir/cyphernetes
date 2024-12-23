@@ -14,8 +14,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
 	colorjson "github.com/TylerBrock/colorjson"
-	"github.com/avitaltamir/cyphernetes/pkg/core"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -203,9 +204,48 @@ type Listener interface {
 }
 
 func runShell(cmd *cobra.Command, args []string) {
+	// Create the API server provider
+	p, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		fmt.Println("Error creating provider:", err)
+		os.Exit(1)
+	}
+
+	// Initialize the executor instance with the provider
+	executor = core.GetQueryExecutorInstance(p)
+	if executor == nil {
+		fmt.Println("Error initializing query executor")
+		os.Exit(1)
+	}
+
+	// Get current context
+	currentContext, currentNamespace, err := getCurrentContext()
+	if err != nil {
+		fmt.Println("Error getting current context:", err)
+		os.Exit(1)
+	}
+	ctx = currentContext
+
+	// Initialize shell environment
 	if core.AllNamespaces {
 		core.Namespace = ""
 		core.AllNamespaces = false
+	} else if currentNamespace != "" {
+		core.Namespace = currentNamespace
+	}
+
+	// Load default macros
+	macroManager = NewMacroManager()
+	if err := macroManager.LoadMacrosFromString("default_macros.txt", defaultMacros); err != nil {
+		fmt.Println("Error loading default macros:", err)
+	}
+
+	// Load user macros
+	userMacrosFile := os.Getenv("HOME") + "/.cyphernetes/macros"
+	if _, err := os.Stat(userMacrosFile); err == nil {
+		if err := macroManager.LoadMacrosFromFile(userMacrosFile); err != nil {
+			fmt.Printf("Error loading user macros: %v\n", err)
+		}
 	}
 
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
@@ -242,15 +282,6 @@ func runShell(cmd *cobra.Command, args []string) {
 \__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
    /___/_/ Interactive Shell`)
 	fmt.Println("")
-
-	// Initialize the GRV cache
-	executor = core.GetQueryExecutorInstance()
-	if executor == nil {
-		os.Exit(1)
-	}
-	core.FetchAndCacheGVRs(executor.Clientset)
-	core.InitResourceSpecs()
-	initResourceSpecs()
 
 	fmt.Println("")
 	fmt.Println("Type 'exit' or press Ctrl-D to exit")
@@ -369,10 +400,10 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
 		} else if input == "\\pc" {
 			// Print the cache
-			core.PrintCache()
+			executor.Provider().PrintCache()
 		} else if input == "\\cc" {
 			// Clear the cache
-			core.ClearCache()
+			executor.Provider().ClearCache()
 			fmt.Println("Cache cleared")
 		} else if input == "\\lm" {
 			fmt.Println("Registered macros:")
@@ -672,4 +703,14 @@ func wrapInColor(input string, color int) string {
 		return input
 	}
 	return fmt.Sprintf("\033[%dm%s\033[0m", color, input)
+}
+
+func InitShell() {
+	if executor == nil {
+		return
+	}
+	if err := core.InitResourceSpecs(executor.Provider()); err != nil {
+		fmt.Printf("Error initializing resource specs: %v\n", err)
+	}
+	// ... rest of the function
 }
