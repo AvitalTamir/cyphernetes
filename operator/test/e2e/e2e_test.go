@@ -193,6 +193,7 @@ var _ = Describe("DynamicOperator E2E Tests", func() {
 				"spec.rules",
 				"spec.ingressClassName",
 				"spec.rules[].http.paths[].backend.service.name",
+				"spec.rules[].http.paths[].backend.serviceName",
 			},
 		})
 
@@ -214,6 +215,9 @@ var _ = Describe("DynamicOperator E2E Tests", func() {
 			MatchCriteria: []core.MatchCriterion{{
 				FieldA: "metadata.name",
 				FieldB: "spec.rules[].http.paths[].backend.service.name",
+			}, {
+				FieldA: "metadata.name",
+				FieldB: "spec.rules[].http.paths[].backend.serviceName",
 			}},
 		})
 
