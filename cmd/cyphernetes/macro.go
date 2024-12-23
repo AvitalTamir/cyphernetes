@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
 
 type Macro struct {

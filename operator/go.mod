@@ -3,8 +3,8 @@ module github.com/avitaltamir/cyphernetes/operator
 go 1.23.0
 
 require (
-	github.com/AvitalTamir/jsonpath v0.0.0-20241013204606-2f0b3ae8866e
-	github.com/avitaltamir/cyphernetes v0.0.0-00010101000000-000000000000
+	github.com/avitaltamir/cyphernetes v0.0.0
+	github.com/avitaltamir/jsonpath v0.0.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	k8s.io/api v0.31.0

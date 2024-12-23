@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
 
 func TestSanitizeGraph(t *testing.T) {

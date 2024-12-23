@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/provider"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"github.com/golang/protobuf/proto"
 	openapi_v3 "github.com/google/gnostic/openapiv3"
 )
@@ -630,4 +630,8 @@ func (p *APIServerProvider) PrintCache() string {
 func (p *APIServerProvider) ClearCache() error {
 	p.gvrCache = make(map[string]schema.GroupVersionResource)
 	return p.initGVRCache()
+}
+
+func (p *APIServerProvider) GetDynamicClient() (dynamic.Interface, error) {
+	return p.dynamicClient, nil
 }

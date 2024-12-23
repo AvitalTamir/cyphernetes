@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
-	"github.com/AvitalTamir/cyphernetes/pkg/provider"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 )
 
 // MockQueryExecutor implements the QueryExecutor interface

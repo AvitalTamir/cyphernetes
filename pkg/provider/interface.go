@@ -3,6 +3,7 @@ package provider
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -22,6 +23,7 @@ type Provider interface {
 	// Client getters
 	GetDiscoveryClient() (discovery.DiscoveryInterface, error)
 	GetClientset() (kubernetes.Interface, error)
+	GetDynamicClient() (dynamic.Interface, error)
 	GetGVRCache() (map[string]schema.GroupVersionResource, error)
 
 	// Cache management methods

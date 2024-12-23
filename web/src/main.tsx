@@ -9,7 +9,7 @@ console.log(`
    /___/_/ Web Interface
 
 Wanna help build this thing?
-Visit https://github.com/AvitalTamir/cyphernetes`)
+Visit https://github.com/avitaltamir/cyphernetes`)
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <App />

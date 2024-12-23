@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
-	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
 )
 

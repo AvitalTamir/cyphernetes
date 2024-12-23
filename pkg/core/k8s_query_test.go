@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/AvitalTamir/jsonpath"
+	"github.com/avitaltamir/jsonpath"
 )
 
 func TestJsonPath(t *testing.T) {
