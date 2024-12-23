@@ -719,6 +719,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		return false, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
 	}
 
+	fmt.Printf("found relationship rule: %+v\n", rule)
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 
 	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
@@ -727,8 +728,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
 	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
 
-	// if resultMap[rel.RightNode.ResourceProperties.Name] already contains items, we need to check which has a smaller number of items, and use the smaller of the two lists
-	// this is to ensure that we don't end up with unflitered items which should have been filtered out in the relationship rule application
+	// Update resultMap with filtered results
 	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
 		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
 			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
@@ -744,75 +744,53 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 	}
 
-	// logDebug(fmt.Sprintf("Matched resources: %+v\n", matchedResources))
+	// Add nodes and edges based on the matched resources
+	rightResources := matchedResources["right"].([]map[string]interface{})
+	leftResources := matchedResources["left"].([]map[string]interface{})
 
-	if rightResources, ok := matchedResources["right"].([]map[string]interface{}); ok && len(rightResources) > 0 {
-		for idx, rightResource := range rightResources {
-			if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
-				if name, ok := metadata["name"].(string); ok {
-					node := Node{
-						Id:   rel.RightNode.ResourceProperties.Name,
-						Kind: resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
-						Name: name,
-					}
-					if node.Kind != "Namespace" {
-						node.Namespace = getNamespaceName(metadata)
-					}
-					results.Graph.Nodes = append(results.Graph.Nodes, node)
+	// Add nodes
+	for _, rightResource := range rightResources {
+		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.RightNode.ResourceProperties.Name,
+					Kind: rightResource["kind"].(string),
+					Name: name,
 				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
 			}
 		}
 	}
 
-	if leftResources, ok := matchedResources["left"].([]map[string]interface{}); ok && len(leftResources) > 0 {
-		for idx, leftResource := range leftResources {
-			if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
-				if name, ok := metadata["name"].(string); ok {
-					node := Node{
-						Id:   rel.LeftNode.ResourceProperties.Name,
-						Kind: resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})[idx]["kind"].(string),
-						Name: name,
-					}
-					if node.Kind != "Namespace" {
-						node.Namespace = getNamespaceName(metadata)
-					}
-					results.Graph.Nodes = append(results.Graph.Nodes, node)
+	for _, leftResource := range leftResources {
+		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.LeftNode.ResourceProperties.Name,
+					Kind: leftResource["kind"].(string),
+					Name: name,
 				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
 			}
 		}
 	}
 
-	// Only add edge if both nodes exist
-	if len(matchedResources["right"].([]map[string]interface{})) > 0 && len(matchedResources["left"].([]map[string]interface{})) > 0 {
-		rightNodeResources := resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})
-		leftNodeResources := resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})
-
-		for _, rightNodeResource := range rightNodeResources {
-			rightNodeId := fmt.Sprintf("%s/%s", rightNodeResource["kind"].(string), rightNodeResource["metadata"].(map[string]interface{})["name"].(string))
-			for _, leftNodeResource := range leftNodeResources {
-				leftNodeId := fmt.Sprintf("%s/%s", leftNodeResource["kind"].(string), leftNodeResource["metadata"].(map[string]interface{})["name"].(string))
-
-				// apply the relationship rule to the two nodes
-				// asign into resourceA and resourceB the right and left node resources by the rule kinds
-				var resourceA []map[string]interface{}
-				var resourceB []map[string]interface{}
-				if rightKind.Resource == rule.KindA {
-					resourceA = []map[string]interface{}{rightNodeResource}
-					resourceB = []map[string]interface{}{leftNodeResource}
-				} else if leftKind.Resource == rule.KindA {
-					resourceA = []map[string]interface{}{leftNodeResource}
-					resourceB = []map[string]interface{}{rightNodeResource}
-				}
-				matchedResources := applyRelationshipRule(resourceA, resourceB, rule, filteredDirection)
-				if len(matchedResources["right"].([]map[string]interface{})) == 0 || len(matchedResources["left"].([]map[string]interface{})) == 0 {
-					continue
-				}
-				results.Graph.Edges = append(results.Graph.Edges, Edge{
-					From: rightNodeId,
-					To:   leftNodeId,
-					Type: string(relType),
-				})
-			}
+	// Add edges between matched resources
+	for _, rightResource := range rightResources {
+		rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
+		for _, leftResource := range leftResources {
+			leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
+			results.Graph.Edges = append(results.Graph.Edges, Edge{
+				From: rightNodeId,
+				To:   leftNodeId,
+				Type: string(relType),
+			})
 		}
 	}
 
@@ -1862,5 +1840,28 @@ func InitResourceSpecs(p provider.Provider) error {
 	}
 
 	ResourceSpecs = specs
+
+	// Initialize relationships after populating ResourceSpecs
+	InitializeRelationships(ResourceSpecs)
+
 	return nil
+}
+
+func findRuleByKinds(kindA, kindB string) (*RelationshipRule, error) {
+	for i := range relationshipRules {
+		rule := &relationshipRules[i]
+		if (rule.KindA == kindA && rule.KindB == kindB) ||
+			(rule.KindA == kindB && rule.KindB == kindA) {
+			return rule, nil
+		}
+	}
+	return nil, fmt.Errorf("no rule found for kinds %s and %s", kindA, kindB)
+}
+
+func extractKindFromSchemaName(schemaName string) string {
+	parts := strings.Split(schemaName, ".")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return ""
 }

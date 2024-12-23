@@ -7,68 +7,60 @@ import (
 	"github.com/AvitalTamir/jsonpath"
 )
 
-func matchByCriteria(resourceA, resourceB interface{}, criteria []MatchCriterion) bool {
-	for _, criterion := range criteria {
-		switch criterion.ComparisonType {
-		case ContainsAll:
-			l, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
-			if err != nil {
-				return false
-			}
-			labels, ok := l.(map[string]interface{})
-			if !ok {
-				return false
-			}
-
-			s, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
-			if err != nil {
-				return false
-			}
-			selector, ok := s.(map[string]interface{})
-			if !ok {
-				return false
-			}
-
-			if !matchContainsAll(labels, selector) {
-				return false
-			}
-
-		case ExactMatch:
-			// Extract the fields
-			fieldsA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
-			if err != nil {
-				return false
-			}
-			fieldsB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
-			if err != nil {
-				return false
-			}
-			if !matchFields(fieldsA, fieldsB) {
-				return false
-			}
-
-		case StringContains:
-			// Extract the fields
-			fieldA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
-			if err != nil {
-				return false
-			}
-			fieldB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
-			if err != nil {
-				return false
-			}
-
-			// Convert both fields to strings
-			strA := fmt.Sprintf("%v", fieldA)
-			strB := fmt.Sprintf("%v", fieldB)
-
-			// Check if fieldA contains fieldB
-			if !strings.Contains(strA, strB) {
-				return false
-			}
+func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion) bool {
+	switch criterion.ComparisonType {
+	case ContainsAll:
+		l, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		if err != nil {
+			return false
 		}
+		labels, ok := l.(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		s, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		if err != nil {
+			return false
+		}
+		selector, ok := s.(map[string]interface{})
+		if !ok {
+			return false
+		}
+
+		return matchContainsAll(labels, selector)
+
+	case ExactMatch:
+		// Extract the fields
+		fieldsA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		if err != nil {
+			return false
+		}
+		fieldsB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		if err != nil {
+			return false
+		}
+		return matchFields(fieldsA, fieldsB)
+
+	case StringContains:
+		// Extract the fields
+		fieldA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		if err != nil {
+			return false
+		}
+		fieldB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		if err != nil {
+			return false
+		}
+
+		// Convert both fields to strings
+		strA := fmt.Sprintf("%v", fieldA)
+		strB := fmt.Sprintf("%v", fieldB)
+
+		// Check if fieldA contains fieldB
+		return strings.Contains(strA, strB)
 	}
-	return true
+	return false
 }
 
 func matchFields(fieldA, fieldB interface{}) bool {
@@ -82,10 +74,21 @@ func matchFields(fieldA, fieldB interface{}) bool {
 		return false
 	}
 
-	// if fieldA is a slice, iterate over it and compare each element to fieldB
+	// if fieldA is a slice, flatten it and compare each element to fieldB
 	fieldASlice, ok := fieldA.([]interface{})
 	if ok {
+		// Flatten nested slices
+		var flatSlice []interface{}
 		for _, element := range fieldASlice {
+			if nestedSlice, isSlice := element.([]interface{}); isSlice {
+				flatSlice = append(flatSlice, nestedSlice...)
+			} else {
+				flatSlice = append(flatSlice, element)
+			}
+		}
+
+		// Compare each element in the flattened slice
+		for _, element := range flatSlice {
 			if matchFields(element, fieldB) {
 				return true
 			}
@@ -93,33 +96,13 @@ func matchFields(fieldA, fieldB interface{}) bool {
 		return false
 	}
 
-	// if fieldA is a map, iterate over it and compare each value to fieldB
+	// if fieldA is a map, traverse it recursively
 	fieldAMap, ok := fieldA.(map[string]interface{})
 	if ok {
 		for _, value := range fieldAMap {
 			if matchFields(value, fieldB) {
 				return true
 			}
-		}
-		return false
-	}
-
-	// if fieldA is a number, compare it to fieldB
-	fieldANumber, ok := fieldA.(float64)
-	if ok {
-		fieldBNumber, ok := fieldB.(float64)
-		if ok {
-			return fieldANumber == fieldBNumber
-		}
-		return false
-	}
-
-	// if fieldA is a bool, compare it to fieldB
-	fieldABool, ok := fieldA.(bool)
-	if ok {
-		fieldBBool, ok := fieldB.(bool)
-		if ok {
-			return fieldABool == fieldBBool
 		}
 		return false
 	}

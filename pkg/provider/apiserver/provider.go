@@ -432,37 +432,32 @@ func (p *APIServerProvider) parseSchema(schema *openapi_v3.Schema, prefix string
 			var propSchema *openapi_v3.Schema
 			if ref := prop.Value.GetReference(); ref != nil && ref.XRef != "" {
 				propSchema = p.resolveReference(ref.XRef)
-				if propSchema == nil {
-					// If reference resolution fails, try getting the schema directly
-					propSchema = prop.Value.GetSchema()
-				}
 			} else {
 				propSchema = prop.Value.GetSchema()
 			}
 
 			if propSchema != nil {
-				// Always try to parse nested fields regardless of type
-				nestedFields := p.parseSchema(propSchema, fieldPath, visited, "object")
-				fields = append(fields, nestedFields...)
-
-				// Additional handling for arrays
+				// Handle arrays - add this section
 				if propSchema.Type == "array" && propSchema.Items != nil && len(propSchema.Items.SchemaOrReference) > 0 {
 					var itemSchema *openapi_v3.Schema
 					if ref := propSchema.Items.SchemaOrReference[0].GetReference(); ref != nil && ref.XRef != "" {
 						itemSchema = p.resolveReference(ref.XRef)
-						if itemSchema == nil {
-							itemSchema = propSchema.Items.SchemaOrReference[0].GetSchema()
-						}
 					} else {
 						itemSchema = propSchema.Items.SchemaOrReference[0].GetSchema()
 					}
 
 					if itemSchema != nil {
-						fields = append(fields, fieldPath+"[]")
-						arrayFields := p.parseSchema(itemSchema, fieldPath+"[]", visited, "array")
+						arrayPath := fieldPath + "[]"
+						fields = append(fields, arrayPath)
+						// Recursively process array item schema
+						arrayFields := p.parseSchema(itemSchema, arrayPath, visited, "array")
 						fields = append(fields, arrayFields...)
 					}
 				}
+
+				// Continue with normal nested field processing
+				nestedFields := p.parseSchema(propSchema, fieldPath, visited, "object")
+				fields = append(fields, nestedFields...)
 			}
 		}
 	}

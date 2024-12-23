@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/AvitalTamir/cyphernetes/pkg/core"
 	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type QueryRequest struct {
@@ -17,35 +15,31 @@ type QueryRequest struct {
 }
 
 type QueryResponse struct {
-	Result string      `json:"result"`
-	Graph  interface{} `json:"graph"`
-}
-
-type ContextInfo struct {
-	Context   string `json:"context"`
-	Namespace string `json:"namespace,omitempty"`
+	Result string `json:"result"`
+	Graph  string `json:"graph"`
 }
 
 func setupAPIRoutes(router *gin.Engine) {
 	api := router.Group("/api")
 	{
 		api.POST("/query", handleQuery)
-		api.GET("/autocomplete", handleAutocomplete)
-		api.GET("/convert-resource-name", handleConvertResourceName)
-		api.GET("/context", handleGetContext)
+		api.GET("/health", handleHealth)
 	}
 }
 
 func handleQuery(c *gin.Context) {
 	var req QueryRequest
 	if err := c.BindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
 		return
 	}
+
+	fmt.Printf("Received query: %s\n", req.Query)
 
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProvider()
 	if err != nil {
+		fmt.Printf("Provider error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error creating provider: %v", err)})
 		return
 	}
@@ -53,112 +47,57 @@ func handleQuery(c *gin.Context) {
 	// Initialize the executor instance with the provider
 	executor := core.GetQueryExecutorInstance(p)
 	if executor == nil {
+		fmt.Printf("Failed to initialize executor\n")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize query executor"})
 		return
 	}
 
-	namespace := "default"
-
+	// Parse the query
 	ast, err := core.ParseQuery(req.Query)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Printf("Parse error: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Error parsing query: %v", err)})
 		return
 	}
 
-	// Execute the query using the parser
-	result, err := executor.Execute(ast, namespace)
+	// Execute the query
+	result, err := executor.Execute(ast, "")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		fmt.Printf("Execution error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error executing query: %v", err)})
 		return
 	}
 
 	// Marshal the result data to JSON string
 	resultData, err := json.Marshal(result.Data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling results: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusOK, QueryResponse{
-		Result: formatJson(string(resultData)),
-		Graph:  result.Graph,
-	})
+	// Sanitize the graph data
+	sanitizedGraph, err := sanitizeGraph(result.Graph, string(resultData))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error sanitizing graph: %v", err)})
+		return
+	}
+
+	// Marshal the sanitized graph to JSON string
+	graphData, err := json.Marshal(sanitizedGraph)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling graph: %v", err)})
+		return
+	}
+
+	// Return the response with both result and graph as strings
+	response := QueryResponse{
+		Result: string(resultData),
+		Graph:  string(graphData),
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
-func handleAutocomplete(c *gin.Context) {
-	query := c.Query("query")
-	pos := c.Query("position")
-
-	position, err := strconv.Atoi(pos)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid position"})
-		return
-	}
-
-	completer := &CyphernetesCompleter{}
-	suggestions, _ := completer.Do([]rune(query), position)
-
-	// Convert [][]rune to []string
-	stringSuggestions := make([]string, len(suggestions))
-	for i, suggestion := range suggestions {
-		stringSuggestions[i] = string(suggestion)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
-}
-
-func handleConvertResourceName(c *gin.Context) {
-	resourceName := c.Query("name")
-	if resourceName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Resource name is required"})
-		return
-	}
-
-	// Create the API server provider
-	p, err := apiserver.NewAPIServerProvider()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error creating provider: %v", err)})
-		return
-	}
-
-	// Get the GVR using the provider
-	gvr, err := p.FindGVR(resourceName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"singular": gvr.Resource})
-}
-
-func handleGetContext(c *gin.Context) {
-	// Get the kubeconfig loader
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		rules,
-		&clientcmd.ConfigOverrides{},
-	).RawConfig()
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load kubeconfig"})
-		return
-	}
-
-	// Get current context
-	currentContext := config.CurrentContext
-	if currentContext == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No current context set"})
-		return
-	}
-
-	// Get namespace from context
-	namespace := "default"
-	if context, exists := config.Contexts[currentContext]; exists && context.Namespace != "" {
-		namespace = context.Namespace
-	}
-
-	c.JSON(http.StatusOK, ContextInfo{
-		Context:   currentContext,
-		Namespace: namespace,
-	})
+func handleHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

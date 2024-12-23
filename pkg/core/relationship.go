@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -32,29 +33,35 @@ func applyRelationshipRule(resourcesA, resourcesB []map[string]interface{}, rule
 
 	for _, resourceA := range resourcesA {
 		for _, resourceB := range resourcesB {
-			if matchByCriteria(resourceA, resourceB, rule.MatchCriteria) {
-				if direction == Left {
-					if !containsResource(matchedResourcesA, resourceA) {
-						matchedResourcesA = append(matchedResourcesA, resourceA)
-					}
-					if !containsResource(matchedResourcesB, resourceB) {
-						matchedResourcesB = append(matchedResourcesB, resourceB)
-					}
-				} else if direction == Right {
-					if !containsResource(matchedResourcesA, resourceB) {
-						matchedResourcesA = append(matchedResourcesA, resourceB)
-					}
-					if !containsResource(matchedResourcesB, resourceA) {
-						matchedResourcesB = append(matchedResourcesB, resourceA)
-					}
+			matched := false
+			for _, criterion := range rule.MatchCriteria {
+				if matchByCriterion(resourceA, resourceB, criterion) {
+					matched = true
+					break
+				}
+			}
+
+			if matched {
+				if !containsResource(matchedResourcesA, resourceA) {
+					matchedResourcesA = append(matchedResourcesA, resourceA)
+				}
+				if !containsResource(matchedResourcesB, resourceB) {
+					matchedResourcesB = append(matchedResourcesB, resourceB)
 				}
 			}
 		}
 	}
 
-	return map[string]interface{}{
-		"right": matchedResourcesA,
-		"left":  matchedResourcesB,
+	if direction == Left {
+		return map[string]interface{}{
+			"right": matchedResourcesA,
+			"left":  matchedResourcesB,
+		}
+	} else {
+		return map[string]interface{}{
+			"right": matchedResourcesB,
+			"left":  matchedResourcesA,
+		}
 	}
 }
 
@@ -84,27 +91,103 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 	return false
 }
 
-func InitializeRelationships(specs map[string][]string) {
-	// Process OpenAPI specs to discover relationships
-	for kindA, fields := range specs {
-		for _, field := range fields {
-			if strings.Contains(field, "metadata.name") {
-				// This could indicate a reference
-				parts := strings.Split(field, ".")
-				if len(parts) > 2 {
-					kindB := parts[0] // The referenced kind
-					AddRelationshipRule(RelationshipRule{
-						KindA:        kindA,
-						KindB:        kindB,
-						Relationship: RelationshipType(fmt.Sprintf("%s_REFERENCES_%s", kindA, kindB)),
-						MatchCriteria: []MatchCriterion{
-							{
-								FieldA:         fmt.Sprintf("$.%s", field),
-								FieldB:         "$.metadata.name",
-								ComparisonType: ExactMatch,
-							},
-						},
-					})
+func InitializeRelationships(resourceSpecs map[string][]string) {
+	// Map to hold available kinds for quick look-up
+	availableKinds := make(map[string]bool)
+	for schemaName := range resourceSpecs {
+		kind := extractKindFromSchemaName(schemaName)
+		if kind != "" {
+			// fmt.Println("Adding available kind:", kind)
+			availableKinds[strings.ToLower(kind)] = true
+		}
+	}
+
+	// Regular expression to match fields ending with 'Name', or 'Ref'
+	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
+	refFieldRegex := regexp.MustCompile(`(\w+)(Ref)`)
+
+	for kindA, fields := range resourceSpecs {
+		kindANameSingular := extractKindFromSchemaName(kindA)
+		if kindANameSingular == "" {
+			continue
+		}
+
+		for _, fieldPath := range fields {
+			parts := strings.Split(fieldPath, ".")
+			fieldName := parts[len(parts)-1]
+
+			// Remove the special handling for configmap and instead improve the general logic
+			relatedKindSingular := ""
+			relSpecType := ""
+
+			if nameOrKeyRefFieldRegex.MatchString(fieldName) {
+				relatedKindSingular = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$1")
+				relSpecType = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$2")
+			} else if refFieldRegex.MatchString(fieldName) {
+				relatedKindSingular = refFieldRegex.ReplaceAllString(fieldName, "$1")
+				relSpecType = refFieldRegex.ReplaceAllString(fieldName, "$2")
+			} else {
+				continue
+			}
+
+			// convert relatedKind to lower case plural using GVR cache
+			if gvr, ok := GvrCache[strings.ToLower(relatedKindSingular)]; ok {
+				relatedKind := gvr.Resource
+
+				// same conversion for kindA
+				if gvrA, ok := GvrCache[strings.ToLower(kindANameSingular)]; ok {
+					kindAName := gvrA.Resource
+
+					// Important: Keep the array notation in the field path
+					fullFieldPath := fieldPath
+					if relSpecType == "Ref" || relSpecType == "KeyRef" {
+						fullFieldPath = fieldPath + ".name"
+					}
+
+					// Check if relatedKind exists in availableKinds
+					if _, exists := availableKinds[strings.ToLower(relatedKindSingular)]; exists {
+						relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+							strings.ToUpper(relatedKindSingular),
+							strings.ToUpper(kindANameSingular)))
+
+						kindA := strings.ToLower(kindAName)
+						kindB := strings.ToLower(relatedKind)
+
+						// Keep the array notation in the JsonPath
+						fieldA := "$." + fullFieldPath
+						fieldB := "$.metadata.name"
+
+						criterion := MatchCriterion{
+							FieldA:         fieldA,
+							FieldB:         fieldB,
+							ComparisonType: ExactMatch,
+						}
+
+						// Check for existing rule and add/create as before
+						existingRuleIndex := -1
+						for i, r := range relationshipRules {
+							if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
+								existingRuleIndex = i
+								break
+							}
+						}
+
+						if existingRuleIndex >= 0 {
+							relationshipRules[existingRuleIndex].MatchCriteria = append(
+								relationshipRules[existingRuleIndex].MatchCriteria,
+								criterion,
+							)
+						} else {
+							// Create new rule
+							rule := RelationshipRule{
+								KindA:         kindA,
+								KindB:         kindB,
+								Relationship:  relType,
+								MatchCriteria: []MatchCriterion{criterion},
+							}
+							relationshipRules = append(relationshipRules, rule)
+						}
+					}
 				}
 			}
 		}
