@@ -91,7 +91,7 @@ Using go:
 go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
 ```
 
-Alternatively, grab a binary from the [Releases page](https://github.com/avitaltamir/cyphernetes/releases).
+Alternatively, grab a binary from the [Releases page](https://github.com/AvitalTamir/cyphernetes/releases).
 
 ## Development
 
