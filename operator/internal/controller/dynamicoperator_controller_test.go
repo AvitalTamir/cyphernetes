@@ -44,6 +44,13 @@ func (m *MockProvider) GetDynamicClient() (dynamic.Interface, error) {
 }
 
 func (m *MockProvider) FindGVR(resourceKind string) (schema.GroupVersionResource, error) {
+	if strings.EqualFold(resourceKind, "ingress") || strings.EqualFold(resourceKind, "ingresses") {
+		return schema.GroupVersionResource{
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+			Resource: "ingresses",
+		}, nil
+	}
 	return schema.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",

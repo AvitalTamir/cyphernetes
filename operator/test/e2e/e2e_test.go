@@ -41,6 +41,8 @@ import (
 
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
 	"github.com/avitaltamir/cyphernetes/operator/internal/controller"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -168,6 +170,56 @@ var _ = Describe("DynamicOperator E2E Tests", func() {
 		timeout                  = time.Second * 20 // Increased timeout
 		interval                 = time.Millisecond * 1000
 	)
+
+	BeforeEach(func() {
+		// Initialize relationships for the test
+		core.InitializeRelationships(map[string][]string{
+			"deployments": {
+				"metadata.name",
+				"metadata.namespace",
+				"spec.replicas",
+				"spec.selector",
+				"spec.template",
+			},
+			"services": {
+				"metadata.name",
+				"metadata.namespace",
+				"spec.selector",
+				"spec.ports",
+			},
+			"ingresses": {
+				"metadata.name",
+				"metadata.namespace",
+				"spec.rules",
+				"spec.ingressClassName",
+				"spec.rules[].http.paths[].backend.service.name",
+			},
+		})
+
+		// Add the relationship rules
+		core.AddRelationshipRule(core.RelationshipRule{
+			KindA:        "deployments",
+			KindB:        "services",
+			Relationship: core.ServiceExposeDeployment,
+			MatchCriteria: []core.MatchCriterion{{
+				FieldA: "spec.selector.matchLabels",
+				FieldB: "spec.selector",
+			}},
+		})
+
+		core.AddRelationshipRule(core.RelationshipRule{
+			KindA:        "services",
+			KindB:        "ingresses",
+			Relationship: core.Route,
+			MatchCriteria: []core.MatchCriterion{{
+				FieldA: "metadata.name",
+				FieldB: "spec.rules[].http.paths[].backend.service.name",
+			}},
+		})
+
+		// Add debug logging
+		fmt.Printf("Relationship rules initialized: %+v\n", core.GetRelationshipRules())
+	})
 
 	Context("When creating an ExposedDeployment DynamicOperator", func() {
 		It("Should create DynamicOperator, Deployment, and Service successfully", func() {
@@ -419,14 +471,30 @@ DELETE d, s;
 
 			By("Verifying ingress class changed to 'active'")
 			Eventually(func() string {
+				// First check if the relationship is established
+				p, err := apiserver.NewAPIServerProvider()
+				if err == nil {
+					executor, err := core.NewQueryExecutor(p)
+					if err == nil {
+						ast, _ := core.ParseQuery(`MATCH (d:Deployment)->(s:Service)->(i:Ingress) RETURN d,s,i`)
+						result, err := executor.Execute(ast, "default")
+						if err == nil {
+							fmt.Printf("Current relationships: %+v\n", result.Graph)
+						}
+					}
+				}
+
 				updatedIngress := &networkingv1.Ingress{}
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: "test-ingress", Namespace: "default"}, updatedIngress)
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-ingress", Namespace: "default"}, updatedIngress)
 				if err != nil {
+					fmt.Printf("Error getting ingress: %v\n", err)
 					return ""
 				}
 				if updatedIngress.Spec.IngressClassName == nil {
+					fmt.Printf("IngressClassName is nil\n")
 					return ""
 				}
+				fmt.Printf("Current IngressClassName: %s\n", *updatedIngress.Spec.IngressClassName)
 				return *updatedIngress.Spec.IngressClassName
 			}, timeout, interval).Should(Equal("active"))
 
