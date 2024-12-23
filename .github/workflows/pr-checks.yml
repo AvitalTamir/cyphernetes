@@ -14,9 +14,9 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Setup Kind
-      uses: engineerd/setup-kind@v0.5.0
+      uses: engineerd/setup-kind@v0.6.0
       with:
-        version: "v0.11.1"
+        version: "v0.24.0"
     - name: Install Envtest
       run: |
         go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
