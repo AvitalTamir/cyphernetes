@@ -719,7 +719,6 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		return false, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
 	}
 
-	fmt.Printf("found relationship rule: %+v\n", rule)
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 
 	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
