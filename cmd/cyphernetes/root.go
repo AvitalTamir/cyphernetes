@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/spf13/cobra"
 )
 

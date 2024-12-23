@@ -1,10 +1,10 @@
-module github.com/AvitalTamir/cyphernetes/operator
+module github.com/avitaltamir/cyphernetes/operator
 
 go 1.23.0
 
 require (
-	github.com/AvitalTamir/cyphernetes v0.0.0
-	github.com/AvitalTamir/jsonpath v0.0.0
+	github.com/avitaltamir/cyphernetes v0.0.0
+	github.com/avitaltamir/jsonpath v0.0.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	k8s.io/api v0.31.0
@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/AvitalTamir/jsonpath v0.0.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -101,4 +102,4 @@ require (
 )
 
 // Use the local module from the monorepo
-replace github.com/AvitalTamir/cyphernetes => ../
+replace github.com/avitaltamir/cyphernetes => ../

@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	operatorv1 "github.com/AvitalTamir/cyphernetes/operator/api/v1"
-	core "github.com/AvitalTamir/cyphernetes/pkg/core"
-	"github.com/AvitalTamir/cyphernetes/pkg/provider"
+	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
+	core "github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"

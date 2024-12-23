@@ -6,7 +6,7 @@ domain: cyphernet.es
 layout:
 - go.kubebuilder.io/v4
 projectname: operator
-repo: github.com/AvitalTamir/cyphernetes/operator
+repo: github.com/avitaltamir/cyphernetes/operator
 resources:
 - api:
     crdVersion: v1
@@ -15,6 +15,6 @@ resources:
   domain: cyphernet.es
   group: cyphernetes-operator
   kind: DynamicOperator
-  path: github.com/AvitalTamir/cyphernetes/operator/api/v1
+  path: github.com/avitaltamir/cyphernetes/operator/api/v1
   version: v1
 version: "3"

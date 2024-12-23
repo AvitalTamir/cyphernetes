@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/wader/readline"
 )
 

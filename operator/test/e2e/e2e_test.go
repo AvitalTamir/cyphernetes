@@ -39,8 +39,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	zap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1 "github.com/AvitalTamir/cyphernetes/operator/api/v1"
-	"github.com/AvitalTamir/cyphernetes/operator/internal/controller"
+	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
+	"github.com/avitaltamir/cyphernetes/operator/internal/controller"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

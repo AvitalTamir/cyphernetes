@@ -14,9 +14,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/AvitalTamir/cyphernetes/pkg/core"
-	"github.com/AvitalTamir/cyphernetes/pkg/provider/apiserver"
 	colorjson "github.com/TylerBrock/colorjson"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
