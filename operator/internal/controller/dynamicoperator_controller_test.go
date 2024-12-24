@@ -28,6 +28,21 @@ type MockProvider struct {
 	dynamicClient dynamic.Interface
 }
 
+func (m *MockProvider) GetGVRList() (map[string]schema.GroupVersionResource, error) {
+	return map[string]schema.GroupVersionResource{
+		"pod": {
+			Group:    "",
+			Version:  "v1",
+			Resource: "pods",
+		},
+		"ingress": {
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+			Resource: "ingresses",
+		},
+	}, nil
+}
+
 func NewMockProvider(clientset kubernetes.Interface, dynamicClient dynamic.Interface) provider.Provider {
 	return &MockProvider{
 		clientset:     clientset,

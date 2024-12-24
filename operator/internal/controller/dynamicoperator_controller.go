@@ -150,14 +150,45 @@ func (r *DynamicOperatorReconciler) logActiveWatchers() {
 	}
 }
 
+// Add this function to initialize kubernetes clients
+func initializeK8sClients(config clientcmd.ClientConfig) (kubernetes.Interface, dynamic.Interface, error) {
+	restConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create config: %v", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create clientset: %v", err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create dynamic client: %v", err)
+	}
+
+	return clientset, dynamicClient, nil
+}
+
+// Modify the SetupWithManager function to use the new initialization
 func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log.Log.Info("Setting up DynamicOperatorReconciler")
 
-	// Initialize the provider
-	provider, err := apiserver.NewAPIServerProviderWithConfig(clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	// Initialize kubernetes clients first
+	clientset, dynamicClient, err := initializeK8sClients(clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{},
 	))
+	if err != nil {
+		return fmt.Errorf("failed to initialize kubernetes clients: %w", err)
+	}
+
+	// Initialize the provider with our clients
+	provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+		Clientset:     clientset,
+		DynamicClient: dynamicClient,
+		TestMode:      false,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
 	}
@@ -169,22 +200,6 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	r.QueryExecutor = queryExecutor
-
-	// Get the kubernetes clients from the provider
-	apiProvider, ok := provider.(*apiserver.APIServerProvider)
-	if !ok {
-		return fmt.Errorf("failed to cast provider to APIServerProvider")
-	}
-
-	clientset, err := apiProvider.GetClientset()
-	if err != nil {
-		return fmt.Errorf("failed to get clientset: %w", err)
-	}
-
-	dynamicClient, err := apiProvider.GetDynamicClient()
-	if err != nil {
-		return fmt.Errorf("failed to get dynamic client: %w", err)
-	}
 
 	r.DynamicClient = dynamicClient
 	r.Clientset = clientset
@@ -338,12 +353,7 @@ func (r *DynamicOperatorReconciler) addFinalizer(ctx context.Context, dynamicOpe
 			return
 		}
 
-		dynamicClient, err := r.QueryExecutor.Provider().GetDynamicClient()
-		if err != nil {
-			log.Log.Error(err, "Failed to get dynamic client")
-			return
-		}
-		_, err = dynamicClient.Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, u, metav1.UpdateOptions{})
+		_, err = r.DynamicClient.Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, u, metav1.UpdateOptions{})
 		if err != nil {
 			log.Log.Error(err, "Failed to add finalizer", "resource", u.GetName())
 		} else {

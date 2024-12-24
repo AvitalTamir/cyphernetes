@@ -1672,7 +1672,7 @@ func InitGVRCache(p provider.Provider) error {
 		GvrCache = make(map[string]schema.GroupVersionResource)
 	}
 
-	cache, err := p.GetGVRCache()
+	cache, err := p.GetGVRList()
 	if err != nil {
 		return fmt.Errorf("error getting GVR cache: %w", err)
 	}

@@ -26,8 +26,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type APIServerProviderConfig struct {
+	Clientset     kubernetes.Interface
+	DynamicClient dynamic.Interface
+	TestMode      bool
+}
+
 type APIServerProvider struct {
-	clientset      *kubernetes.Clientset
+	clientset      kubernetes.Interface
 	dynamicClient  dynamic.Interface
 	gvrCache       map[string]schema.GroupVersionResource
 	gvrCacheMutex  sync.RWMutex
@@ -52,32 +58,50 @@ type apiResponse struct {
 }
 
 func NewAPIServerProvider() (provider.Provider, error) {
-	// First try in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		// Fall back to kubeconfig
-		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-		configOverrides := &clientcmd.ConfigOverrides{}
-		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-		config, err = kubeConfig.ClientConfig()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create config: %v", err)
-		}
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create clientset: %v", err)
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamic client: %v", err)
-	}
-
 	// Detect if we're in a test environment
 	isTest := strings.HasSuffix(os.Args[0], ".test") ||
 		strings.Contains(os.Args[0], "___")
+
+	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{
+		TestMode: isTest,
+	})
+}
+
+func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.Provider, error) {
+	var err error
+	clientset := config.Clientset
+	dynamicClient := config.DynamicClient
+
+	// If clients are not provided, create them
+	if clientset == nil || dynamicClient == nil {
+		// First try in-cluster config
+		var restConfig *rest.Config
+		restConfig, err = rest.InClusterConfig()
+		if err != nil {
+			// Fall back to kubeconfig
+			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+			configOverrides := &clientcmd.ConfigOverrides{}
+			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+			restConfig, err = kubeConfig.ClientConfig()
+			if err != nil {
+				return nil, fmt.Errorf("failed to create config: %v", err)
+			}
+		}
+
+		if clientset == nil {
+			clientset, err = kubernetes.NewForConfig(restConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create clientset: %v", err)
+			}
+		}
+
+		if dynamicClient == nil {
+			dynamicClient, err = dynamic.NewForConfig(restConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create dynamic client: %v", err)
+			}
+		}
+	}
 
 	provider := &APIServerProvider{
 		clientset:      clientset,
@@ -85,7 +109,7 @@ func NewAPIServerProvider() (provider.Provider, error) {
 		gvrCache:       make(map[string]schema.GroupVersionResource),
 		requestChannel: make(chan *apiRequest),
 		semaphore:      make(chan struct{}, 1),
-		testMode:       isTest,
+		testMode:       config.TestMode,
 	}
 
 	// Start the request processor
@@ -765,7 +789,7 @@ func (p *APIServerProvider) GetClientset() (kubernetes.Interface, error) {
 	return p.clientset, nil
 }
 
-func (p *APIServerProvider) GetGVRCache() (map[string]schema.GroupVersionResource, error) {
+func (p *APIServerProvider) GetGVRList() (map[string]schema.GroupVersionResource, error) {
 	// Initialize the cache if it's empty
 	if len(p.gvrCache) == 0 {
 		err := p.initGVRCache()
@@ -773,7 +797,7 @@ func (p *APIServerProvider) GetGVRCache() (map[string]schema.GroupVersionResourc
 			return nil, fmt.Errorf("error initializing GVR cache: %w", err)
 		}
 	}
-	return p.gvrCache, nil
+	return p.GetGVRCacheSnapshot(), nil
 }
 
 // Add this helper method if not already present
@@ -824,4 +848,17 @@ func (p *APIServerProvider) initGVRCache() error {
 
 func (p *APIServerProvider) GetDynamicClient() (dynamic.Interface, error) {
 	return p.dynamicClient, nil
+}
+
+// Add this method to APIServerProvider
+func (p *APIServerProvider) GetGVRCacheSnapshot() map[string]schema.GroupVersionResource {
+	p.gvrCacheMutex.RLock()
+	defer p.gvrCacheMutex.RUnlock()
+
+	// Return a copy of the cache to prevent concurrent access issues
+	snapshot := make(map[string]schema.GroupVersionResource, len(p.gvrCache))
+	for k, v := range p.gvrCache {
+		snapshot[k] = v
+	}
+	return snapshot
 }
