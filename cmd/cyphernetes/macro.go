@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
 
 type Macro struct {
@@ -51,7 +51,7 @@ func executeMacro(input string) (string, error) {
 	}
 
 	var results []string
-	var graph parser.Graph
+	var graph core.Graph
 	for i, stmt := range statements {
 		result, graphInternal, err := processQuery(stmt)
 		if err != nil {

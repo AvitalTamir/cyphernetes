@@ -1,4 +1,4 @@
-package parser
+package core
 
 import (
 	"os"
@@ -73,6 +73,27 @@ func TestMatchByCriteria(t *testing.T) {
 		expectMatch bool
 	}{
 		{
+			name: "Single criterion match",
+			resourceA: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+				},
+			},
+			resourceB: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+				},
+			},
+			criteria: []MatchCriterion{
+				{
+					FieldA:         "$.metadata.name",
+					FieldB:         "$.metadata.name",
+					ComparisonType: ExactMatch,
+				},
+			},
+			expectMatch: true,
+		},
+		{
 			name: "Matching resources",
 			resourceA: map[string]interface{}{
 				"metadata": map[string]interface{}{
@@ -122,9 +143,13 @@ func TestMatchByCriteria(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchByCriteria(tt.resourceA, tt.resourceB, tt.criteria)
-			if result != tt.expectMatch {
-				t.Errorf("Expected match: %v, but got: %v", tt.expectMatch, result)
+			// Test each criterion individually
+			for _, criterion := range tt.criteria {
+				result := matchByCriterion(tt.resourceA, tt.resourceB, criterion)
+				if result != tt.expectMatch {
+					t.Errorf("matchByCriterion() with criterion %+v = %v, want %v",
+						criterion, result, tt.expectMatch)
+				}
 			}
 		})
 	}
@@ -388,7 +413,7 @@ relationships:
 			}()
 
 			// Test loading custom relationships
-			err := loadCustomRelationships()
+			_, err := loadCustomRelationships()
 
 			if tt.expectedError {
 				if err == nil {
@@ -426,27 +451,25 @@ func TestStringContainsComparison(t *testing.T) {
 		name        string
 		resourceA   interface{}
 		resourceB   interface{}
-		criteria    []MatchCriterion
+		criterion   MatchCriterion
 		expectMatch bool
 	}{
 		{
 			name: "String contains match",
 			resourceA: map[string]interface{}{
 				"metadata": map[string]interface{}{
-					"name": "myapp-config",
+					"name": "test-deployment",
 				},
 			},
 			resourceB: map[string]interface{}{
 				"metadata": map[string]interface{}{
-					"name": "myapp",
+					"name": "test",
 				},
 			},
-			criteria: []MatchCriterion{
-				{
-					FieldA:         "$.metadata.name",
-					FieldB:         "$.metadata.name",
-					ComparisonType: StringContains,
-				},
+			criterion: MatchCriterion{
+				FieldA:         "$.metadata.name",
+				FieldB:         "$.metadata.name",
+				ComparisonType: StringContains,
 			},
 			expectMatch: true,
 		},
@@ -454,20 +477,18 @@ func TestStringContainsComparison(t *testing.T) {
 			name: "String contains no match",
 			resourceA: map[string]interface{}{
 				"metadata": map[string]interface{}{
-					"name": "other-config",
+					"name": "production-deployment",
 				},
 			},
 			resourceB: map[string]interface{}{
 				"metadata": map[string]interface{}{
-					"name": "myapp",
+					"name": "test",
 				},
 			},
-			criteria: []MatchCriterion{
-				{
-					FieldA:         "$.metadata.name",
-					FieldB:         "$.metadata.name",
-					ComparisonType: StringContains,
-				},
+			criterion: MatchCriterion{
+				FieldA:         "$.metadata.name",
+				FieldB:         "$.metadata.name",
+				ComparisonType: StringContains,
 			},
 			expectMatch: false,
 		},
@@ -475,9 +496,10 @@ func TestStringContainsComparison(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchByCriteria(tt.resourceA, tt.resourceB, tt.criteria)
+			result := matchByCriterion(tt.resourceA, tt.resourceB, tt.criterion)
 			if result != tt.expectMatch {
-				t.Errorf("Expected match: %v, but got: %v", tt.expectMatch, result)
+				t.Errorf("matchByCriterion() with criterion %+v = %v, want %v",
+					tt.criterion, result, tt.expectMatch)
 			}
 		})
 	}

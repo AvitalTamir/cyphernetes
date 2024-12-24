@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/wader/readline"
 )
 
 func TestShellPrompt(t *testing.T) {
 	// Save the original namespace and restore it after the test
-	originalNamespace := parser.Namespace
-	defer func() { parser.Namespace = originalNamespace }()
+	originalNamespace := core.Namespace
+	defer func() { core.Namespace = originalNamespace }()
 
 	tests := []struct {
 		name      string
@@ -27,7 +27,7 @@ func TestShellPrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser.Namespace = tt.namespace
+			core.Namespace = tt.namespace
 			got := shellPrompt()
 			if !regexp.MustCompile(tt.want).MatchString(got) {
 				t.Errorf("shellPrompt() = %v, does not match regex %v", got, tt.want)
@@ -38,11 +38,11 @@ func TestShellPrompt(t *testing.T) {
 
 func TestShellPromptNoColor(t *testing.T) {
 	// Save the original namespace and noColor options and restore it after the test
-	originalNamespace := parser.Namespace
-	originalNoColor := parser.NoColor
+	originalNamespace := core.Namespace
+	originalNoColor := core.NoColor
 	defer func() {
-		parser.Namespace = originalNamespace
-		parser.NoColor = originalNoColor
+		core.Namespace = originalNamespace
+		core.NoColor = originalNoColor
 	}()
 
 	tests := []struct {
@@ -57,8 +57,8 @@ func TestShellPromptNoColor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser.NoColor = true
-			parser.Namespace = tt.namespace
+			core.NoColor = true
+			core.Namespace = tt.namespace
 			got := shellPrompt()
 			if !regexp.MustCompile(tt.want).MatchString(got) {
 				t.Errorf("shellPrompt() = %v, does not match regex %v", got, tt.want)

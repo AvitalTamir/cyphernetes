@@ -620,8 +620,6 @@ Available shell commands:
 * `\d` - Print debug information.
 * `\q` - Toggle printing query execution time.
 * `\r` - Toggle raw output (disable colorized JSON).
-* `\cc` - Clear the cache.
-* `\pc` - Print the cache.
 * `\lm` - List available macros.
 * `:macro_name [args]` - Execute a macro.
 
