@@ -159,6 +159,7 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 		if strings.ToLower(k) == lowerKind || // Case-insensitive kind match
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
+			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind || // Singular form
 			containsStringIgnoreCase(p.getShortNames(gvr), lowerKind) { // Short name match
 			return gvr, nil
 		}
@@ -620,19 +621,6 @@ func (p *APIServerProvider) initGVRCache() error {
 	}
 
 	return nil
-}
-
-func (p *APIServerProvider) PrintCache() string {
-	var output strings.Builder
-	for kind, gvr := range p.gvrCache {
-		output.WriteString(fmt.Sprintf("%s: %s\n", kind, gvr.String()))
-	}
-	return output.String()
-}
-
-func (p *APIServerProvider) ClearCache() error {
-	p.gvrCache = make(map[string]schema.GroupVersionResource)
-	return p.initGVRCache()
 }
 
 func (p *APIServerProvider) GetDynamicClient() (dynamic.Interface, error) {

@@ -66,10 +66,6 @@ func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
 	return make(map[string][]string), nil
 }
 
-func (m *MockProvider) ClearCache() error {
-	return nil
-}
-
 func (m *MockProvider) GetK8sResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
 	return []map[string]interface{}{}, nil
 }
@@ -92,10 +88,6 @@ func (m *MockProvider) CreateProviderForContext(context string) (provider.Provid
 
 func (m *MockProvider) GetDiscoveryClient() (discovery.DiscoveryInterface, error) {
 	return m.clientset.Discovery(), nil
-}
-
-func (m *MockProvider) PrintCache() string {
-	return ""
 }
 
 var _ = Describe("DynamicOperator Controller", func() {

@@ -25,8 +25,4 @@ type Provider interface {
 	GetClientset() (kubernetes.Interface, error)
 	GetDynamicClient() (dynamic.Interface, error)
 	GetGVRCache() (map[string]schema.GroupVersionResource, error)
-
-	// Cache management methods
-	PrintCache() string
-	ClearCache() error
 }

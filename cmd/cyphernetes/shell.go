@@ -392,13 +392,6 @@ func runShell(cmd *cobra.Command, args []string) {
 				printQueryExecutionTime = true
 			}
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
-		} else if input == "\\pc" {
-			// Print the cache
-			executor.Provider().PrintCache()
-		} else if input == "\\cc" {
-			// Clear the cache
-			executor.Provider().ClearCache()
-			fmt.Println("Cache cleared")
 		} else if input == "\\lm" {
 			fmt.Println("Registered macros:")
 			for name, macro := range macroManager.Macros {
@@ -444,8 +437,6 @@ func runShell(cmd *cobra.Command, args []string) {
 			fmt.Println("\\q                 - Toggle print query execution time")
 			fmt.Println("\\r                 - Toggle raw output (disable colorized JSON)")
 			fmt.Println("\\d                 - Toggle debug mode")
-			fmt.Println("\\cc                - Clear the cache")
-			fmt.Println("\\pc                - Print the cache")
 			fmt.Println("\\lm                - List all registered macros")
 			fmt.Println(":macro_name [args] - Execute a macro")
 		} else if input != "" {
