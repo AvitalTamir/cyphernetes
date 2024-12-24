@@ -92,12 +92,16 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 }
 
 func InitializeRelationships(resourceSpecs map[string][]string) {
+	relationshipCount := 0
+	totalKinds := len(resourceSpecs)
+	processed := 0
+	lastProgress := 0
+
 	// Map to hold available kinds for quick look-up
 	availableKinds := make(map[string]bool)
 	for schemaName := range resourceSpecs {
 		kind := extractKindFromSchemaName(schemaName)
 		if kind != "" {
-			// fmt.Println("Adding available kind:", kind)
 			availableKinds[strings.ToLower(kind)] = true
 		}
 	}
@@ -109,8 +113,19 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 	for kindA, fields := range resourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
 		if kindANameSingular == "" {
+			processed++
 			continue
 		}
+
+		// Update progress bar
+		progress := (processed * 100) / totalKinds
+		if progress > lastProgress {
+			fmt.Printf("\r🧠 Initializing relationships [%-25s] %d%%",
+				strings.Repeat("=", progress/4),
+				progress)
+			lastProgress = progress
+		}
+		fmt.Print("\r")
 
 		for _, fieldPath := range fields {
 			parts := strings.Split(fieldPath, ".")
@@ -186,37 +201,47 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 								MatchCriteria: []MatchCriterion{criterion},
 							}
 							relationshipRules = append(relationshipRules, rule)
+							relationshipCount++
 						}
 					}
 				}
 			}
 		}
+
+		processed++
 	}
 
-	err := loadCustomRelationships()
+	customRelationshipsCount, err := loadCustomRelationships()
 	if err != nil {
-		fmt.Println("Error loading custom relationships:", err)
+		fmt.Println("\nError loading custom relationships:", err)
 	}
+
+	suffix := ""
+	if customRelationshipsCount > 0 {
+		suffix = fmt.Sprintf(" and %d custom", customRelationshipsCount)
+	}
+
+	fmt.Printf("\033[K ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
 }
 
-func loadCustomRelationships() error {
+func loadCustomRelationships() (int, error) {
 	counter := 0
 	// Get user's home directory
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("error getting home directory: %v", err)
+		return 0, fmt.Errorf("error getting home directory: %v", err)
 	}
 
 	// Check if .cyphernetes/relationships.yaml exists
 	relationshipsPath := filepath.Join(home, ".cyphernetes", "relationships.yaml")
 	if _, err := os.Stat(relationshipsPath); os.IsNotExist(err) {
-		return nil
+		return 0, nil
 	}
 
 	// Read and parse relationships.yaml
 	data, err := os.ReadFile(relationshipsPath)
 	if err != nil {
-		return fmt.Errorf("error reading relationships file: %v", err)
+		return 0, fmt.Errorf("error reading relationships file: %v", err)
 	}
 
 	type CustomRelationships struct {
@@ -225,28 +250,28 @@ func loadCustomRelationships() error {
 
 	var customRels CustomRelationships
 	if err := yaml.Unmarshal(data, &customRels); err != nil {
-		return fmt.Errorf("error parsing relationships file: %v", err)
+		return 0, fmt.Errorf("error parsing relationships file: %v", err)
 	}
 
 	// Validate and add custom relationships
 	for _, rule := range customRels.Relationships {
 		// Validate required fields
 		if rule.KindA == "" || rule.KindB == "" {
-			return fmt.Errorf("invalid relationship rule: kindA, kindB and relationship are required: %+v", rule)
+			return 0, fmt.Errorf("invalid relationship rule: kindA, kindB and relationship are required: %+v", rule)
 		}
 		if len(rule.MatchCriteria) == 0 {
-			return fmt.Errorf("invalid relationship rule: at least one match criterion is required: %+v", rule)
+			return 0, fmt.Errorf("invalid relationship rule: at least one match criterion is required: %+v", rule)
 		}
 
 		// Validate each criterion
 		for _, criterion := range rule.MatchCriteria {
 			if criterion.FieldA == "" || criterion.FieldB == "" {
-				return fmt.Errorf("invalid match criterion: fieldA and fieldB are required: %+v", criterion)
+				return 0, fmt.Errorf("invalid match criterion: fieldA and fieldB are required: %+v", criterion)
 			}
 			if criterion.ComparisonType != ExactMatch &&
 				criterion.ComparisonType != ContainsAll &&
 				criterion.ComparisonType != StringContains {
-				return fmt.Errorf("invalid comparison type: must be ExactMatch, ContainsAll, or StringContains: %v", criterion.ComparisonType)
+				return 0, fmt.Errorf("invalid comparison type: must be ExactMatch, ContainsAll, or StringContains: %v", criterion.ComparisonType)
 			}
 		}
 
@@ -255,11 +280,5 @@ func loadCustomRelationships() error {
 		AddRelationshipRule(rule)
 	}
 
-	suffix := ""
-	if counter > 0 {
-		suffix = "s"
-	}
-	fmt.Printf("💡 added %d custom relationship%s\n", counter, suffix)
-
-	return nil
+	return counter, nil
 }

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -343,8 +345,11 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body 
 	return err
 }
 
+type GroupVersion interface {
+	Schema(contentType string) ([]byte, error)
+}
+
 func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
-	fmt.Print("🔎 fetching resource specs... ")
 	if p.openAPIDoc == nil {
 		// Get OpenAPI V3 client
 		openAPIV3Client := p.clientset.Discovery().OpenAPIV3()
@@ -364,48 +369,157 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			},
 		}
 
-		// Process each group version
-		for _, groupVersion := range paths {
-			schemaBytes, err := groupVersion.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
-			if err != nil {
-				if strings.Contains(err.Error(), "the backend attempted to redirect this request") {
+		totalPaths := len(paths)
+
+		// Create channels for work distribution and results collection
+		type schemaResult struct {
+			bytes []byte
+			index int
+		}
+
+		// Create a slice to preserve order
+		pathSlice := make([]GroupVersion, 0, len(paths))
+		for _, path := range paths {
+			pathSlice = append(pathSlice, path)
+		}
+
+		// Adjust to a more conservative number of workers
+		numWorkers := runtime.NumCPU() // Just use number of CPUs instead of *2
+
+		// Use smaller buffer sizes
+		workChan := make(chan struct {
+			path  GroupVersion
+			index int
+		}, len(pathSlice))
+		resultChan := make(chan schemaResult, len(pathSlice))
+		progressChan := make(chan int, len(pathSlice))
+
+		// Feed the work channel
+		for i, path := range pathSlice {
+			workChan <- struct {
+				path  GroupVersion
+				index int
+			}{path, i}
+		}
+		close(workChan)
+
+		// Progress tracking goroutine
+		go func() {
+			processed := 0
+			fmt.Print("\n🧠 Resolving schemas [")
+			for range progressChan {
+				processed++
+				progress := (processed * 100) / len(pathSlice)
+				fmt.Printf("\r🧠 Resolving schemas [%-25s] %d%%", strings.Repeat("=", progress/4), progress)
+			}
+			fmt.Print("\r")
+		}()
+
+		// Create worker pool
+		var wg sync.WaitGroup
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for work := range workChan {
+					time.Sleep(10 * time.Millisecond) // Add small delay between requests
+					schemaBytes, err := work.path.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
+
+					// Get the schema name from the path
+					pathStr := fmt.Sprintf("%v", work.path)
+
+					if err != nil {
+						if !strings.Contains(err.Error(), "the backend attempted to redirect this request") {
+							fmt.Printf("\nError getting schema %s: %v\n", pathStr, err)
+						}
+						progressChan <- 1
+						continue
+					}
+
+					resultChan <- schemaResult{bytes: schemaBytes, index: work.index}
+					progressChan <- 1
+				}
+			}()
+		}
+
+		// Start a goroutine to close channels when all workers are done
+		go func() {
+			wg.Wait()
+			close(resultChan)
+			close(progressChan)
+		}()
+
+		// Collect results in order
+		schemasBytes := make([][]byte, totalPaths)
+		p.openAPIDoc.Components.Schemas.AdditionalProperties = make([]*openapi_v3.NamedSchemaOrReference, 0, totalPaths)
+
+		for result := range resultChan {
+			schemasBytes[result.index] = result.bytes
+		}
+
+		// Process schemas in batches
+		const batchSize = 10
+		for i := 0; i < len(schemasBytes); i += batchSize {
+			end := i + batchSize
+			if end > len(schemasBytes) {
+				end = len(schemasBytes)
+			}
+
+			var wg sync.WaitGroup
+			for j := i; j < end; j++ {
+				if len(schemasBytes[j]) == 0 {
 					continue
 				}
-				continue
+				wg.Add(1)
+				go func(schemaBytes []byte) {
+					defer wg.Done()
+					tempDoc := &openapi_v3.Document{}
+					if err := proto.Unmarshal(schemaBytes, tempDoc); err != nil {
+						return
+					}
+					// Use a mutex when appending to shared slice
+					if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
+						p.openAPIDoc.Components.Schemas.AdditionalProperties = append(
+							p.openAPIDoc.Components.Schemas.AdditionalProperties,
+							tempDoc.Components.Schemas.AdditionalProperties...,
+						)
+					}
+				}(schemasBytes[j])
 			}
-
-			// Unmarshal into temporary document
-			tempDoc := &openapi_v3.Document{}
-			err = proto.Unmarshal(schemaBytes, tempDoc)
-			if err != nil {
-				continue
-			}
-
-			// Merge schemas
-			if tempDoc.Components != nil && tempDoc.Components.Schemas != nil {
-				p.openAPIDoc.Components.Schemas.AdditionalProperties = append(
-					p.openAPIDoc.Components.Schemas.AdditionalProperties,
-					tempDoc.Components.Schemas.AdditionalProperties...,
-				)
-			}
+			wg.Wait()
 		}
 	}
 
 	// Process schemas into field paths
+	processed := 0
 	specs := make(map[string][]string)
 	if p.openAPIDoc.Components != nil && p.openAPIDoc.Components.Schemas != nil {
+		// Create a cache for visited schemas to avoid reprocessing
+		schemaCache := make(map[string][]string)
+
 		for _, schemaEntry := range p.openAPIDoc.Components.Schemas.AdditionalProperties {
 			resourceName := schemaEntry.Name
 			schema := schemaEntry.Value.GetSchema()
 			if schema != nil {
+				// Check if we've already processed this schema
+				if cachedFields, ok := schemaCache[resourceName]; ok {
+					specs[resourceName] = cachedFields
+					continue
+				}
+
 				visited := make(map[string][]string)
 				fields := p.parseSchema(schema, "", visited, "")
 				specs[resourceName] = fields
+
+				// Cache the result
+				schemaCache[resourceName] = fields
 			}
+
+			processed++
 		}
 	}
+	fmt.Printf("\r ✔️ Resolving schemas (%v processed)                    \n", processed)
 
-	fmt.Println("done!")
 	return specs, nil
 }
 
