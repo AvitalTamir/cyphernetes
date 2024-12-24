@@ -1163,10 +1163,7 @@ func convertBytesToMemory(bytes int64) string {
 	for _, unit := range binaryUnits {
 		if bytes >= unit.multiplier {
 			value := float64(bytes) / float64(unit.multiplier)
-			formatted := fmt.Sprintf("%.1f", value)
-			if strings.HasSuffix(formatted, ".0") {
-				formatted = strings.TrimSuffix(formatted, ".0")
-			}
+			formatted := strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0")
 			return fmt.Sprintf("%s%s", formatted, unit.suffix)
 		}
 	}
@@ -1175,10 +1172,7 @@ func convertBytesToMemory(bytes int64) string {
 	for _, unit := range decimalUnits {
 		if bytes >= unit.multiplier {
 			value := float64(bytes) / float64(unit.multiplier)
-			formatted := fmt.Sprintf("%.1f", value)
-			if strings.HasSuffix(formatted, ".0") {
-				formatted = strings.TrimSuffix(formatted, ".0")
-			}
+			formatted := strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0")
 			return fmt.Sprintf("%s%s", formatted, unit.suffix)
 		}
 	}

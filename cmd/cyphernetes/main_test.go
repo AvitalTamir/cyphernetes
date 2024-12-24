@@ -131,3 +131,16 @@ func TestCyphernetesShellNoColorFlagHelper(t *testing.T) {
 	main()
 	fmt.Print(shellPrompt())
 }
+
+func TestCyphernetesVersion(t *testing.T) {
+	stdout, _ := runTestCommand(t, "TestCyphernetesVersionHelper", "TEST_CYPHERNETES_VERSION")
+	checkOutput(t, stdout, "Cyphernetes dev\nLicense: Apache 2.0\nSource: https://github.com/avitaltamir/cyphernetes\n", "\"cyphernetes --version\"")
+}
+
+func TestCyphernetesVersionHelper(t *testing.T) {
+	if os.Getenv("TEST_CYPHERNETES_VERSION") != "1" {
+		return
+	}
+	os.Args = []string{"cyphernetes", "--version"}
+	main()
+}
