@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 )
@@ -29,8 +30,19 @@ func runWeb(cmd *cobra.Command, args []string) {
 	port := "8080"
 	url := fmt.Sprintf("http://localhost:%s", port)
 
-	parser.InitResourceSpecs()
-	resourceSpecs = parser.ResourceSpecs
+	// Create the API server provider
+	p, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		fmt.Printf("Error creating provider: %v\n", err)
+		return
+	}
+
+	// Initialize the executor instance with the provider
+	executor = core.GetQueryExecutorInstance(p)
+	if executor == nil {
+		fmt.Printf("Error initializing query executor\n")
+		return
+	}
 
 	// Set Gin to release mode to disable logging
 	gin.SetMode(gin.ReleaseMode)
@@ -58,7 +70,7 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Start the server in a goroutine
 	go func() {
-		fmt.Printf("Starting Cyphernetes web interface at %s\n", url)
+		fmt.Printf("\nStarting Cyphernetes web interface at %s\n", url)
 		fmt.Println("Press Ctrl+C to stop")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Printf("Error starting server: %v\n", err)

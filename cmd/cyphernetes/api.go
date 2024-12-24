@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -15,8 +17,8 @@ type QueryRequest struct {
 }
 
 type QueryResponse struct {
-	Result string      `json:"result"`
-	Graph  interface{} `json:"graph"`
+	Result string `json:"result"`
+	Graph  string `json:"graph"`
 }
 
 type ContextInfo struct {
@@ -31,53 +33,74 @@ func setupAPIRoutes(router *gin.Engine) {
 		api.GET("/autocomplete", handleAutocomplete)
 		api.GET("/convert-resource-name", handleConvertResourceName)
 		api.GET("/context", handleGetContext)
+		api.GET("/health", handleHealth)
 	}
 }
 
 func handleQuery(c *gin.Context) {
 	var req QueryRequest
 	if err := c.BindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
 		return
 	}
-	executor := parser.GetQueryExecutorInstance()
 
-	namespace := "default"
-
-	ast, err := parser.ParseQuery(req.Query)
+	// Create the API server provider
+	p, err := apiserver.NewAPIServerProvider()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Printf("Provider error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error creating provider: %v", err)})
 		return
 	}
 
-	// Execute the query using the parser
-	result, err := executor.Execute(ast, namespace)
+	// Initialize the executor instance with the provider
+	executor := core.GetQueryExecutorInstance(p)
+	if executor == nil {
+		fmt.Printf("Failed to initialize executor\n")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize query executor"})
+		return
+	}
+
+	// Parse the query
+	ast, err := core.ParseQuery(req.Query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		fmt.Printf("Parse error: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Error parsing query: %v", err)})
 		return
 	}
 
-	// marshal the result.Data and result.Graph to json
+	// Execute the query
+	result, err := executor.Execute(ast, "")
+	if err != nil {
+		fmt.Printf("Execution error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error executing query: %v", err)})
+		return
+	}
+
+	// Marshal the result data to JSON string
 	resultData, err := json.Marshal(result.Data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling results: %v", err)})
 		return
 	}
 
+	// Sanitize the graph data
 	sanitizedGraph, err := sanitizeGraph(result.Graph, string(resultData))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	resultGraph, err := json.Marshal(sanitizedGraph)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error sanitizing graph: %v", err)})
 		return
 	}
 
+	// Marshal the sanitized graph to JSON string
+	graphData, err := json.Marshal(sanitizedGraph)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling graph: %v", err)})
+		return
+	}
+
+	// Return the response with both result and graph as strings
 	response := QueryResponse{
 		Result: string(resultData),
-		Graph:  string(resultGraph),
+		Graph:  string(graphData),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -105,6 +128,10 @@ func handleAutocomplete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
 }
 
+func handleHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func handleConvertResourceName(c *gin.Context) {
 	resourceName := c.Query("name")
 	if resourceName == "" {
@@ -112,9 +139,12 @@ func handleConvertResourceName(c *gin.Context) {
 		return
 	}
 
-	executor := parser.GetQueryExecutorInstance()
-	// Use the FindGVR function to get the singular form
-	gvr, err := parser.FindGVR(executor.Clientset, resourceName)
+	p, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create API server provider"})
+		return
+	}
+	gvr, err := p.FindGVR(resourceName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

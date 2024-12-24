@@ -1,4 +1,4 @@
-package parser
+package core
 
 import (
 	"encoding/json"
@@ -353,26 +353,26 @@ func TestConvertBytesToMemory(t *testing.T) {
 		expected string
 	}{
 		// Binary (power-of-two) units
-		{"Exbibyte", 1 << 60, "1.0Ei"},
-		{"Pebibyte", 1 << 50, "1.0Pi"},
-		{"Tebibyte", 1 << 40, "1.0Ti"},
-		{"Gibibyte", 1 << 30, "1.0Gi"},
-		{"Mebibyte", 1 << 20, "1.0Mi"},
-		{"Kibibyte", 1 << 10, "1.0Ki"},
-		{"Exabyte", 1e18, "1.0E"},
-		{"Petabyte", 1e15, "1.0P"},
-		{"Terabyte", 1e12, "1.0T"},
-		{"Gigabyte", 1e9, "1.0G"},
-		{"Megabyte", 1e6, "1.0M"},
-		{"Kilobyte", 1e3, "1.0k"},
+		{"Exbibyte", 1 << 60, "1Ei"},
+		{"Pebibyte", 1 << 50, "1Pi"},
+		{"Tebibyte", 1 << 40, "1Ti"},
+		{"Gibibyte", 1 << 30, "1Gi"},
+		{"Mebibyte", 1 << 20, "1Mi"},
+		{"Kibibyte", 1 << 10, "1Ki"},
+		{"Exabyte", 1e18, "1E"},
+		{"Petabyte", 1e15, "1P"},
+		{"Terabyte", 1e12, "1T"},
+		{"Gigabyte", 1e9, "1G"},
+		{"Megabyte", 1e6, "1M"},
+		{"Kilobyte", 1e3, "1k"},
 		{"Zero bytes", 0, "0"},
 		{"One byte", 1, "1"},
 		{"999 bytes", 999, "999"},
 		{"1.5 Gibibytes", 1610612736, "1.5Gi"},
 		{"1.5 Mebibytes", 1572864, "1.5Mi"},
 		{"1.5 Kibibytes", 1536, "1.5Ki"},
-		{"Large binary", 1125899906842624, "1.0Pi"},
-		{"Large decimal", 1000000000000000, "1.0P"},
+		{"Large binary", 1125899906842624, "1Pi"},
+		{"Large decimal", 1000000000000000, "1P"},
 	}
 
 	for _, tt := range tests {

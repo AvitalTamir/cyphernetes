@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,9 +16,79 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
+	core "github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 )
+
+type MockProvider struct {
+	clientset     kubernetes.Interface
+	dynamicClient dynamic.Interface
+}
+
+func NewMockProvider(clientset kubernetes.Interface, dynamicClient dynamic.Interface) provider.Provider {
+	return &MockProvider{
+		clientset:     clientset,
+		dynamicClient: dynamicClient,
+	}
+}
+
+func (m *MockProvider) GetClientset() (kubernetes.Interface, error) {
+	return m.clientset, nil
+}
+
+func (m *MockProvider) GetDynamicClient() (dynamic.Interface, error) {
+	return m.dynamicClient, nil
+}
+
+func (m *MockProvider) FindGVR(resourceKind string) (schema.GroupVersionResource, error) {
+	if strings.EqualFold(resourceKind, "ingress") || strings.EqualFold(resourceKind, "ingresses") {
+		return schema.GroupVersionResource{
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+			Resource: "ingresses",
+		}, nil
+	}
+	return schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: strings.ToLower(resourceKind) + "s",
+	}, nil
+}
+
+func (m *MockProvider) GetGVRCache() (map[string]schema.GroupVersionResource, error) {
+	return make(map[string]schema.GroupVersionResource), nil
+}
+
+func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
+	return make(map[string][]string), nil
+}
+
+func (m *MockProvider) GetK8sResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	return []map[string]interface{}{}, nil
+}
+
+func (m *MockProvider) DeleteK8sResources(kind, name, namespace string) error {
+	return nil
+}
+
+func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+	return nil
+}
+
+func (m *MockProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+	return nil
+}
+
+func (m *MockProvider) CreateProviderForContext(context string) (provider.Provider, error) {
+	return m, nil
+}
+
+func (m *MockProvider) GetDiscoveryClient() (discovery.DiscoveryInterface, error) {
+	return m.clientset.Discovery(), nil
+}
 
 var _ = Describe("DynamicOperator Controller", func() {
 	BeforeEach(func() {
@@ -92,10 +163,8 @@ var _ = Describe("DynamicOperator Controller", func() {
 			dynamicClient, err := dynamic.NewForConfig(k8sConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			queryExecutor, err := parser.NewQueryExecutor()
+			queryExecutor, err := core.NewQueryExecutor(NewMockProvider(clientset, dynamicClient))
 			Expect(err).NotTo(HaveOccurred())
-			queryExecutor.Clientset = clientset
-			queryExecutor.DynamicClient = dynamicClient
 
 			dynamicOperatorReconciler := &DynamicOperatorReconciler{
 				Client:         k8sClient,
@@ -103,7 +172,6 @@ var _ = Describe("DynamicOperator Controller", func() {
 				Clientset:      clientset,
 				DynamicClient:  dynamicClient,
 				QueryExecutor:  queryExecutor,
-				GVRFinder:      &RealGVRFinder{},
 				lastExecution:  make(map[string]time.Time),
 				activeWatchers: make(map[string]context.CancelFunc),
 			}

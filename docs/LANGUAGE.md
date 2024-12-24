@@ -220,7 +220,7 @@ Using the `WHERE` clause, we can filter our results by any field in the Kubernet
 
 ```graphql
 MATCH (d:Deployment {app: "nginx"})
-WHERE d.spec.replicas=4
+WHERE d.spec.replicas=4, d.metadata.namespace="default"
 RETURN d.metadata.name,
        d.spec.replicas
 ```

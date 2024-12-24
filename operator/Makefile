@@ -95,8 +95,8 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	mkdir -p cyphernetes/pkg/parser
-	cp ../pkg/parser/* cyphernetes/pkg/parser/
+	mkdir -p cyphernetes/pkg
+	cp -r ../pkg/* cyphernetes/pkg/
 	cp ../go.mod cyphernetes/
 	cp ../go.sum cyphernetes/
 	$(CONTAINER_TOOL) build -t ${IMG} .

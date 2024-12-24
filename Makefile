@@ -10,7 +10,7 @@ all: operator-manifests bt
 bt: build test
 
 # Define how to build the project
-build: gen-parser web-build
+build: web-build
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} > /dev/null)
 	mkdir -p dist/
@@ -33,11 +33,6 @@ build-all-platforms:
 test:
 	@echo "🧪 Running tests..."
 	go test ./...
-
-# Define how to generate the grammar parser
-gen-parser:
-	@echo "🧠 Generating parser..."
-	goyacc -o pkg/parser/cyphernetes.go -p "yy" grammar/cyphernetes.y &> /dev/null
 
 operator-manifests:
 	@echo "🤖 Creating operator manifests..."
@@ -62,7 +57,7 @@ clean:
 coverage:
 	mkdir -p .coverage
 	@echo "🧪 Generating coverage report for cmd/cyphernetes..."
-	go test ./cmd/cyphernetes -coverprofile=.coverage/coverage.out
+	go test ./... -coverprofile=.coverage/coverage.out
 	go tool cover -func=.coverage/coverage.out | sed 's/^/   /g'
 	go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
 	@echo "🌎 Opening coverage report in browser..."
@@ -97,5 +92,4 @@ help:
 	@echo "  all          - Build the project."
 	@echo "  build        - Compile the project into a binary."
 	@echo "  test         - Run tests."
-	@echo "  gen-parser   - Generate the grammar parser using Pigeon."
 	@echo "  clean        - Remove binary and clean up."

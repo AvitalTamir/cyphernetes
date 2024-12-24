@@ -96,15 +96,12 @@ Alternatively, grab a binary from the [Releases page](https://github.com/AvitalT
 ## Development
 
 The Cyphernetes monorepo is a multi-package project that includes the core Cyphernetes Go package, a CLI, a web client, and an operator.
-Additionally, there's a grammer folder which contains the yacc grammar for generating the parser.
 
 ```
 .
 ├── cmd # The CLI (this is where the cyphernetes binary lives)
 │   └── cyphernetes
 │       └── ...
-├── grammar # The yacc grammar for generating the parser
-│   └── ...
 ├── operator # The operator
 │   └── ...
 ├── pkg # The core Cyphernetes package (and parser)
@@ -118,7 +115,6 @@ Additionally, there's a grammer folder which contains the yacc grammar for gener
 ### Prerequisites
 
 * Go (Latest)
-* goyacc (for generating the parser)
 * Make (for running make commands)
 * NodeJS (Latest, for building the web client)
 * pnpm (9+, for building the web client)
