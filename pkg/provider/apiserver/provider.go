@@ -35,6 +35,7 @@ type APIServerProvider struct {
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
 	testMode       bool
+	resourceMutex  sync.RWMutex
 }
 
 type apiRequest struct {
@@ -169,6 +170,9 @@ func (p *APIServerProvider) processRequests() {
 }
 
 func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	p.resourceMutex.RLock()
+	defer p.resourceMutex.RUnlock()
+
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return nil, err
@@ -269,6 +273,9 @@ func containsStringIgnoreCase(slice []string, str string) bool {
 
 // Implement other Provider interface methods...
 func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) error {
+	p.resourceMutex.Lock()
+	defer p.resourceMutex.Unlock()
+
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return err
@@ -291,6 +298,9 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 }
 
 func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+	p.resourceMutex.Lock()
+	defer p.resourceMutex.Unlock()
+
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return err
@@ -325,6 +335,9 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 }
 
 func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+	p.resourceMutex.Lock()
+	defer p.resourceMutex.Unlock()
+
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return err
