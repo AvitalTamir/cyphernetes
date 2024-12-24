@@ -7,7 +7,6 @@ toolchain go1.23.2
 require (
 	github.com/AvitalTamir/jsonpath v0.0.0
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
-	github.com/avitaltamir/jsonpath v0.0.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/gnostic v0.7.0
 	github.com/spf13/cobra v1.8.1
