@@ -149,11 +149,6 @@ func fetchResourceTreeStructureForKind(kind string) ([]string, error) {
 }
 
 func getSchemaName(kind string) string {
-	exactMatch := "io.k8s.api.apps.v1.Deployment"
-	if strings.EqualFold(kind, "deployments") {
-		return exactMatch
-	}
-
 	for schemaName := range core.ResourceSpecs {
 		if strings.Contains(strings.ToLower(schemaName), strings.ToLower(kind)) {
 			parts := strings.Split(schemaName, ".")
