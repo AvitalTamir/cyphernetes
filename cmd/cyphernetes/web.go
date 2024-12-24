@@ -70,7 +70,7 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Start the server in a goroutine
 	go func() {
-		fmt.Printf("Starting Cyphernetes web interface at %s\n", url)
+		fmt.Printf("\nStarting Cyphernetes web interface at %s\n", url)
 		fmt.Println("Press Ctrl+C to stop")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Printf("Error starting server: %v\n", err)
