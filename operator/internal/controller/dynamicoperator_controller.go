@@ -154,7 +154,6 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log.Log.Info("Setting up DynamicOperatorReconciler")
 
 	// Initialize the provider
-	// config := mgr.GetConfig()
 	provider, err := apiserver.NewAPIServerProviderWithConfig(clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
 		&clientcmd.ConfigOverrides{},
