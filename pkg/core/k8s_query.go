@@ -757,16 +757,21 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		}
 	}
 
-	// Add edges between matched resources
+	// Process edges
 	for _, rightResource := range rightResources {
-		rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
 		for _, leftResource := range leftResources {
-			leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
-			results.Graph.Edges = append(results.Graph.Edges, Edge{
-				From: rightNodeId,
-				To:   leftNodeId,
-				Type: string(relType),
-			})
+			// Check if these resources actually match according to the criteria
+			for _, criterion := range rule.MatchCriteria {
+				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
+					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
+					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
+					results.Graph.Edges = append(results.Graph.Edges, Edge{
+						From: rightNodeId,
+						To:   leftNodeId,
+						Type: string(relType),
+					})
+				}
+			}
 		}
 	}
 
