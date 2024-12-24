@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -33,11 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// GVRFinder is an interface for finding GroupVersionResource
-type GVRFinder interface {
-	FindGVR(resourceKind string) (schema.GroupVersionResource, error)
-}
 
 const finalizerName = "dynamicoperator.cyphernetes-operator.cyphernet.es/finalizer"
 
@@ -634,14 +628,6 @@ func removeString(slice []string, s string) []string {
 		}
 	}
 	return result
-}
-
-type RealGVRFinder struct {
-	provider provider.Provider
-}
-
-func (f *RealGVRFinder) FindGVR(clientset interface{}, resourceKind string) (schema.GroupVersionResource, error) {
-	return f.provider.FindGVR(resourceKind)
 }
 
 type QueryExecutorInterface interface {
