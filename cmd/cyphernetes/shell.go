@@ -393,7 +393,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
 		} else if input == "\\lm" {
-			fmt.Println("Registered macros:")
+			fmt.Println("Registered macros:\n")
 			for name, macro := range macroManager.Macros {
 				description := macro.Description
 				if description == "" {
@@ -406,6 +406,7 @@ func runShell(cmd *cobra.Command, args []string) {
 					wrapInColor(fmt.Sprint(macro.Args), 36),
 					wrapInColor(description, 35))
 			}
+			fmt.Println("")
 		} else if input == "\\r" {
 			// Toggle raw json output
 			returnRawJsonOutput = !returnRawJsonOutput
