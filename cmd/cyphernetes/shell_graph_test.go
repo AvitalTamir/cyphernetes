@@ -4,33 +4,33 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
 
 func TestSanitizeGraph(t *testing.T) {
 	testCases := []struct {
 		name     string
-		input    parser.Graph
+		input    core.Graph
 		result   string
-		expected parser.Graph
+		expected core.Graph
 	}{
 		{
 			name: "Filter out nodes and edges",
-			input: parser.Graph{
-				Nodes: []parser.Node{
+			input: core.Graph{
+				Nodes: []core.Node{
 					{Id: "Pod", Kind: "Pod", Name: "pod1"},
 					{Id: "Service", Kind: "Service", Name: "svc1"},
 				},
-				Edges: []parser.Edge{
+				Edges: []core.Edge{
 					{From: "Pod", To: "Service", Type: "EXPOSE"},
 				},
 			},
 			result: `{"Pod":[{"name":"pod1"}]}`,
-			expected: parser.Graph{
-				Nodes: []parser.Node{
+			expected: core.Graph{
+				Nodes: []core.Node{
 					{Id: "Pod", Kind: "Pod", Name: "pod1"},
 				},
-				Edges: []parser.Edge(nil),
+				Edges: []core.Edge(nil),
 			},
 		},
 	}
@@ -49,20 +49,20 @@ func TestSanitizeGraph(t *testing.T) {
 }
 
 func TestMergeGraphs(t *testing.T) {
-	graph1 := parser.Graph{
-		Nodes: []parser.Node{{Id: "Pod/pod1", Kind: "Pod", Name: "pod1"}},
-		Edges: []parser.Edge{{From: "Pod/pod1", To: "Service/svc1", Type: "EXPOSE"}},
+	graph1 := core.Graph{
+		Nodes: []core.Node{{Id: "Pod/pod1", Kind: "Pod", Name: "pod1"}},
+		Edges: []core.Edge{{From: "Pod/pod1", To: "Service/svc1", Type: "EXPOSE"}},
 	}
-	graph2 := parser.Graph{
-		Nodes: []parser.Node{{Id: "Service/svc1", Kind: "Service", Name: "svc1"}},
-		Edges: []parser.Edge{{From: "Service/svc1", To: "Ingress/ing1", Type: "ROUTE"}},
+	graph2 := core.Graph{
+		Nodes: []core.Node{{Id: "Service/svc1", Kind: "Service", Name: "svc1"}},
+		Edges: []core.Edge{{From: "Service/svc1", To: "Ingress/ing1", Type: "ROUTE"}},
 	}
-	expected := parser.Graph{
-		Nodes: []parser.Node{
+	expected := core.Graph{
+		Nodes: []core.Node{
 			{Id: "Pod/pod1", Kind: "Pod", Name: "pod1"},
 			{Id: "Service/svc1", Kind: "Service", Name: "svc1"},
 		},
-		Edges: []parser.Edge{
+		Edges: []core.Edge{
 			{From: "Pod/pod1", To: "Service/svc1", Type: "EXPOSE"},
 			{From: "Service/svc1", To: "Ingress/ing1", Type: "ROUTE"},
 		},
@@ -75,12 +75,12 @@ func TestMergeGraphs(t *testing.T) {
 }
 
 func TestDrawGraph(t *testing.T) {
-	graph := parser.Graph{
-		Nodes: []parser.Node{
+	graph := core.Graph{
+		Nodes: []core.Node{
 			{Id: "Pod/pod1", Kind: "Pod", Name: "pod1"},
 			{Id: "Service/svc1", Kind: "Service", Name: "svc1"},
 		},
-		Edges: []parser.Edge{
+		Edges: []core.Edge{
 			{From: "Pod/pod1", To: "Service/svc1", Type: "EXPOSES"},
 		},
 	}

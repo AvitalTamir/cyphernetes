@@ -3,114 +3,123 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/avitaltamir/cyphernetes/pkg/parser"
+	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 )
 
-// MockQueryExecutor implements the Execute method of QueryExecutor
+// MockQueryExecutor implements the QueryExecutor interface
 type MockQueryExecutor struct {
-	ExecuteFunc func(expr *parser.Expression) (parser.QueryResult, error)
+	ExecuteFunc func(expr *core.Expression, namespace string) (core.QueryResult, error)
 }
 
-func (m *MockQueryExecutor) Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error) {
-	return m.ExecuteFunc(expr)
+func (m *MockQueryExecutor) Execute(expr *core.Expression, namespace string) (core.QueryResult, error) {
+	return m.ExecuteFunc(expr, namespace)
+}
+
+func (m *MockQueryExecutor) Provider() provider.Provider {
+	return &MockProvider{}
+}
+
+// Add a mock provider
+type MockProvider struct {
+	provider.Provider
 }
 
 func TestRunQuery(t *testing.T) {
+	// Store original functions to restore later
+	originalParseQuery := parseQuery
+	originalNewQueryExecutor := newQueryExecutor
+
 	tests := []struct {
-		name           string
-		args           []string
-		parseQueryErr  error
-		newExecutorErr error
-		executeErr     error
-		expectedOutput string
+		name            string
+		args            []string
+		setup           func()
+		wantOut         string
+		mockParseQuery  func(string) (*core.Expression, error)
+		mockExecute     func(*core.Expression, string) (core.QueryResult, error)
+		mockNewExecutor func(provider.Provider) (*core.QueryExecutor, error)
 	}{
+		{
+			name: "New executor error",
+			args: []string{"match (p:pods)"},
+			mockNewExecutor: func(p provider.Provider) (*core.QueryExecutor, error) {
+				return nil, fmt.Errorf("executor error")
+			},
+			wantOut: "Error creating query executor:  executor error\n",
+		},
 		{
 			name: "Successful query",
 			args: []string{"MATCH (n:Pod)"},
-			expectedOutput: `{
+			mockParseQuery: func(query string) (*core.Expression, error) {
+				return &core.Expression{}, nil
+			},
+			mockExecute: func(expr *core.Expression, namespace string) (core.QueryResult, error) {
+				return core.QueryResult{
+					Data: map[string]interface{}{
+						"test": "data",
+					},
+				}, nil
+			},
+			wantOut: `{
   "test": "data"
-}`,
+}
+`,
 		},
 		{
-			name:           "Parse query error",
-			args:           []string{"INVALID QUERY"},
-			parseQueryErr:  fmt.Errorf("parse error"),
-			expectedOutput: "Error parsing query:  parse error",
+			name: "Parse query error",
+			args: []string{"INVALID QUERY"},
+			mockParseQuery: func(query string) (*core.Expression, error) {
+				return nil, fmt.Errorf("parse error")
+			},
+			wantOut: "Error parsing query:  parse error\n",
 		},
 		{
-			name:           "New executor error",
-			args:           []string{"MATCH (n:Pod)"},
-			newExecutorErr: fmt.Errorf("executor error"),
-			expectedOutput: "Error creating query executor:  executor error",
-		},
-		{
-			name:           "Execute error",
-			args:           []string{"MATCH (n:Pod)"},
-			executeErr:     fmt.Errorf("execution error"),
-			expectedOutput: "Error executing query:  execution error",
+			name: "Execute error",
+			args: []string{"MATCH (n:Pod)"},
+			mockParseQuery: func(query string) (*core.Expression, error) {
+				return &core.Expression{}, nil
+			},
+			mockExecute: func(expr *core.Expression, namespace string) (core.QueryResult, error) {
+				return core.QueryResult{}, fmt.Errorf("execution error")
+			},
+			wantOut: "Error executing query:  execution error\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
-			originalParseQuery := parseQuery
-			originalNewQueryExecutor := newQueryExecutor
-			originalExecuteMethod := executeMethod
+			if tt.setup != nil {
+				tt.setup()
+			}
 
-			parseQuery = func(query string) (*parser.Expression, error) {
-				if tt.parseQueryErr != nil {
-					return nil, tt.parseQueryErr
+			// Set up mocks for this test
+			if tt.mockParseQuery != nil {
+				parseQuery = tt.mockParseQuery
+			}
+			if tt.mockNewExecutor != nil {
+				newQueryExecutor = tt.mockNewExecutor
+			}
+			if tt.mockExecute != nil {
+				newQueryExecutor = func(p provider.Provider) (*core.QueryExecutor, error) {
+					return &core.QueryExecutor{}, nil
 				}
-				return &parser.Expression{}, nil
-			}
-
-			mockExecutor := &MockQueryExecutor{
-				ExecuteFunc: func(expr *parser.Expression) (parser.QueryResult, error) {
-					if tt.executeErr != nil {
-						return parser.QueryResult{}, tt.executeErr
-					}
-					return parser.QueryResult{
-						Data: map[string]interface{}{
-							"test": "data",
-						},
-					}, nil
-				},
-			}
-
-			newQueryExecutor = func() (*parser.QueryExecutor, error) {
-				if tt.newExecutorErr != nil {
-					return nil, tt.newExecutorErr
+				executeMethod = func(_ *core.QueryExecutor, expr *core.Expression, namespace string) (core.QueryResult, error) {
+					return tt.mockExecute(expr, namespace)
 				}
-				return &parser.QueryExecutor{}, nil
 			}
 
-			// Replace the Execute method
-			executeMethod = func(qe *parser.QueryExecutor, expr *parser.Expression, namespace string) (parser.QueryResult, error) {
-				return mockExecutor.Execute(expr, "")
+			out := &bytes.Buffer{}
+			runQuery(tt.args, out)
+
+			if got := out.String(); got != tt.wantOut {
+				t.Errorf("unexpected output:\ngot:\n%s\nwant:\n%s", got, tt.wantOut)
 			}
 
-			// Restore original functions after test
-			defer func() {
-				parseQuery = originalParseQuery
-				newQueryExecutor = originalNewQueryExecutor
-				executeMethod = originalExecuteMethod
-			}()
-
-			// Execute the command
-			buf := new(bytes.Buffer)
-
-			runQuery(tt.args, buf)
-
-			// Check the output
-			got := strings.TrimSpace(buf.String())
-			want := strings.TrimSpace(tt.expectedOutput)
-			if got != want {
-				t.Errorf("unexpected output:\ngot:\n%s\nwant:\n%s", got, want)
-			}
+			// Reset mocks after test
+			parseQuery = originalParseQuery
+			newQueryExecutor = originalNewQueryExecutor
 		})
 	}
 }

@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -27,14 +26,12 @@ import (
 
 	"github.com/AvitalTamir/jsonpath"
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
-	parser "github.com/avitaltamir/cyphernetes/pkg/parser"
+	core "github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/clientcmd"
 )
-
-// GVRFinder is an interface for finding GroupVersionResource
-type GVRFinder interface {
-	FindGVR(clientset interface{}, resourceKind string) (schema.GroupVersionResource, error)
-}
 
 const finalizerName = "dynamicoperator.cyphernetes-operator.cyphernet.es/finalizer"
 
@@ -42,8 +39,7 @@ const finalizerName = "dynamicoperator.cyphernetes-operator.cyphernet.es/finaliz
 type DynamicOperatorReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
-	QueryExecutor  QueryExecutorInterface
-	GVRFinder      GVRFinder
+	QueryExecutor  *core.QueryExecutor
 	DynamicClient  dynamic.Interface
 	Clientset      kubernetes.Interface
 	lastExecution  map[string]time.Time
@@ -157,26 +153,39 @@ func (r *DynamicOperatorReconciler) logActiveWatchers() {
 func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log.Log.Info("Setting up DynamicOperatorReconciler")
 
-	// Initialize the QueryExecutor
-	config := mgr.GetConfig()
-	clientset, err := kubernetes.NewForConfig(config)
+	// Initialize the provider
+	provider, err := apiserver.NewAPIServerProviderWithConfig(clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(),
+		&clientcmd.ConfigOverrides{},
+	))
 	if err != nil {
-		return fmt.Errorf("failed to create clientset: %w", err)
-	}
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create dynamic client: %w", err)
+		return fmt.Errorf("failed to create provider: %w", err)
 	}
 
-	queryExecutor, err := parser.NewQueryExecutor()
+	// Initialize the QueryExecutor with the provider
+	queryExecutor, err := core.NewQueryExecutor(provider)
 	if err != nil {
 		return fmt.Errorf("failed to create query executor: %w", err)
 	}
-	queryExecutor.Clientset = clientset
-	queryExecutor.DynamicClient = dynamicClient
 
 	r.QueryExecutor = queryExecutor
-	r.GVRFinder = &RealGVRFinder{}
+
+	// Get the kubernetes clients from the provider
+	apiProvider, ok := provider.(*apiserver.APIServerProvider)
+	if !ok {
+		return fmt.Errorf("failed to cast provider to APIServerProvider")
+	}
+
+	clientset, err := apiProvider.GetClientset()
+	if err != nil {
+		return fmt.Errorf("failed to get clientset: %w", err)
+	}
+
+	dynamicClient, err := apiProvider.GetDynamicClient()
+	if err != nil {
+		return fmt.Errorf("failed to get dynamic client: %w", err)
+	}
+
 	r.DynamicClient = dynamicClient
 	r.Clientset = clientset
 	r.lastExecution = make(map[string]time.Time)
@@ -185,7 +194,6 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	log.Log.Info("DynamicOperatorReconciler setup complete",
 		"QueryExecutor", fmt.Sprintf("%v", r.QueryExecutor),
-		"GVRFinder", fmt.Sprintf("%v", r.GVRFinder),
 		"DynamicClient", fmt.Sprintf("%v", r.DynamicClient),
 		"Clientset", fmt.Sprintf("%v", r.Clientset))
 
@@ -210,7 +218,7 @@ func (r *DynamicOperatorReconciler) setupDynamicWatcher(ctx context.Context, dyn
 	}
 
 	log.Log.Info("Finding GVR", "ResourceKind", dynamicOperator.Spec.ResourceKind)
-	gvr, err := r.GVRFinder.FindGVR(r.Clientset, dynamicOperator.Spec.ResourceKind)
+	gvr, err := r.QueryExecutor.Provider().FindGVR(dynamicOperator.Spec.ResourceKind)
 	if err != nil {
 		log.Log.Error(err, "Failed to find GVR")
 		return ctrl.Result{}, fmt.Errorf("failed to find GVR for %s: %w", dynamicOperator.Spec.ResourceKind, err)
@@ -324,12 +332,18 @@ func (r *DynamicOperatorReconciler) addFinalizer(ctx context.Context, dynamicOpe
 	if !containsString(u.GetFinalizers(), finalizerName) {
 		log.Log.Info("Adding finalizer", "resource", u.GetName())
 		u.SetFinalizers(append(u.GetFinalizers(), finalizerName))
-		gvr, err := r.GVRFinder.FindGVR(r.QueryExecutor.GetClientset(), dynamicOperator.Spec.ResourceKind)
+		gvr, err := r.QueryExecutor.Provider().FindGVR(dynamicOperator.Spec.ResourceKind)
 		if err != nil {
 			log.Log.Error(err, "Failed to find GVR", "resourceKind", dynamicOperator.Spec.ResourceKind)
 			return
 		}
-		_, err = r.QueryExecutor.GetDynamicClient().Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, u, metav1.UpdateOptions{})
+
+		dynamicClient, err := r.QueryExecutor.Provider().GetDynamicClient()
+		if err != nil {
+			log.Log.Error(err, "Failed to get dynamic client")
+			return
+		}
+		_, err = dynamicClient.Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, u, metav1.UpdateOptions{})
 		if err != nil {
 			log.Log.Error(err, "Failed to add finalizer", "resource", u.GetName())
 		} else {
@@ -379,7 +393,7 @@ func (r *DynamicOperatorReconciler) handleDelete(ctx context.Context, dynamicOpe
 		log.Log.Info("Removing finalizer", "resource", u.GetName())
 
 		// Find the GVR for the custom resource
-		gvr, err := r.GVRFinder.FindGVR(r.QueryExecutor.GetClientset(), dynamicOperator.Spec.ResourceKind)
+		gvr, err := r.QueryExecutor.Provider().FindGVR(dynamicOperator.Spec.ResourceKind)
 		if err != nil {
 			log.Log.Error(err, "Failed to find GVR", "resourceKind", dynamicOperator.Spec.ResourceKind)
 			return
@@ -388,8 +402,15 @@ func (r *DynamicOperatorReconciler) handleDelete(ctx context.Context, dynamicOpe
 		// Implement retry logic
 		retries := 3
 		for i := 0; i < retries; i++ {
+			p := r.QueryExecutor.Provider()
+			_, ok := p.(*apiserver.APIServerProvider)
+			if !ok {
+				log.Log.Error(fmt.Errorf("failed to cast provider to APIServerProvider"), "provider", p)
+				return
+			}
+
 			// Get the latest version of the object
-			latestObj, err := r.QueryExecutor.GetDynamicClient().Resource(gvr).Namespace(u.GetNamespace()).Get(ctx, u.GetName(), metav1.GetOptions{})
+			latestObj, err := r.DynamicClient.Resource(gvr).Namespace(u.GetNamespace()).Get(ctx, u.GetName(), metav1.GetOptions{})
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					log.Log.Info("Resource already deleted, finalizer removal not needed", "resource", u.GetName())
@@ -403,7 +424,7 @@ func (r *DynamicOperatorReconciler) handleDelete(ctx context.Context, dynamicOpe
 			latestObj.SetFinalizers(removeString(latestObj.GetFinalizers(), finalizerName))
 
 			// Update the object without the finalizer
-			_, err = r.QueryExecutor.GetDynamicClient().Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, latestObj, metav1.UpdateOptions{})
+			_, err = r.DynamicClient.Resource(gvr).Namespace(u.GetNamespace()).Update(ctx, latestObj, metav1.UpdateOptions{})
 			if err == nil {
 				log.Log.Info("Finalizer removed successfully", "resource", u.GetName())
 				return
@@ -490,7 +511,7 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 	sanitizedStatement = strings.TrimSpace(sanitizedStatement)
 	sanitizedStatement = strings.ReplaceAll(sanitizedStatement, "\n", " ")
 
-	ast, err := parser.ParseQuery(sanitizedStatement)
+	ast, err := core.ParseQuery(sanitizedStatement)
 	if err != nil {
 		return err
 	}
@@ -509,8 +530,8 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 
 	// Check if we need to add owner references to created resources
 	if createClause := findCreateClause(ast); createClause != nil {
-		var nodesToAddOwnerRef []*parser.NodePattern
-		var matchCreateNode *parser.NodePattern
+		var nodesToAddOwnerRef []*core.NodePattern
+		var matchCreateNode *core.NodePattern
 
 		matchClause := findMatchClause(ast)
 		if matchClause == nil {
@@ -608,20 +629,13 @@ func removeString(slice []string, s string) []string {
 	return result
 }
 
-type RealGVRFinder struct{}
-
-func (f *RealGVRFinder) FindGVR(clientset interface{}, resourceKind string) (schema.GroupVersionResource, error) {
-	return parser.FindGVR(clientset.(*kubernetes.Clientset), resourceKind)
-}
-
 type QueryExecutorInterface interface {
-	Execute(expr *parser.Expression, namespace string) (parser.QueryResult, error)
-	GetClientset() kubernetes.Interface
-	GetDynamicClient() dynamic.Interface
+	Execute(expr *core.Expression, namespace string) (core.QueryResult, error)
+	Provider() provider.Provider
 }
 
-func (r *DynamicOperatorReconciler) addOwnerReference(result parser.QueryResult, node *parser.NodePattern, matchCreateNode *parser.NodePattern, ownerObj map[string]interface{}, namespace string) error {
-	gvr, err := r.GVRFinder.FindGVR(r.Clientset, node.ResourceProperties.Kind)
+func (r *DynamicOperatorReconciler) addOwnerReference(result core.QueryResult, node *core.NodePattern, matchCreateNode *core.NodePattern, ownerObj map[string]interface{}, namespace string) error {
+	gvr, err := r.QueryExecutor.Provider().FindGVR(node.ResourceProperties.Kind)
 	if err != nil {
 		return fmt.Errorf("failed to find GVR for %s: %v", node.ResourceProperties.Kind, err)
 	}
@@ -722,18 +736,18 @@ func (r *DynamicOperatorReconciler) addOwnerReference(result parser.QueryResult,
 }
 
 // Helper functions to find specific clauses in the AST
-func findCreateClause(ast *parser.Expression) *parser.CreateClause {
+func findCreateClause(ast *core.Expression) *core.CreateClause {
 	for _, clause := range ast.Clauses {
-		if createClause, ok := clause.(*parser.CreateClause); ok {
+		if createClause, ok := clause.(*core.CreateClause); ok {
 			return createClause
 		}
 	}
 	return nil
 }
 
-func findMatchClause(ast *parser.Expression) *parser.MatchClause {
+func findMatchClause(ast *core.Expression) *core.MatchClause {
 	for _, clause := range ast.Clauses {
-		if matchClause, ok := clause.(*parser.MatchClause); ok {
+		if matchClause, ok := clause.(*core.MatchClause); ok {
 			return matchClause
 		}
 	}
