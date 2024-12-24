@@ -24,11 +24,26 @@ import (
 )
 
 type APIServerProvider struct {
-	clientset     *kubernetes.Clientset
-	dynamicClient dynamic.Interface
-	gvrCache      map[string]schema.GroupVersionResource
-	gvrCacheMutex sync.RWMutex
-	openAPIDoc    *openapi_v3.Document
+	clientset      *kubernetes.Clientset
+	dynamicClient  dynamic.Interface
+	gvrCache       map[string]schema.GroupVersionResource
+	gvrCacheMutex  sync.RWMutex
+	openAPIDoc     *openapi_v3.Document
+	requestChannel chan *apiRequest
+	semaphore      chan struct{}
+}
+
+type apiRequest struct {
+	kind          string
+	fieldSelector string
+	labelSelector string
+	namespace     string
+	responseChan  chan *apiResponse
+}
+
+type apiResponse struct {
+	result interface{}
+	err    error
 }
 
 func NewAPIServerProvider() (provider.Provider, error) {
@@ -56,10 +71,15 @@ func NewAPIServerProvider() (provider.Provider, error) {
 	}
 
 	provider := &APIServerProvider{
-		clientset:     clientset,
-		dynamicClient: dynamicClient,
-		gvrCache:      make(map[string]schema.GroupVersionResource),
+		clientset:      clientset,
+		dynamicClient:  dynamicClient,
+		gvrCache:       make(map[string]schema.GroupVersionResource),
+		requestChannel: make(chan *apiRequest),
+		semaphore:      make(chan struct{}, 1), // Limit to 1 concurrent request
 	}
+
+	// Start the request processor
+	go provider.processRequests()
 
 	// Initialize the GVR cache
 	if err := provider.initGVRCache(); err != nil {
@@ -87,14 +107,39 @@ func NewAPIServerProviderWithConfig(kubeConfig clientcmd.ClientConfig) (provider
 	}
 
 	return &APIServerProvider{
-		clientset:     clientset,
-		dynamicClient: dynamicClient,
-		gvrCache:      make(map[string]schema.GroupVersionResource),
+		clientset:      clientset,
+		dynamicClient:  dynamicClient,
+		gvrCache:       make(map[string]schema.GroupVersionResource),
+		requestChannel: make(chan *apiRequest),
+		semaphore:      make(chan struct{}, 1), // Limit to 1 concurrent request
 	}, nil
 }
 
 // Implement Provider interface methods...
 func (p *APIServerProvider) GetK8sResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	responseChan := make(chan *apiResponse)
+	p.requestChannel <- &apiRequest{
+		kind:          kind,
+		fieldSelector: fieldSelector,
+		labelSelector: labelSelector,
+		namespace:     namespace,
+		responseChan:  responseChan,
+	}
+
+	response := <-responseChan
+	return response.result, response.err
+}
+
+func (p *APIServerProvider) processRequests() {
+	for request := range p.requestChannel {
+		p.semaphore <- struct{}{} // Acquire token
+		list, err := p.fetchResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
+		<-p.semaphore // Release token
+		request.responseChan <- &apiResponse{result: list, err: err}
+	}
+}
+
+func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return nil, err
