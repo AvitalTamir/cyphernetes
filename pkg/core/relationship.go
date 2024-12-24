@@ -92,6 +92,7 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 }
 
 func InitializeRelationships(resourceSpecs map[string][]string) {
+	fmt.Print("🧠 Initializing relationships")
 	relationshipCount := 0
 	totalKinds := len(resourceSpecs)
 	processed := 0
@@ -120,12 +121,11 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 		// Update progress bar
 		progress := (processed * 100) / totalKinds
 		if progress > lastProgress {
-			fmt.Printf("\r🧠 Initializing relationships [%-25s] %d%%",
+			fmt.Printf("\033[K\r🧠 Initializing relationships [%-25s] %d%%",
 				strings.Repeat("=", progress/4),
 				progress)
 			lastProgress = progress
 		}
-		fmt.Print("\r")
 
 		for _, fieldPath := range fields {
 			parts := strings.Split(fieldPath, ".")
@@ -221,7 +221,7 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 		suffix = fmt.Sprintf(" and %d custom", customRelationshipsCount)
 	}
 
-	fmt.Printf("\033[K ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
+	fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
 }
 
 func loadCustomRelationships() (int, error) {

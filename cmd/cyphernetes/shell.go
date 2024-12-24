@@ -393,7 +393,7 @@ func runShell(cmd *cobra.Command, args []string) {
 			}
 			fmt.Printf("Print query execution time: %t\n", printQueryExecutionTime)
 		} else if input == "\\lm" {
-			fmt.Println("Registered macros:\n")
+			fmt.Print("Registered macros:\n\n")
 			for name, macro := range macroManager.Macros {
 				description := macro.Description
 				if description == "" {
