@@ -11,15 +11,16 @@ Cyphernetes is made up of two main packages:
 The `pkg/core` package is a library that you can import into your own Go project.
 It provides a single function, `Parse`, which takes a Cyphernetes query and returns a Result object, which contains the results data and a graph made up of nodes and edges.
 
-To use the `Parse` function, you need to import the `pkg/core` package and instantiate a new `QueryExecutor` using the `NewQueryExecutor` function - to which you pass a `Provider` implementation:
+To use the `Parse` function, you need to import the `pkg/core` package and instantiate a new `QueryExecutor` using the `NewQueryExecutor` function - to which you pass a `Provider` implementation.
+Here's how this looks in the Cyphernetes CLI and Cyphernetes operator projects, both using the default `apiserver` provider:
 
 ```go
 import (
     "github.com/avitaltamir/cyphernetes/pkg/core"
-    "github.com/avitaltamir/cyphernetes/pkg/provider"
+    "github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 )
 
-provider := provider.NewAPIServerProvider()
+provider := apiserver.NewAPIServerProvider()
 executor := core.NewQueryExecutor(provider)
 query := "MATCH (p:Pod) WHERE p.status.phase != 'Running' RETURN p.metadata.name"
 result, err := executor.Parse(query)
