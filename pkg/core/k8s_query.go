@@ -42,9 +42,10 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 type QueryExecutor struct {
-	provider       provider.Provider
-	requestChannel chan *apiRequest
-	semaphore      chan struct{}
+	provider          provider.Provider
+	requestChannel    chan *apiRequest
+	semaphore         chan struct{}
+	relationshipMutex sync.RWMutex
 }
 
 var (
@@ -1672,12 +1673,8 @@ func InitGVRCache(p provider.Provider) error {
 		GvrCache = make(map[string]schema.GroupVersionResource)
 	}
 
-	cache, err := p.GetGVRCache()
-	if err != nil {
-		return fmt.Errorf("error getting GVR cache: %w", err)
-	}
-
-	GvrCache = cache
+	// Let the provider handle caching internally
+	// We'll just initialize an empty cache
 	return nil
 }
 

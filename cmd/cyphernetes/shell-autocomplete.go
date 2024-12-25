@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -178,20 +179,21 @@ func getKindForIdentifier(line string, identifier string) string {
 		if match[1] == identifier {
 			kind := match[2]
 			if executor != nil {
-				gvrCache, err := executor.Provider().GetGVRCache()
-				if err != nil {
+				apiProvider, ok := executor.Provider().(*apiserver.APIServerProvider)
+				if !ok {
 					return kind
 				}
 
-				if gvr, ok := gvrCache[strings.ToLower(kind)]; ok {
-					return findCanonicalKind(gvrCache, gvr)
+				cache := apiProvider.GetGVRCacheSnapshot()
+				if gvr, ok := cache[strings.ToLower(kind)]; ok {
+					return findCanonicalKind(cache, gvr)
 				}
 
-				for k, gvr := range gvrCache {
+				for k, gvr := range cache {
 					if strings.EqualFold(gvr.Resource, kind) ||
 						strings.EqualFold(strings.TrimSuffix(gvr.Resource, "s"), kind) ||
 						strings.EqualFold(k, kind) {
-						return findCanonicalKind(gvrCache, gvr)
+						return findCanonicalKind(cache, gvr)
 					}
 				}
 			}
@@ -218,13 +220,16 @@ func getResourceKinds(identifier string) []string {
 	}
 
 	var kinds []string
-	gvrCache, err := executor.Provider().GetGVRCache()
-	if err != nil {
-		fmt.Printf("Error getting GVR cache: %v\n", err)
+
+	apiProvider, ok := executor.Provider().(*apiserver.APIServerProvider)
+	if !ok {
+		fmt.Printf("Error: provider is not an APIServerProvider\n")
 		return kinds
 	}
 
-	for _, gvr := range gvrCache {
+	cache := apiProvider.GetGVRCacheSnapshot()
+
+	for _, gvr := range cache {
 		if strings.HasPrefix(gvr.GroupResource().Resource, identifier) {
 			kinds = append(kinds, gvr.Resource)
 		}
