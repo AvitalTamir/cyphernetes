@@ -28,19 +28,28 @@ type MockProvider struct {
 	dynamicClient dynamic.Interface
 }
 
-func (m *MockProvider) GetGVRList() (map[string]schema.GroupVersionResource, error) {
-	return map[string]schema.GroupVersionResource{
-		"pod": {
+func (m *MockProvider) FindGVR(resourceKind string) (schema.GroupVersionResource, error) {
+	// Add test cases as needed
+	switch strings.ToLower(resourceKind) {
+	case "pod", "pods":
+		return schema.GroupVersionResource{
 			Group:    "",
 			Version:  "v1",
 			Resource: "pods",
-		},
-		"ingress": {
+		}, nil
+	case "ingress", "ingresses":
+		return schema.GroupVersionResource{
 			Group:    "networking.k8s.io",
 			Version:  "v1",
 			Resource: "ingresses",
-		},
-	}, nil
+		}, nil
+	default:
+		return schema.GroupVersionResource{
+			Group:    "",
+			Version:  "v1",
+			Resource: strings.ToLower(resourceKind) + "s",
+		}, nil
+	}
 }
 
 func NewMockProvider(clientset kubernetes.Interface, dynamicClient dynamic.Interface) provider.Provider {
@@ -56,21 +65,6 @@ func (m *MockProvider) GetClientset() (kubernetes.Interface, error) {
 
 func (m *MockProvider) GetDynamicClient() (dynamic.Interface, error) {
 	return m.dynamicClient, nil
-}
-
-func (m *MockProvider) FindGVR(resourceKind string) (schema.GroupVersionResource, error) {
-	if strings.EqualFold(resourceKind, "ingress") || strings.EqualFold(resourceKind, "ingresses") {
-		return schema.GroupVersionResource{
-			Group:    "networking.k8s.io",
-			Version:  "v1",
-			Resource: "ingresses",
-		}, nil
-	}
-	return schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: strings.ToLower(resourceKind) + "s",
-	}, nil
 }
 
 func (m *MockProvider) GetGVRCache() (map[string]schema.GroupVersionResource, error) {

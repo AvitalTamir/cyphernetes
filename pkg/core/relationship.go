@@ -6,8 +6,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v2"
+)
+
+var (
+	relationshipsMutex sync.RWMutex
+	relationships      = make(map[string][]string)
 )
 
 func AddRelationshipRule(rule RelationshipRule) {
@@ -281,4 +287,18 @@ func loadCustomRelationships() (int, error) {
 	}
 
 	return counter, nil
+}
+
+func AddRelationship(resourceA, resourceB interface{}, relationshipType string) {
+	relationshipsMutex.Lock()
+	defer relationshipsMutex.Unlock()
+
+	// Add relationship logic...
+}
+
+func GetRelationships() map[string][]string {
+	relationshipsMutex.RLock()
+	defer relationshipsMutex.RUnlock()
+
+	return relationships
 }
