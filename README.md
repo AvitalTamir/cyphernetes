@@ -36,7 +36,7 @@ There are multiple ways to run Cyphernetes queries:
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
 4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
-5. Using the Cyphernetes API in your own Go programs
+5. Using the Cyphernetes API in your own Go programs. See [our integration guide](docs/INTEGRATION.md) for more details.
 
 To learn more about how to use Cyphernetes, refer to these documents:
 * [LANGUAGE.md](docs/LANGUAGE.md) - a crash-course in Cyphernetes language syntax
