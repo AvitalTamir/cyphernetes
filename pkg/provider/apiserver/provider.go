@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,7 +28,6 @@ import (
 type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
-	TestMode      bool
 }
 
 type APIServerProvider struct {
@@ -40,7 +38,6 @@ type APIServerProvider struct {
 	openAPIDoc     *openapi_v3.Document
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
-	testMode       bool
 	resourceMutex  sync.RWMutex
 }
 
@@ -58,13 +55,7 @@ type apiResponse struct {
 }
 
 func NewAPIServerProvider() (provider.Provider, error) {
-	// Detect if we're in a test environment
-	isTest := strings.HasSuffix(os.Args[0], ".test") ||
-		strings.Contains(os.Args[0], "___")
-
-	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{
-		TestMode: isTest,
-	})
+	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{})
 }
 
 func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.Provider, error) {
@@ -109,7 +100,6 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		gvrCache:       make(map[string]schema.GroupVersionResource),
 		requestChannel: make(chan *apiRequest),
 		semaphore:      make(chan struct{}, 1),
-		testMode:       config.TestMode,
 	}
 
 	// Start the request processor
@@ -140,17 +130,12 @@ func NewAPIServerProviderWithConfig(kubeConfig clientcmd.ClientConfig) (provider
 		return nil, fmt.Errorf("failed to create dynamic client: %v", err)
 	}
 
-	// Detect if we're in a test environment
-	isTest := strings.HasSuffix(os.Args[0], ".test") ||
-		strings.Contains(os.Args[0], "___")
-
 	provider := &APIServerProvider{
 		clientset:      clientset,
 		dynamicClient:  dynamicClient,
 		gvrCache:       make(map[string]schema.GroupVersionResource),
 		requestChannel: make(chan *apiRequest),
 		semaphore:      make(chan struct{}, 1),
-		testMode:       isTest,
 	}
 
 	// Start the request processor
@@ -181,14 +166,10 @@ func (p *APIServerProvider) GetK8sResources(kind, fieldSelector, labelSelector, 
 
 func (p *APIServerProvider) processRequests() {
 	for request := range p.requestChannel {
-		if !p.testMode {
-			p.semaphore <- struct{}{} // Acquire token
-			time.Sleep(10 * time.Millisecond)
-		}
+		p.semaphore <- struct{}{} // Acquire token
+		time.Sleep(10 * time.Millisecond)
 		list, err := p.fetchResources(request.kind, request.fieldSelector, request.labelSelector, request.namespace)
-		if !p.testMode {
-			<-p.semaphore // Release token
-		}
+		<-p.semaphore // Release token
 		request.responseChan <- &apiResponse{result: list, err: err}
 	}
 }

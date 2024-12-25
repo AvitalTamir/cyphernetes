@@ -150,7 +150,6 @@ func (r *DynamicOperatorReconciler) logActiveWatchers() {
 	}
 }
 
-// Add this function to initialize kubernetes clients
 func initializeK8sClients(config clientcmd.ClientConfig) (kubernetes.Interface, dynamic.Interface, error) {
 	restConfig, err := config.ClientConfig()
 	if err != nil {
@@ -170,7 +169,6 @@ func initializeK8sClients(config clientcmd.ClientConfig) (kubernetes.Interface, 
 	return clientset, dynamicClient, nil
 }
 
-// Modify the SetupWithManager function to use the new initialization
 func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	log.Log.Info("Setting up DynamicOperatorReconciler")
 
@@ -187,7 +185,6 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 		Clientset:     clientset,
 		DynamicClient: dynamicClient,
-		TestMode:      false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
