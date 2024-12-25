@@ -31,14 +31,17 @@ func runWeb(cmd *cobra.Command, args []string) {
 	url := fmt.Sprintf("http://localhost:%s", port)
 
 	// Create the API server provider
-	p, err := apiserver.NewAPIServerProvider()
+	providerConfig := &apiserver.APIServerProviderConfig{
+		DryRun: DryRun,
+	}
+	provider, err := apiserver.NewAPIServerProviderWithOptions(providerConfig)
 	if err != nil {
 		fmt.Printf("Error creating provider: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	// Initialize the executor instance with the provider
-	executor = core.GetQueryExecutorInstance(p)
+	executor = core.GetQueryExecutorInstance(provider)
 	if executor == nil {
 		fmt.Printf("Error initializing query executor\n")
 		return

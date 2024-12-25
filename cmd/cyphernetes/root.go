@@ -13,6 +13,7 @@ import (
 
 var (
 	Version = "dev"
+	DryRun  = false
 )
 
 func getVersionInfo() string {
@@ -87,6 +88,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&core.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&core.NoColor, "no-color", false, "Disable colored output in shell and query results")
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "Show version and exit")
+	rootCmd.PersistentFlags().BoolVar(&DryRun, "dry-run", false, "Enable dry-run mode for all operations")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
