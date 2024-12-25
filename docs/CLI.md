@@ -1,5 +1,16 @@
 # The Cyphernetes CLI
 
+> Note: Dry Run mode is available for all CLI commands.
+
+  The `-d, --dry-run` flag can be used with any CLI command to enable dry run mode.
+  When dry run mode is enabled, Cyphernetes will print the actions it would take without actually performing them.
+
+  ```bash
+  cyphernetes --dry-run query 'CREATE (d:Deployment {name: "nginx"})'
+  cyphernetes --dry-run shell
+  cyphernetes --dry-run web
+  ```
+
 ## Shell
 
 Cyphernetes comes with a shell that lets you interactively query the Kubernetes API using Cyphernetes.
@@ -98,7 +109,7 @@ Available flags:
 cyphernetes query 'MATCH (d:Deployment {name: "nginx"}) RETURN d'
 ```
 
-# Custom Relationships
+### Custom Relationships
 
 Cyphernetes allows defining custom relationships between Kubernetes resources in a `~/.cyphernetes/relationships.yaml` file. This is useful when working with custom resources or when you want to define relationships that aren't built into Cyphernetes.
 
@@ -148,3 +159,15 @@ Custom relationships are loaded on startup and can be used just like built-in re
 MATCH (d:Deployment)->(p:Pod)
 RETURN d.metadata.name, p.metadata.name
 ```
+
+## Web
+
+The `web` command starts a web server that lets you interact with Cyphernetes using a web interface.
+
+To start the web server, run:
+
+```bash
+cyphernetes web
+```
+
+You can then visit `http://localhost:8080` in your browser to interact with Cyphernetes.

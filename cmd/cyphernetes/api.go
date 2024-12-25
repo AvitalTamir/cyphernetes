@@ -45,7 +45,9 @@ func handleQuery(c *gin.Context) {
 	}
 
 	// Create the API server provider
-	p, err := apiserver.NewAPIServerProvider()
+	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+		DryRun: DryRun,
+	})
 	if err != nil {
 		fmt.Printf("Provider error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error creating provider: %v", err)})
