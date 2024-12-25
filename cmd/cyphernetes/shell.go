@@ -33,8 +33,6 @@ var ShellCmd = &cobra.Command{
 	Short: "Launch an interactive shell",
 	Run: func(cmd *cobra.Command, args []string) {
 		showSplash()
-		// Add a longer delay to ensure splash is displayed
-		time.Sleep(100 * time.Millisecond)
 
 		// Create provider with dry-run config
 		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
