@@ -32,6 +32,10 @@ var ShellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Launch an interactive shell",
 	Run: func(cmd *cobra.Command, args []string) {
+		showSplash()
+		// Add a longer delay to ensure splash is displayed
+		time.Sleep(100 * time.Millisecond)
+
 		// Create provider with dry-run config
 		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 			DryRun: DryRun,
@@ -46,7 +50,7 @@ var ShellCmd = &cobra.Command{
 			return
 		}
 
-		runShell(cmd, args)
+		initAndRunShell(cmd, args)
 	},
 }
 
@@ -219,15 +223,13 @@ type Listener interface {
 	OnChange(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool)
 }
 
-func runShell(_ *cobra.Command, _ []string) {
+func initAndRunShell(_ *cobra.Command, _ []string) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProvider()
 	if err != nil {
 		fmt.Println("Error creating provider:", err)
 		os.Exit(1)
 	}
-
-	showSplash()
 
 	// Initialize the executor instance with the provider
 	executor = core.GetQueryExecutorInstance(p)
