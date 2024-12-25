@@ -28,6 +28,7 @@ import (
 type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
+	DryRun        bool
 }
 
 type APIServerProvider struct {
@@ -39,6 +40,7 @@ type APIServerProvider struct {
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
 	resourceMutex  sync.RWMutex
+	dryRun         bool
 }
 
 type apiRequest struct {
@@ -100,6 +102,11 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		gvrCache:       make(map[string]schema.GroupVersionResource),
 		requestChannel: make(chan *apiRequest),
 		semaphore:      make(chan struct{}, 1),
+		dryRun:         config.DryRun,
+	}
+
+	if config.DryRun {
+		fmt.Println("Provider initialized in dry-run mode")
 	}
 
 	// Start the request processor
@@ -211,39 +218,20 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 // Move the FindGVR implementation from k8s_client.go here
 func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, error) {
 	p.gvrCacheMutex.RLock()
-	// Try exact match first
-	if gvr, ok := p.gvrCache[kind]; ok {
-		p.gvrCacheMutex.RUnlock()
-		return gvr, nil
-	}
-	p.gvrCacheMutex.RUnlock()
-
-	// If not found, try to refresh the cache
-	if err := p.initGVRCache(); err != nil {
-		return schema.GroupVersionResource{}, err
-	}
-
-	p.gvrCacheMutex.RLock()
 	defer p.gvrCacheMutex.RUnlock()
 
-	// Try exact match again after refresh
+	// Try exact match first
 	if gvr, ok := p.gvrCache[kind]; ok {
 		return gvr, nil
 	}
 
-	// Try case-insensitive lookup and handle variations
+	// Try case-insensitive lookup
 	lowerKind := strings.ToLower(kind)
 	for k, gvr := range p.gvrCache {
-		// Check for:
-		// 1. Case-insensitive match of kind
-		// 2. Plural form matches resource name
-		// 3. Singular form matches resource name
-		// 4. Short name matches
 		if strings.ToLower(k) == lowerKind || // Case-insensitive kind match
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
-			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind || // Singular form
-			containsStringIgnoreCase(p.getShortNames(gvr), lowerKind) { // Short name match
+			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind { // Singular form
 			return gvr, nil
 		}
 	}
@@ -286,14 +274,23 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		return err
 	}
 
+	var deleteOpts metav1.DeleteOptions
+	if p.dryRun {
+		deleteOpts.DryRun = []string{metav1.DryRunAll}
+	}
+
 	var deleteErr error
 	if namespace != "" {
-		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
-			fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+			if p.dryRun {
+				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
+			} else {
+				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+			}
 		}
 	} else {
-		deleteErr = p.dynamicClient.Resource(gvr).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		deleteErr = p.dynamicClient.Resource(gvr).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			fmt.Printf("Deleted %s/%s\n", strings.ToLower(kind), name)
 		}
@@ -323,14 +320,23 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 	metadata := unstructuredObj.Object["metadata"].(map[string]interface{})
 	metadata["name"] = name
 
+	createOpts := metav1.CreateOptions{}
+	if p.dryRun {
+		createOpts.DryRun = []string{metav1.DryRunAll}
+	}
+
 	if namespace != "" {
 		metadata["namespace"] = namespace
-		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, metav1.CreateOptions{})
+		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
-			fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
+			if p.dryRun {
+				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
+			} else {
+				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
+			}
 		}
 	} else {
-		_, err = p.dynamicClient.Resource(gvr).Create(context.TODO(), unstructuredObj, metav1.CreateOptions{})
+		_, err = p.dynamicClient.Resource(gvr).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
 			fmt.Printf("\nCreated %s/%s", strings.ToLower(kind), name)
 		}
@@ -340,9 +346,6 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 }
 
 func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
-	p.resourceMutex.Lock()
-	defer p.resourceMutex.Unlock()
-
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return err
@@ -362,17 +365,25 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body 
 		}
 	}
 
-	// Apply the patch
+	patchOpts := metav1.PatchOptions{}
+	if p.dryRun {
+		patchOpts.DryRun = []string{metav1.DryRunAll}
+	}
+
 	if namespace != "" {
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 			context.TODO(),
 			name,
 			types.JSONPatchType,
 			patchData,
-			metav1.PatchOptions{},
+			patchOpts,
 		)
 		if err == nil {
-			fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+			if p.dryRun {
+				fmt.Printf("Dry run mode: would patch %s/%s\n", strings.ToLower(kind), name)
+			} else {
+				fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+			}
 		}
 	} else {
 		_, err = p.dynamicClient.Resource(gvr).Patch(
@@ -380,7 +391,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body 
 			name,
 			types.JSONPatchType,
 			patchData,
-			metav1.PatchOptions{},
+			patchOpts,
 		)
 		if err == nil {
 			fmt.Printf("Patched %s/%s\n", strings.ToLower(kind), name)

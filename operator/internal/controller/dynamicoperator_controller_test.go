@@ -67,10 +67,6 @@ func (m *MockProvider) GetDynamicClient() (dynamic.Interface, error) {
 	return m.dynamicClient, nil
 }
 
-func (m *MockProvider) GetGVRCache() (map[string]schema.GroupVersionResource, error) {
-	return make(map[string]schema.GroupVersionResource), nil
-}
-
 func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
 	return make(map[string][]string), nil
 }

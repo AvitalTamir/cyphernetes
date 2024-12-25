@@ -31,7 +31,25 @@ var ctx string
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Launch an interactive shell",
-	Run:   runShell,
+	Run: func(cmd *cobra.Command, args []string) {
+		showSplash()
+
+		// Create provider with dry-run config
+		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+			DryRun: DryRun,
+		})
+		if err != nil {
+			fmt.Printf("Error creating provider: %v\n", err)
+			return
+		}
+
+		executor = core.GetQueryExecutorInstance(provider)
+		if executor == nil {
+			return
+		}
+
+		initAndRunShell(cmd, args)
+	},
 }
 
 var executor *core.QueryExecutor
@@ -203,15 +221,13 @@ type Listener interface {
 	OnChange(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool)
 }
 
-func runShell(cmd *cobra.Command, args []string) {
+func initAndRunShell(_ *cobra.Command, _ []string) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProvider()
 	if err != nil {
 		fmt.Println("Error creating provider:", err)
 		os.Exit(1)
 	}
-
-	showSplash()
 
 	// Initialize the executor instance with the provider
 	executor = core.GetQueryExecutorInstance(p)
@@ -695,6 +711,7 @@ func InitShell() {
 	if executor == nil {
 		return
 	}
+
 	if err := core.InitResourceSpecs(executor.Provider()); err != nil {
 		fmt.Printf("Error initializing resource specs: %v\n", err)
 	}

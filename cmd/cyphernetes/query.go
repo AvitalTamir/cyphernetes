@@ -42,7 +42,9 @@ var queryCmd = &cobra.Command{
 
 func runQuery(args []string, w io.Writer) {
 	// Create the API server provider
-	p, err := apiserver.NewAPIServerProvider()
+	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+		DryRun: DryRun,
+	})
 	if err != nil {
 		fmt.Fprintln(w, "Error creating provider: ", err)
 		return

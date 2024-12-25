@@ -42,10 +42,9 @@ var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
 
 type QueryExecutor struct {
-	provider          provider.Provider
-	requestChannel    chan *apiRequest
-	semaphore         chan struct{}
-	relationshipMutex sync.RWMutex
+	provider       provider.Provider
+	requestChannel chan *apiRequest
+	semaphore      chan struct{}
 }
 
 var (
@@ -1441,7 +1440,7 @@ func GetQueryExecutorInstance(p provider.Provider) *QueryExecutor {
 		}
 
 		// Initialize relationships
-		InitializeRelationships(ResourceSpecs)
+		InitializeRelationships(ResourceSpecs, p)
 	})
 	return executorInstance
 }
@@ -1683,11 +1682,13 @@ func InitResourceSpecs(p provider.Provider) error {
 		ResourceSpecs = make(map[string][]string)
 	}
 
+	logDebug("Getting OpenAPI resource specs...")
 	specs, err := p.GetOpenAPIResourceSpecs()
 	if err != nil {
 		return fmt.Errorf("error getting resource specs: %w", err)
 	}
 
+	logDebug("Got specs for", len(specs), "resources")
 	ResourceSpecs = specs
 
 	return nil

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"gopkg.in/yaml.v2"
 )
 
@@ -97,21 +98,13 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 	return false
 }
 
-func InitializeRelationships(resourceSpecs map[string][]string) {
+func InitializeRelationships(resourceSpecs map[string][]string, provider provider.Provider) {
+	logDebug("Starting relationship initialization with", len(resourceSpecs), "resource specs")
 	fmt.Print("🧠 Initializing relationships")
 	relationshipCount := 0
 	totalKinds := len(resourceSpecs)
 	processed := 0
 	lastProgress := 0
-
-	// Map to hold available kinds for quick look-up
-	availableKinds := make(map[string]bool)
-	for schemaName := range resourceSpecs {
-		kind := extractKindFromSchemaName(schemaName)
-		if kind != "" {
-			availableKinds[strings.ToLower(kind)] = true
-		}
-	}
 
 	// Regular expression to match fields ending with 'Name', or 'Ref'
 	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
@@ -137,7 +130,6 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 			parts := strings.Split(fieldPath, ".")
 			fieldName := parts[len(parts)-1]
 
-			// Remove the special handling for configmap and instead improve the general logic
 			relatedKindSingular := ""
 			relSpecType := ""
 
@@ -151,12 +143,12 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 				continue
 			}
 
-			// convert relatedKind to lower case plural using GVR cache
-			if gvr, ok := GvrCache[strings.ToLower(relatedKindSingular)]; ok {
+			// Use FindGVR to get the GVR for the related kind
+			if gvr, err := provider.FindGVR(relatedKindSingular); err == nil {
 				relatedKind := gvr.Resource
 
-				// same conversion for kindA
-				if gvrA, ok := GvrCache[strings.ToLower(kindANameSingular)]; ok {
+				// Same conversion for kindA
+				if gvrA, err := provider.FindGVR(kindANameSingular); err == nil {
 					kindAName := gvrA.Resource
 
 					// Important: Keep the array notation in the field path
@@ -164,51 +156,52 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 					if relSpecType == "Ref" || relSpecType == "KeyRef" {
 						fullFieldPath = fieldPath + ".name"
 					}
+					logDebug("Using field path:", fullFieldPath)
 
-					// Check if relatedKind exists in availableKinds
-					if _, exists := availableKinds[strings.ToLower(relatedKindSingular)]; exists {
-						relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
-							strings.ToUpper(relatedKindSingular),
-							strings.ToUpper(kindANameSingular)))
+					relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+						strings.ToUpper(relatedKindSingular),
+						strings.ToUpper(kindANameSingular)))
 
-						kindA := strings.ToLower(kindAName)
-						kindB := strings.ToLower(relatedKind)
+					kindA := strings.ToLower(kindAName)
+					kindB := strings.ToLower(relatedKind)
 
-						// Keep the array notation in the JsonPath
-						fieldA := "$." + fullFieldPath
-						fieldB := "$.metadata.name"
+					// Keep the array notation in the JsonPath
+					fieldA := "$." + fullFieldPath
+					fieldB := "$.metadata.name"
 
-						criterion := MatchCriterion{
-							FieldA:         fieldA,
-							FieldB:         fieldB,
-							ComparisonType: ExactMatch,
+					logDebug("Creating relationship rule:", kindA, "->", kindB, "with fields:", fieldA, "->", fieldB)
+					criterion := MatchCriterion{
+						FieldA:         fieldA,
+						FieldB:         fieldB,
+						ComparisonType: ExactMatch,
+					}
+
+					// Check for existing rule and add/create as before
+					existingRuleIndex := -1
+					for i, r := range relationshipRules {
+						if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
+							existingRuleIndex = i
+							break
 						}
+					}
 
-						// Check for existing rule and add/create as before
-						existingRuleIndex := -1
-						for i, r := range relationshipRules {
-							if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
-								existingRuleIndex = i
-								break
-							}
+					if existingRuleIndex >= 0 {
+						logDebug("Adding criterion to existing rule for:", kindA, "->", kindB)
+						relationshipRules[existingRuleIndex].MatchCriteria = append(
+							relationshipRules[existingRuleIndex].MatchCriteria,
+							criterion,
+						)
+					} else {
+						logDebug("Creating new relationship rule for:", kindA, "->", kindB)
+						// Create new rule
+						rule := RelationshipRule{
+							KindA:         kindA,
+							KindB:         kindB,
+							Relationship:  relType,
+							MatchCriteria: []MatchCriterion{criterion},
 						}
-
-						if existingRuleIndex >= 0 {
-							relationshipRules[existingRuleIndex].MatchCriteria = append(
-								relationshipRules[existingRuleIndex].MatchCriteria,
-								criterion,
-							)
-						} else {
-							// Create new rule
-							rule := RelationshipRule{
-								KindA:         kindA,
-								KindB:         kindB,
-								Relationship:  relType,
-								MatchCriteria: []MatchCriterion{criterion},
-							}
-							relationshipRules = append(relationshipRules, rule)
-							relationshipCount++
-						}
+						relationshipRules = append(relationshipRules, rule)
+						relationshipCount++
 					}
 				}
 			}
@@ -227,6 +220,7 @@ func InitializeRelationships(resourceSpecs map[string][]string) {
 		suffix = fmt.Sprintf(" and %d custom", customRelationshipsCount)
 	}
 
+	logDebug("Relationship initialization complete. Found", relationshipCount, "internal relationships and", customRelationshipsCount, "custom relationships")
 	fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
 }
 
