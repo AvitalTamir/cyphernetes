@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -42,6 +44,7 @@ import (
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
 	"github.com/avitaltamir/cyphernetes/operator/internal/controller"
 	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -50,6 +53,65 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
+
+// MockProvider implements the provider.Provider interface for testing
+type MockProvider struct {
+	gvrMap map[string]schema.GroupVersionResource
+}
+
+func (m *MockProvider) FindGVR(kind string) (schema.GroupVersionResource, error) {
+	if gvr, ok := m.gvrMap[strings.ToLower(kind)]; ok {
+		return gvr, nil
+	}
+	return schema.GroupVersionResource{}, fmt.Errorf("GVR not found for kind: %s", kind)
+}
+
+// Implement other required methods of the provider.Provider interface
+func (m *MockProvider) GetK8sResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error) {
+	return nil, nil
+}
+
+func (m *MockProvider) DeleteK8sResources(kind, name, namespace string) error {
+	return nil
+}
+
+func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+	return nil
+}
+
+func (m *MockProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+	return nil
+}
+
+func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
+	return map[string][]string{
+		"deployments": {
+			"metadata.name",
+			"metadata.namespace",
+			"spec.replicas",
+			"spec.selector",
+			"spec.template",
+		},
+		"services": {
+			"metadata.name",
+			"metadata.namespace",
+			"spec.selector",
+			"spec.ports",
+		},
+		"ingresses": {
+			"metadata.name",
+			"metadata.namespace",
+			"spec.rules",
+			"spec.ingressClassName",
+			"spec.rules[].http.paths[].backend.service.name",
+			"spec.rules[].http.paths[].backend.serviceName",
+		},
+	}, nil
+}
+
+func (m *MockProvider) CreateProviderForContext(context string) (provider.Provider, error) {
+	return m, nil
+}
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
@@ -173,6 +235,15 @@ var _ = Describe("DynamicOperator E2E Tests", func() {
 
 	BeforeEach(func() {
 		// Initialize relationships for the test
+		// Create a mock provider for relationship initialization
+		mockProvider := &MockProvider{
+			gvrMap: map[string]schema.GroupVersionResource{
+				"deployment": {Group: "apps", Version: "v1", Resource: "deployments"},
+				"service":    {Group: "", Version: "v1", Resource: "services"},
+				"ingress":    {Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
+			},
+		}
+
 		core.InitializeRelationships(map[string][]string{
 			"deployments": {
 				"metadata.name",
@@ -195,7 +266,7 @@ var _ = Describe("DynamicOperator E2E Tests", func() {
 				"spec.rules[].http.paths[].backend.service.name",
 				"spec.rules[].http.paths[].backend.serviceName",
 			},
-		})
+		}, mockProvider)
 
 		// Add the relationship rules
 		core.AddRelationshipRule(core.RelationshipRule{

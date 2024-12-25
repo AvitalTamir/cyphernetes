@@ -218,39 +218,20 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 // Move the FindGVR implementation from k8s_client.go here
 func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, error) {
 	p.gvrCacheMutex.RLock()
-	// Try exact match first
-	if gvr, ok := p.gvrCache[kind]; ok {
-		p.gvrCacheMutex.RUnlock()
-		return gvr, nil
-	}
-	p.gvrCacheMutex.RUnlock()
-
-	// If not found, try to refresh the cache
-	if err := p.initGVRCache(); err != nil {
-		return schema.GroupVersionResource{}, err
-	}
-
-	p.gvrCacheMutex.RLock()
 	defer p.gvrCacheMutex.RUnlock()
 
-	// Try exact match again after refresh
+	// Try exact match first
 	if gvr, ok := p.gvrCache[kind]; ok {
 		return gvr, nil
 	}
 
-	// Try case-insensitive lookup and handle variations
+	// Try case-insensitive lookup
 	lowerKind := strings.ToLower(kind)
 	for k, gvr := range p.gvrCache {
-		// Check for:
-		// 1. Case-insensitive match of kind
-		// 2. Plural form matches resource name
-		// 3. Singular form matches resource name
-		// 4. Short name matches
 		if strings.ToLower(k) == lowerKind || // Case-insensitive kind match
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
-			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind || // Singular form
-			containsStringIgnoreCase(p.getShortNames(gvr), lowerKind) { // Short name match
+			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind { // Singular form
 			return gvr, nil
 		}
 	}
