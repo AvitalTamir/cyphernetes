@@ -77,7 +77,7 @@ Example:
 
 # Kubernetes Client
 
-The `pkg/provider/apiserver` package is a wrapper around the Kubernetes client-go library and may be used as a base implementation for your own provider. If your program already uses client-go, you can re-use a lot of the code in the `pkg/provider/apiserver` package, and only implement the parts that are missing from your provider - for example retrieving the resources from a Postgres or Elasticsearch database.
+The `pkg/provider/apiserver` package is a wrapper around the Kubernetes client-go library and may be used as a base implementation for your own provider. If your program already uses client-go, you can re-use a lot of the code in the `pkg/provider/apiserver` package, you can pass a clientSet to the `NewAPIServerProvider` function - or you can initialize the provider with no options and a new clientSet will be created from the available configuration.
 
 Alternatively, you can implement your own provider from scratch, as long as it:
 - implements the `Provider` interface
