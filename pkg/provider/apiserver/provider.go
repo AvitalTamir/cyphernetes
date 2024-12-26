@@ -225,6 +225,16 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 	uniqueGVRs := make(map[string]schema.GroupVersionResource)
 	uniqueOptions := make(map[string]bool)
 
+	// If kind contains dots, treat it as a fully qualified name
+	if strings.Contains(kind, ".") {
+		// Try exact match only
+		if gvr, ok := p.gvrCache[kind]; ok {
+			return gvr, nil
+		}
+		return schema.GroupVersionResource{}, fmt.Errorf("resource %q not found", kind)
+	}
+
+	// For non-fully-qualified names, try all the matching strategies
 	// Try exact match first
 	if gvr, ok := p.gvrCache[kind]; ok {
 		key := fmt.Sprintf("%s/%s", gvr.Resource, gvr.Group)
@@ -232,7 +242,7 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 		if gvr.Group == "" {
 			uniqueOptions["core."+gvr.Resource] = true
 		} else {
-			uniqueOptions[gvr.Group+"."+gvr.Resource] = true
+			uniqueOptions[gvr.Resource+"."+gvr.Group] = true
 		}
 	}
 
@@ -243,12 +253,12 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind { // Singular form
-			key := fmt.Sprintf("%s/%s", gvr.Group, gvr.Resource)
+			key := fmt.Sprintf("%s/%s", gvr.Resource, gvr.Group)
 			uniqueGVRs[key] = gvr
 			if gvr.Group == "" {
 				uniqueOptions["core."+gvr.Resource] = true
 			} else {
-				uniqueOptions[gvr.Group+"."+gvr.Resource] = true
+				uniqueOptions[gvr.Resource+"."+gvr.Group] = true
 			}
 		}
 	}
@@ -864,6 +874,15 @@ func (p *APIServerProvider) initGVRCache() error {
 			// Store with short names as keys
 			for _, shortName := range r.ShortNames {
 				p.gvrCache[shortName] = gvr
+			}
+
+			// Store fully qualified names
+			if gv.Group != "" {
+				// Store resource.group format
+				p.gvrCache[r.Name+"."+gv.Group] = gvr
+				if r.SingularName != "" {
+					p.gvrCache[r.SingularName+"."+gv.Group] = gvr
+				}
 			}
 		}
 	}
