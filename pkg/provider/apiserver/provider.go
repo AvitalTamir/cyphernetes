@@ -252,7 +252,8 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 		if strings.ToLower(k) == lowerKind || // Case-insensitive kind match
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
-			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind { // Singular form
+			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind || // Singular form
+			(strings.HasSuffix(gvr.Resource, "ies") && strings.ToLower(strings.TrimSuffix(gvr.Resource, "ies")+"y") == lowerKind) { // Handle -ies to -y conversion
 			key := fmt.Sprintf("%s/%s", gvr.Resource, gvr.Group)
 			uniqueGVRs[key] = gvr
 			if gvr.Group == "" {
@@ -281,31 +282,6 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 
 	return schema.GroupVersionResource{}, fmt.Errorf("resource %q not found", kind)
 }
-
-// Add helper method to get short names for a GVR
-// func (p *APIServerProvider) getShortNames(gvr schema.GroupVersionResource) []string {
-// 	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-// 	if err != nil {
-// 		return nil
-// 	}
-
-// 	for _, r := range resources.APIResources {
-// 		if r.Name == gvr.Resource {
-// 			return r.ShortNames
-// 		}
-// 	}
-// 	return nil
-// }
-
-// // Helper function for case-insensitive string slice contains
-// func containsStringIgnoreCase(slice []string, str string) bool {
-// 	for _, item := range slice {
-// 		if strings.EqualFold(item, str) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
 
 // Implement other Provider interface methods...
 func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) error {
