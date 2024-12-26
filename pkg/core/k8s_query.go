@@ -40,6 +40,7 @@ type QueryResult struct {
 
 var resultCache = make(map[string]interface{})
 var resultMap = make(map[string]interface{})
+var resultMapMutex sync.RWMutex
 
 type QueryExecutor struct {
 	provider       provider.Provider
@@ -684,6 +685,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	var resourcesA, resourcesB []map[string]interface{}
 	var filteredDirection Direction
 
+	resultMapMutex.RLock()
 	if rule.KindA == rightKind.Resource {
 		resourcesA = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
 		resourcesB = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
@@ -693,8 +695,10 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		resourcesB = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
 		filteredDirection = Right
 	} else {
-		return false, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
+		resultMapMutex.RUnlock()
+		return false, fmt.Errorf("relationship rule not found for %s and %s", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
 	}
+	resultMapMutex.RUnlock()
 
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 
@@ -704,7 +708,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
 	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
 
-	// Update resultMap with filtered results
+	resultMapMutex.Lock()
 	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
 		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
 			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
@@ -719,6 +723,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	} else {
 		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 	}
+	resultMapMutex.Unlock()
 
 	// Add nodes and edges based on the matched resources
 	rightResources := matchedResources["right"].([]map[string]interface{})
@@ -782,6 +787,10 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 	if filtered, ok := filteredResults[key]; ok {
 		return filtered
 	}
+
+	resultMapMutex.RLock()
+	defer resultMapMutex.RUnlock()
+
 	if resources, ok := resultMap[key].([]map[string]interface{}); ok {
 		return resources
 	}
