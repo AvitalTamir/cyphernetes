@@ -237,7 +237,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	}
 
 	// Get current context
-	currentContext, currentNamespace, err := getCurrentContext()
+	currentContext, _, err := getCurrentContext()
 	if err != nil {
 		fmt.Println("Error getting current context:", err)
 		os.Exit(1)
@@ -248,8 +248,6 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	if core.AllNamespaces {
 		core.Namespace = ""
 		core.AllNamespaces = false
-	} else if currentNamespace != "" {
-		core.Namespace = currentNamespace
 	}
 
 	// Load default macros
