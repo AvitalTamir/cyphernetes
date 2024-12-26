@@ -140,6 +140,30 @@ func TestLexer(t *testing.T) {
 				{Type: EOF, Literal: ""},
 			},
 		},
+		{
+			name:  "fully qualified resource kinds",
+			input: "(d:deployments.apps), (p:pods.v1.core), (c:configmaps.v1)",
+			expected: []Token{
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "deployments.apps"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: COMMA, Literal: ","},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "p"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "pods.v1.core"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: COMMA, Literal: ","},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "c"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "configmaps.v1"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {

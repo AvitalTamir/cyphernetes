@@ -795,7 +795,11 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 		}
 
 		// check if the node has already been fetched
-		if resultCache[q.resourcePropertyName(node)] == nil {
+		cacheKey, err := q.resourcePropertyName(node)
+		if err != nil {
+			return fmt.Errorf("error getting resource property name: %v", err)
+		}
+		if resultCache[cacheKey] == nil {
 			err := getNodeResources(node, q, c.ExtraFilters)
 			if err != nil {
 				return fmt.Errorf("error getting node resources >> %s", err)
@@ -818,7 +822,7 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 			}
 		} else if resultMap[node.ResourceProperties.Name] == nil {
 			// Copy from cache using the original name
-			resultMap[node.ResourceProperties.Name] = resultCache[q.resourcePropertyName(node)]
+			resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
 		}
 	}
 	return nil
@@ -913,17 +917,16 @@ func getTargetK8sResourceName(resourceTemplate map[string]interface{}, resourceN
 	return name
 }
 
-func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
+func (q *QueryExecutor) resourcePropertyName(n *NodePattern) (string, error) {
 	var ns string
 
 	gvr, err := q.provider.FindGVR(n.ResourceProperties.Kind)
 	if err != nil {
-		fmt.Println("Error finding API resource: ", err)
-		return ""
+		return "", err
 	}
 
 	if n.ResourceProperties.Properties == nil {
-		return fmt.Sprintf("%s_%s", Namespace, gvr.Resource)
+		return fmt.Sprintf("%s_%s", Namespace, gvr.Resource), nil
 	}
 
 	for _, prop := range n.ResourceProperties.Properties.PropertyList {
@@ -937,7 +940,7 @@ func (q *QueryExecutor) resourcePropertyName(n *NodePattern) string {
 		ns = Namespace
 	}
 
-	return fmt.Sprintf("%s_%s", ns, gvr.Resource)
+	return fmt.Sprintf("%s_%s", ns, gvr.Resource), nil
 }
 
 func convertToComparableTypes(result, filterValue interface{}) (interface{}, interface{}, error) {
@@ -1496,7 +1499,10 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	}
 
 	// Check if the resource has already been fetched
-	cacheKey := q.resourcePropertyName(n)
+	cacheKey, err := q.resourcePropertyName(n)
+	if err != nil {
+		return fmt.Errorf("error getting resource property name: %v", err)
+	}
 	if resultCache[cacheKey] == nil {
 		// Get resources using the provider
 		resources, err := q.provider.GetK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector, namespace)
