@@ -12,7 +12,8 @@ type Lexer struct {
 		lit     string
 		hasNext bool
 	}
-	inContexts bool
+	inContexts  bool
+	inNodeLabel bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -48,36 +49,52 @@ func (l *Lexer) NextToken() Token {
 
 	case scanner.Ident:
 		lit := l.s.TokenText()
-		switch strings.ToUpper(lit) {
-		case "MATCH":
-			return Token{Type: MATCH, Literal: lit}
-		case "CREATE":
-			return Token{Type: CREATE, Literal: lit}
-		case "WHERE":
-			return Token{Type: WHERE, Literal: lit}
-		case "SET":
-			return Token{Type: SET, Literal: lit}
-		case "DELETE":
-			return Token{Type: DELETE, Literal: lit}
-		case "RETURN":
-			return Token{Type: RETURN, Literal: lit}
-		case "IN":
-			return Token{Type: IN, Literal: lit}
-		case "AS":
-			return Token{Type: AS, Literal: lit}
-		case "COUNT":
-			return Token{Type: COUNT, Literal: lit}
-		case "SUM":
-			return Token{Type: SUM, Literal: lit}
-		case "CONTAINS":
-			return Token{Type: CONTAINS, Literal: lit}
-		case "TRUE", "FALSE":
-			return Token{Type: BOOLEAN, Literal: lit}
-		case "NULL":
-			return Token{Type: NULL, Literal: lit}
-		default:
-			return Token{Type: IDENT, Literal: lit}
+		if !l.inNodeLabel {
+			switch strings.ToUpper(lit) {
+			case "MATCH":
+				return Token{Type: MATCH, Literal: lit}
+			case "CREATE":
+				return Token{Type: CREATE, Literal: lit}
+			case "WHERE":
+				return Token{Type: WHERE, Literal: lit}
+			case "SET":
+				return Token{Type: SET, Literal: lit}
+			case "DELETE":
+				return Token{Type: DELETE, Literal: lit}
+			case "RETURN":
+				return Token{Type: RETURN, Literal: lit}
+			case "IN":
+				return Token{Type: IN, Literal: lit}
+			case "AS":
+				return Token{Type: AS, Literal: lit}
+			case "COUNT":
+				return Token{Type: COUNT, Literal: lit}
+			case "SUM":
+				return Token{Type: SUM, Literal: lit}
+			case "CONTAINS":
+				return Token{Type: CONTAINS, Literal: lit}
+			case "TRUE", "FALSE":
+				return Token{Type: BOOLEAN, Literal: lit}
+			case "NULL":
+				return Token{Type: NULL, Literal: lit}
+			default:
+				return Token{Type: IDENT, Literal: lit}
+			}
 		}
+		var fullLit strings.Builder
+		fullLit.WriteString(lit)
+
+		for l.s.Peek() == '.' {
+			l.s.Next() // consume dot
+			fullLit.WriteRune('.')
+
+			tok := l.s.Scan()
+			if tok != scanner.Ident {
+				return Token{Type: ILLEGAL, Literal: fullLit.String()}
+			}
+			fullLit.WriteString(l.s.TokenText())
+		}
+		return Token{Type: IDENT, Literal: fullLit.String()}
 
 	case scanner.Int:
 		return Token{Type: NUMBER, Literal: l.s.TokenText()}
@@ -100,12 +117,14 @@ func (l *Lexer) NextToken() Token {
 	case '(':
 		return Token{Type: LPAREN, Literal: "("}
 	case ')':
+		l.inNodeLabel = false
 		return Token{Type: RPAREN, Literal: ")"}
 	case '{':
 		return Token{Type: LBRACE, Literal: "{"}
 	case '}':
 		return Token{Type: RBRACE, Literal: "}"}
 	case ':':
+		l.inNodeLabel = true
 		return Token{Type: COLON, Literal: ":"}
 	case ',':
 		return Token{Type: COMMA, Literal: ","}
