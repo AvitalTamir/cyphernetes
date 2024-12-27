@@ -874,6 +874,76 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with fully qualified resource kinds",
+			input: `MATCH (d:deployments.apps) RETURN d.spec.replicas`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "deployments.apps",
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.spec.replicas"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with multiple fully qualified resource kinds",
+			input: `MATCH (d:deployments.apps)->(p:pods.v1.core) RETURN d.metadata.name, p.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "deployments.apps",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "pods.v1.core",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "d",
+										Kind: "deployments.apps",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "p",
+										Kind: "pods.v1.core",
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.metadata.name"},
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

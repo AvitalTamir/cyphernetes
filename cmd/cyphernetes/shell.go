@@ -133,7 +133,7 @@ var (
 	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
 	bracketsRegex   = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex   = regexp.MustCompile(`"(.*?)"`)
-	identifierRegex = regexp.MustCompile(`0m(\w+):(\w+)`)
+	identifierRegex = regexp.MustCompile(`0m(\w+):([.\w]+)`)
 	propertiesRegex = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
 	returnRegex     = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 )

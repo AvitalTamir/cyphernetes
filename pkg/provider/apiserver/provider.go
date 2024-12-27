@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -220,9 +221,29 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 	p.gvrCacheMutex.RLock()
 	defer p.gvrCacheMutex.RUnlock()
 
+	// Use maps to deduplicate matches
+	uniqueGVRs := make(map[string]schema.GroupVersionResource)
+	uniqueOptions := make(map[string]bool)
+
+	// If kind contains dots, treat it as a fully qualified name
+	if strings.Contains(kind, ".") {
+		// Try exact match only
+		if gvr, ok := p.gvrCache[kind]; ok {
+			return gvr, nil
+		}
+		return schema.GroupVersionResource{}, fmt.Errorf("resource %q not found", kind)
+	}
+
+	// For non-fully-qualified names, try all the matching strategies
 	// Try exact match first
 	if gvr, ok := p.gvrCache[kind]; ok {
-		return gvr, nil
+		key := fmt.Sprintf("%s/%s", gvr.Resource, gvr.Group)
+		uniqueGVRs[key] = gvr
+		if gvr.Group == "" {
+			uniqueOptions["core."+gvr.Resource] = true
+		} else {
+			uniqueOptions[gvr.Resource+"."+gvr.Group] = true
+		}
 	}
 
 	// Try case-insensitive lookup
@@ -231,37 +252,35 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 		if strings.ToLower(k) == lowerKind || // Case-insensitive kind match
 			strings.ToLower(gvr.Resource) == lowerKind || // Plural form
 			strings.ToLower(strings.TrimSuffix(gvr.Resource, "s")) == lowerKind || // Singular form
-			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind { // Singular form
+			strings.ToLower(strings.TrimSuffix(gvr.Resource, "es")) == lowerKind || // Singular form
+			(strings.HasSuffix(gvr.Resource, "ies") && strings.ToLower(strings.TrimSuffix(gvr.Resource, "ies")+"y") == lowerKind) { // Handle -ies to -y conversion
+			key := fmt.Sprintf("%s/%s", gvr.Resource, gvr.Group)
+			uniqueGVRs[key] = gvr
+			if gvr.Group == "" {
+				uniqueOptions["core."+gvr.Resource] = true
+			} else {
+				uniqueOptions[gvr.Resource+"."+gvr.Group] = true
+			}
+		}
+	}
+
+	if len(uniqueGVRs) > 1 {
+		var options []string
+		for option := range uniqueOptions {
+			options = append(options, option)
+		}
+		sort.Strings(options)
+		return schema.GroupVersionResource{}, fmt.Errorf("ambiguous resource kind %q found. Please specify one of:\n%s",
+			kind, strings.Join(options, "\n"))
+	}
+
+	if len(uniqueGVRs) == 1 {
+		for _, gvr := range uniqueGVRs {
 			return gvr, nil
 		}
 	}
 
 	return schema.GroupVersionResource{}, fmt.Errorf("resource %q not found", kind)
-}
-
-// Add helper method to get short names for a GVR
-func (p *APIServerProvider) getShortNames(gvr schema.GroupVersionResource) []string {
-	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
-	if err != nil {
-		return nil
-	}
-
-	for _, r := range resources.APIResources {
-		if r.Name == gvr.Resource {
-			return r.ShortNames
-		}
-	}
-	return nil
-}
-
-// Helper function for case-insensitive string slice contains
-func containsStringIgnoreCase(slice []string, str string) bool {
-	for _, item := range slice {
-		if strings.EqualFold(item, str) {
-			return true
-		}
-	}
-	return false
 }
 
 // Implement other Provider interface methods...
@@ -831,6 +850,15 @@ func (p *APIServerProvider) initGVRCache() error {
 			// Store with short names as keys
 			for _, shortName := range r.ShortNames {
 				p.gvrCache[shortName] = gvr
+			}
+
+			// Store fully qualified names
+			if gv.Group != "" {
+				// Store resource.group format
+				p.gvrCache[r.Name+"."+gv.Group] = gvr
+				if r.SingularName != "" {
+					p.gvrCache[r.SingularName+"."+gv.Group] = gvr
+				}
 			}
 		}
 	}
