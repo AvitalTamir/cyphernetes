@@ -175,14 +175,8 @@ func handleGetContext(c *gin.Context) {
 		return
 	}
 
-	// Get namespace from context
-	namespace := "default"
-	if context, exists := config.Contexts[currentContext]; exists && context.Namespace != "" {
-		namespace = context.Namespace
-	}
-
 	c.JSON(http.StatusOK, ContextInfo{
 		Context:   currentContext,
-		Namespace: namespace,
+		Namespace: core.Namespace,
 	})
 }
