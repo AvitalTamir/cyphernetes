@@ -46,6 +46,7 @@ type QueryExecutor struct {
 	provider       provider.Provider
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
+	matchNodes     []*NodePattern
 }
 
 var (
@@ -79,6 +80,9 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 }
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
+	// Reset match nodes at the start of each query
+	q.matchNodes = nil
+
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
@@ -98,6 +102,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	for _, clause := range ast.Clauses {
 		switch c := clause.(type) {
 		case *MatchClause:
+			// Store the nodes from the match clause
+			q.matchNodes = c.Nodes
+
 			var filteringOccurred bool
 			filteredResults := make(map[string][]map[string]interface{})
 
@@ -132,7 +139,6 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				parts := strings.Split(kvp.Key, ".")
 				for i := 1; i < len(parts); i++ {
 					if i > 1 && strings.HasSuffix(parts[i-1], "\\") {
-						// Combine this part with the previous one, removing the backslash
 						path[len(path)-1] = path[len(path)-1][:len(path[len(path)-1])-1] + "." + strings.ReplaceAll(parts[i], "/", "~1")
 					} else {
 						path = append(path, strings.ReplaceAll(parts[i], "/", "~1"))
@@ -140,6 +146,19 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 
 				resources := resultMap[resultMapKey].([]map[string]interface{})
+
+				// Find the matching node from the stored match nodes
+				var nodeKind string
+				for _, node := range q.matchNodes {
+					if node.ResourceProperties.Name == resultMapKey {
+						nodeKind = node.ResourceProperties.Kind
+						break
+					}
+				}
+				if nodeKind == "" {
+					return *results, fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
+				}
+
 				for _, resource := range resources {
 					// Create a single patch that works with the existing structure
 					patches := createCompatiblePatch(path, kvp.Value)
@@ -150,8 +169,12 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 						return *results, fmt.Errorf("error marshalling patches: %s", err)
 					}
 
-					// Apply the patches to the resource
-					err = q.PatchK8sResource(resource, patchJSON)
+					metadata := resource["metadata"].(map[string]interface{})
+					name := metadata["name"].(string)
+					namespace := getNamespaceName(metadata)
+
+					// Apply the patches to the resource using the kind from MATCH clause
+					err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
 					if err != nil {
 						return *results, fmt.Errorf("error patching resource: %s", err)
 					}
@@ -164,26 +187,34 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 		case *DeleteClause:
 			// Execute a Kubernetes delete operation based on the DeleteClause.
 			for _, nodeId := range c.NodeIds {
-				// make sure the identifier is a key in the result map
 				if resultMap[nodeId] == nil {
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
 
-				// Get the resources to delete
 				resources := resultMap[nodeId].([]map[string]interface{})
 				for _, resource := range resources {
-					kind := resource["kind"].(string)
 					metadata := resource["metadata"].(map[string]interface{})
 					name := metadata["name"].(string)
 					namespace := getNamespaceName(metadata)
 
-					err := q.provider.DeleteK8sResources(kind, name, namespace)
+					// Find the matching node from the stored match nodes
+					var nodeKind string
+					for _, node := range q.matchNodes {
+						if node.ResourceProperties.Name == nodeId {
+							nodeKind = node.ResourceProperties.Kind
+							break
+						}
+					}
+					if nodeKind == "" {
+						return *results, fmt.Errorf("could not find kind for node %s in MATCH clause", nodeId)
+					}
+
+					err := q.provider.DeleteK8sResources(nodeKind, name, namespace)
 					if err != nil {
-						return *results, fmt.Errorf("error deleting resource %s/%s: %v", kind, name, err)
+						return *results, fmt.Errorf("error deleting resource %s/%s: %v", nodeKind, name, err)
 					}
 				}
 
-				// Remove from result map after successful deletion
 				delete(resultMap, nodeId)
 			}
 
@@ -229,7 +260,15 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
 
 				}
-				foreignGVR, err := q.findGVR(foreignNode.ResourceProperties.Kind)
+				// Find the matching node from stored match nodes to get the kind
+				var foreignNodeKind string
+				for _, matchNode := range q.matchNodes {
+					if matchNode.ResourceProperties.Name == foreignNode.ResourceProperties.Name {
+						foreignNodeKind = matchNode.ResourceProperties.Kind
+						break
+					}
+				}
+				foreignGVR, err := q.findGVR(foreignNodeKind)
 				if err != nil {
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
 				}
