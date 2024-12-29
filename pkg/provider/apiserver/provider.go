@@ -225,7 +225,23 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 	uniqueGVRs := make(map[string]schema.GroupVersionResource)
 	uniqueOptions := make(map[string]bool)
 
-	// If kind contains dots, treat it as a fully qualified name
+	// Special handling for core.* prefix
+	if strings.HasPrefix(strings.ToLower(kind), "core.") {
+		resourceName := strings.TrimPrefix(kind, "core.")
+
+		// Look for exact match in core group
+		for k, gvr := range p.gvrCache {
+			if gvr.Group == "" && // core group has empty string as group
+				(strings.EqualFold(k, resourceName) ||
+					strings.EqualFold(gvr.Resource, resourceName) ||
+					strings.EqualFold(strings.TrimSuffix(gvr.Resource, "s"), resourceName)) {
+				return gvr, nil
+			}
+		}
+		return schema.GroupVersionResource{}, fmt.Errorf("resource %q not found in core group", resourceName)
+	}
+
+	// If kind contains dots (but not starting with core.), treat it as a fully qualified name
 	if strings.Contains(kind, ".") {
 		// Try exact match only
 		if gvr, ok := p.gvrCache[kind]; ok {
