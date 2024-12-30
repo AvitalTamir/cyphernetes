@@ -191,8 +191,15 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		return nil, err
 	}
 
+	// Check if resource is namespaced
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return nil, err
+	}
+
 	var list *unstructured.UnstructuredList
-	if namespace != "" {
+	// Only use namespace if resource is namespaced
+	if namespace != "" && isNamespaced {
 		list, err = p.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{
 			FieldSelector: fieldSelector,
 			LabelSelector: labelSelector,
@@ -293,13 +300,19 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		return err
 	}
 
+	// Check if resource is namespaced
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return err
+	}
+
 	var deleteOpts metav1.DeleteOptions
 	if p.dryRun {
 		deleteOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
 	var deleteErr error
-	if namespace != "" {
+	if namespace != "" && isNamespaced {
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
@@ -327,6 +340,12 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		return err
 	}
 
+	// Check if resource is namespaced
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return err
+	}
+
 	unstructuredObj, err := toUnstructured(body)
 	if err != nil {
 		return err
@@ -344,7 +363,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		createOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
-	if namespace != "" {
+	if namespace != "" && isNamespaced {
 		metadata["namespace"] = namespace
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
@@ -881,4 +900,20 @@ func (p *APIServerProvider) GetGVRCacheSnapshot() map[string]schema.GroupVersion
 		snapshot[k] = v
 	}
 	return snapshot
+}
+
+// Add this helper method to check if a resource is namespaced
+func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource) (bool, error) {
+	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+	if err != nil {
+		return false, fmt.Errorf("error getting server resources: %w", err)
+	}
+
+	for _, r := range resources.APIResources {
+		if r.Name == gvr.Resource {
+			return r.Namespaced, nil
+		}
+	}
+
+	return false, fmt.Errorf("resource %q not found", gvr.Resource)
 }
