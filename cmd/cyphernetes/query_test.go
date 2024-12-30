@@ -68,6 +68,22 @@ func TestRunQuery(t *testing.T) {
 `,
 		},
 		{
+			name: "Successful query in YAML format",
+			args: []string{"MATCH (n:Pod)"},
+			mockParseQuery: func(query string) (*core.Expression, error) {
+				return &core.Expression{}, nil
+			},
+			mockExecute: func(expr *core.Expression, namespace string) (core.QueryResult, error) {
+				core.OutputFormat = "yaml"
+				return core.QueryResult{
+					Data: map[string]interface{}{
+						"test": "data",
+					},
+				}, nil
+			},
+			wantOut: "test: data\n\n",
+		},
+		{
 			name: "Parse query error",
 			args: []string{"INVALID QUERY"},
 			mockParseQuery: func(query string) (*core.Expression, error) {
