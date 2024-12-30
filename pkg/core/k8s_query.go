@@ -51,6 +51,7 @@ type QueryExecutor struct {
 var (
 	Namespace     string
 	LogLevel      string
+	OutputFormat  string
 	AllNamespaces bool
 	CleanOutput   bool
 	NoColor       bool

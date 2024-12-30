@@ -84,6 +84,17 @@ func init() {
 		core.LogLevel = LogLevel
 	}
 
+	// Set output format for shell and query
+	rootCmd.PersistentFlags().StringVar(&core.OutputFormat, "format", "json", "Output format for shell and query results")
+	// Return an error if the format is incorrect
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		f := cmd.Flag("format").Value.String()
+		if f != "yaml" && f != "json" {
+			return fmt.Errorf("Invalid value for --format: must be 'json' or 'yaml'")
+		}
+		return nil
+	}
+
 	rootCmd.PersistentFlags().StringVarP(&core.Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().BoolVarP(&core.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
 	rootCmd.PersistentFlags().BoolVar(&core.NoColor, "no-color", false, "Disable colored output in shell and query results")
