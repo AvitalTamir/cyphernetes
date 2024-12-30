@@ -191,14 +191,12 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		return nil, err
 	}
 
-	// Check if resource is namespaced
 	isNamespaced, err := p.isNamespacedResource(gvr)
 	if err != nil {
 		return nil, err
 	}
 
 	var list *unstructured.UnstructuredList
-	// Only use namespace if resource is namespaced
 	if namespace != "" && isNamespaced {
 		list, err = p.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{
 			FieldSelector: fieldSelector,
@@ -215,7 +213,6 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		return nil, err
 	}
 
-	// Convert list items to []map[string]interface{}
 	var converted []map[string]interface{}
 	for _, u := range list.Items {
 		converted = append(converted, u.UnstructuredContent())
@@ -300,7 +297,6 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		return err
 	}
 
-	// Check if resource is namespaced
 	isNamespaced, err := p.isNamespacedResource(gvr)
 	if err != nil {
 		return err
@@ -340,7 +336,6 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		return err
 	}
 
-	// Check if resource is namespaced
 	isNamespaced, err := p.isNamespacedResource(gvr)
 	if err != nil {
 		return err
@@ -351,7 +346,6 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		return err
 	}
 
-	// Ensure metadata and name are set
 	if unstructuredObj.Object["metadata"] == nil {
 		unstructuredObj.Object["metadata"] = map[string]interface{}{}
 	}
@@ -902,7 +896,7 @@ func (p *APIServerProvider) GetGVRCacheSnapshot() map[string]schema.GroupVersion
 	return snapshot
 }
 
-// Add this helper method to check if a resource is namespaced
+// Add helper method to check if a resource is namespaced
 func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource) (bool, error) {
 	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
