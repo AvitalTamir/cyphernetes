@@ -36,12 +36,13 @@ There are multiple ways to run Cyphernetes queries:
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
 4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
-5. Using the Cyphernetes API in your own Go programs. See [our integration guide](docs/INTEGRATION.md) for more details.
+5. Using the Cyphernetes API in your own Go programs. See our [integration guide](docs/INTEGRATION.md) for more details.
 
 To learn more about how to use Cyphernetes, refer to these documents:
 * [LANGUAGE.md](docs/LANGUAGE.md) - a crash-course in Cyphernetes language syntax
 * [CLI.md](docs/CLI.md) - a guide to using Cyphernetes shell, query command and macros
 * [OPERATOR.md](docs/OPERATOR.md) - a guide to using Cyphernetes DynamicOperator
+* [INTEGRATION.md](docs/INTEGRATION.md) - a guide to using Cyphernetes in your own Go programs
 
 ### Examples (from the Cyphernetes Shell)
 ```graphql
@@ -104,11 +105,10 @@ The Cyphernetes monorepo is a multi-package project that includes the core Cyphe
 │       └── ...
 ├── operator # The operator
 │   └── ...
-├── pkg # The core Cyphernetes package (parser and engine behind the language features)
-│   └── core
-│       └── ...
+├── pkg
+│   └── core # The core Cyphernetes package (parser and engine behind the language features)
 │   └── provider # An interface for different backend implementations and a default implementation for an api-server client
-│       └── ...
+│       └── apiserver # A client for the Kubernetes API server
 ├── web # The web client
 │   └── src
 │       └── ...
@@ -175,5 +175,7 @@ Cyphernetes is open-sourced under the Apache 2.0 license. See the [LICENSE](LICE
 ## Authors
 
 * _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
+* _Project maintainer_ - [Naor Peled](https://github.com/naorpeled)
 * _Enhancements, Bug fixes_ - [James Kim](https://github.com/jameskim0987)
-* _Enhancements, Bug fixes_ - [Naor Peled](https://github.com/naorpeled)
+* _Enhancements, Bug fixes_ - [Vinicius Artur](https://github.com/viniciusartur)
+* _Improvements_ - [Noé Tarbouriech](https://github.com/noetarbouriech)
