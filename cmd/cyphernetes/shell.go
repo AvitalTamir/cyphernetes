@@ -19,6 +19,7 @@ import (
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
+	"gopkg.in/yaml.v3"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -578,11 +579,24 @@ func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *
 	}
 
 	if data, ok := resultMap["Data"]; ok {
-		resultBytes, err := json.Marshal(data)
+		// Marshal data based on the output format
+		var output []byte
+		var err error
+		if core.OutputFormat == "yaml" {
+			output, err = yaml.Marshal(data)
+		} else { // core.OutputFormat == "json"
+			output, err = json.MarshalIndent(data, "", "  ")
+			if !returnRawJsonOutput {
+				output = []byte(formatJson(string(output)))
+			}
+		}
+
+		// Handle marshalling errors
 		if err != nil {
 			return fmt.Errorf("error marshalling data: %w", err)
 		}
-		*result = string(resultBytes)
+
+		*result = string(output)
 	} else {
 		*result = "{}"
 	}
