@@ -10,6 +10,7 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var (
@@ -117,6 +118,13 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			continue
 		}
 
+		// Get GVR for kindA, handling ambiguity
+		gvrA, err := tryResolveGVR(provider, kindANameSingular)
+		if err != nil {
+			processed++
+			continue
+		}
+
 		// Update progress bar
 		progress := (processed * 100) / totalKinds
 		if progress > lastProgress {
@@ -143,67 +151,63 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 				continue
 			}
 
-			// Use FindGVR to get the GVR for the related kind
-			if gvr, err := provider.FindGVR(relatedKindSingular); err == nil {
-				relatedKind := gvr.Resource
+			// Get GVR for related kind, handling ambiguity
+			gvr, err := tryResolveGVR(provider, relatedKindSingular)
+			if err != nil {
+				continue
+			}
 
-				// Same conversion for kindA
-				if gvrA, err := provider.FindGVR(kindANameSingular); err == nil {
-					kindAName := gvrA.Resource
+			// Important: Keep the array notation in the field path
+			fullFieldPath := fieldPath
+			if relSpecType == "Ref" || relSpecType == "KeyRef" {
+				fullFieldPath = fieldPath + ".name"
+			}
+			logDebug("Using field path:", fullFieldPath)
 
-					// Important: Keep the array notation in the field path
-					fullFieldPath := fieldPath
-					if relSpecType == "Ref" || relSpecType == "KeyRef" {
-						fullFieldPath = fieldPath + ".name"
-					}
-					logDebug("Using field path:", fullFieldPath)
+			relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+				strings.ToUpper(relatedKindSingular),
+				strings.ToUpper(kindANameSingular)))
 
-					relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
-						strings.ToUpper(relatedKindSingular),
-						strings.ToUpper(kindANameSingular)))
+			kindA := strings.ToLower(gvrA.Resource)
+			kindB := strings.ToLower(gvr.Resource)
 
-					kindA := strings.ToLower(kindAName)
-					kindB := strings.ToLower(relatedKind)
+			// Keep the array notation in the JsonPath
+			fieldA := "$." + fullFieldPath
+			fieldB := "$.metadata.name"
 
-					// Keep the array notation in the JsonPath
-					fieldA := "$." + fullFieldPath
-					fieldB := "$.metadata.name"
+			logDebug("Creating relationship rule:", kindA, "->", kindB, "with fields:", fieldA, "->", fieldB)
+			criterion := MatchCriterion{
+				FieldA:         fieldA,
+				FieldB:         fieldB,
+				ComparisonType: ExactMatch,
+			}
 
-					logDebug("Creating relationship rule:", kindA, "->", kindB, "with fields:", fieldA, "->", fieldB)
-					criterion := MatchCriterion{
-						FieldA:         fieldA,
-						FieldB:         fieldB,
-						ComparisonType: ExactMatch,
-					}
-
-					// Check for existing rule and add/create as before
-					existingRuleIndex := -1
-					for i, r := range relationshipRules {
-						if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
-							existingRuleIndex = i
-							break
-						}
-					}
-
-					if existingRuleIndex >= 0 {
-						logDebug("Adding criterion to existing rule for:", kindA, "->", kindB)
-						relationshipRules[existingRuleIndex].MatchCriteria = append(
-							relationshipRules[existingRuleIndex].MatchCriteria,
-							criterion,
-						)
-					} else {
-						logDebug("Creating new relationship rule for:", kindA, "->", kindB)
-						// Create new rule
-						rule := RelationshipRule{
-							KindA:         kindA,
-							KindB:         kindB,
-							Relationship:  relType,
-							MatchCriteria: []MatchCriterion{criterion},
-						}
-						relationshipRules = append(relationshipRules, rule)
-						relationshipCount++
-					}
+			// Check for existing rule and add/create as before
+			existingRuleIndex := -1
+			for i, r := range relationshipRules {
+				if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
+					existingRuleIndex = i
+					break
 				}
+			}
+
+			if existingRuleIndex >= 0 {
+				logDebug("Adding criterion to existing rule for:", kindA, "->", kindB)
+				relationshipRules[existingRuleIndex].MatchCriteria = append(
+					relationshipRules[existingRuleIndex].MatchCriteria,
+					criterion,
+				)
+			} else {
+				logDebug("Creating new relationship rule for:", kindA, "->", kindB)
+				// Create new rule
+				rule := RelationshipRule{
+					KindA:         kindA,
+					KindB:         kindB,
+					Relationship:  relType,
+					MatchCriteria: []MatchCriterion{criterion},
+				}
+				relationshipRules = append(relationshipRules, rule)
+				relationshipCount++
 			}
 		}
 
@@ -222,6 +226,29 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 	logDebug("Relationship initialization complete. Found", relationshipCount, "internal relationships and", customRelationshipsCount, "custom relationships")
 	fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
+}
+
+// Helper function to try resolving GVR with core prefix if ambiguous
+func tryResolveGVR(provider provider.Provider, kind string) (schema.GroupVersionResource, error) {
+	gvr, err := provider.FindGVR(kind)
+	if err != nil {
+		if strings.Contains(err.Error(), "ambiguous") {
+			// Try with core. prefix
+			gvr, err = provider.FindGVR("core." + kind)
+			if err == nil {
+				return gvr, nil
+			}
+			// If that fails, try extracting the core option from the ambiguous error
+			options := strings.Split(err.Error(), "\n")
+			for _, option := range options {
+				if strings.HasPrefix(option, "core.") {
+					return provider.FindGVR(option)
+				}
+			}
+		}
+		return schema.GroupVersionResource{}, err
+	}
+	return gvr, nil
 }
 
 func loadCustomRelationships() (int, error) {
