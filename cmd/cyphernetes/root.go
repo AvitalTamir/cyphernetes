@@ -78,10 +78,21 @@ func TestExecute(args []string) error {
 func init() {
 	// First set the log level
 	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "info", "The log level to use (debug, info, warn, error, fatal, panic)")
-	// Add a PreRun hook to set LogLevel after flag parsing
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+
+	// Set output format for shell and query
+	rootCmd.PersistentFlags().StringVar(&core.OutputFormat, "format", "json", "Output format for shell and query results")
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Set LogLevel after flag parsing
 		LogLevel = cmd.Flag("loglevel").Value.String()
 		core.LogLevel = LogLevel
+
+		// Return an error if the format is incorrect
+		f := cmd.Flag("format").Value.String()
+		if f != "yaml" && f != "json" {
+			return fmt.Errorf("Invalid value for --format: must be 'json' or 'yaml'")
+		}
+		return nil
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&core.Namespace, "namespace", "n", "default", "The namespace to query against")
