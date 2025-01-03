@@ -33,15 +33,17 @@ type APIServerProviderConfig struct {
 }
 
 type APIServerProvider struct {
-	clientset      kubernetes.Interface
-	dynamicClient  dynamic.Interface
-	gvrCache       map[string]schema.GroupVersionResource
-	gvrCacheMutex  sync.RWMutex
-	openAPIDoc     *openapi_v3.Document
-	requestChannel chan *apiRequest
-	semaphore      chan struct{}
-	resourceMutex  sync.RWMutex
-	dryRun         bool
+	clientset       kubernetes.Interface
+	dynamicClient   dynamic.Interface
+	gvrCache        map[string]schema.GroupVersionResource
+	gvrCacheMutex   sync.RWMutex
+	openAPIDoc      *openapi_v3.Document
+	requestChannel  chan *apiRequest
+	semaphore       chan struct{}
+	resourceMutex   sync.RWMutex
+	dryRun          bool
+	namespacedCache map[string]bool
+	namespacedMutex sync.RWMutex
 }
 
 type apiRequest struct {
@@ -98,12 +100,13 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	}
 
 	provider := &APIServerProvider{
-		clientset:      clientset,
-		dynamicClient:  dynamicClient,
-		gvrCache:       make(map[string]schema.GroupVersionResource),
-		requestChannel: make(chan *apiRequest),
-		semaphore:      make(chan struct{}, 1),
-		dryRun:         config.DryRun,
+		clientset:       clientset,
+		dynamicClient:   dynamicClient,
+		gvrCache:        make(map[string]schema.GroupVersionResource),
+		requestChannel:  make(chan *apiRequest),
+		semaphore:       make(chan struct{}, 1),
+		dryRun:          config.DryRun,
+		namespacedCache: make(map[string]bool),
 	}
 
 	if config.DryRun {
@@ -191,8 +194,13 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		return nil, err
 	}
 
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return nil, err
+	}
+
 	var list *unstructured.UnstructuredList
-	if namespace != "" {
+	if namespace != "" && isNamespaced {
 		list, err = p.dynamicClient.Resource(gvr).Namespace(namespace).List(context.TODO(), metav1.ListOptions{
 			FieldSelector: fieldSelector,
 			LabelSelector: labelSelector,
@@ -208,7 +216,6 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		return nil, err
 	}
 
-	// Convert list items to []map[string]interface{}
 	var converted []map[string]interface{}
 	for _, u := range list.Items {
 		converted = append(converted, u.UnstructuredContent())
@@ -309,13 +316,18 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		return err
 	}
 
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return err
+	}
+
 	var deleteOpts metav1.DeleteOptions
 	if p.dryRun {
 		deleteOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
 	var deleteErr error
-	if namespace != "" {
+	if namespace != "" && isNamespaced {
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
@@ -343,12 +355,16 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		return err
 	}
 
+	isNamespaced, err := p.isNamespacedResource(gvr)
+	if err != nil {
+		return err
+	}
+
 	unstructuredObj, err := toUnstructured(body)
 	if err != nil {
 		return err
 	}
 
-	// Ensure metadata and name are set
 	if unstructuredObj.Object["metadata"] == nil {
 		unstructuredObj.Object["metadata"] = map[string]interface{}{}
 	}
@@ -360,7 +376,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		createOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
-	if namespace != "" {
+	if namespace != "" && isNamespaced {
 		metadata["namespace"] = namespace
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
@@ -897,4 +913,37 @@ func (p *APIServerProvider) GetGVRCacheSnapshot() map[string]schema.GroupVersion
 		snapshot[k] = v
 	}
 	return snapshot
+}
+
+// Add helper method to check if a resource is namespaced
+func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource) (bool, error) {
+	// Create cache key in format "group/version/resource"
+	cacheKey := fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
+
+	// Check cache first
+	p.namespacedMutex.RLock()
+	if namespaced, exists := p.namespacedCache[cacheKey]; exists {
+		p.namespacedMutex.RUnlock()
+		return namespaced, nil
+	}
+	p.namespacedMutex.RUnlock()
+
+	// If not in cache, fetch from API server
+	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
+	if err != nil {
+		return false, fmt.Errorf("error getting server resources: %w", err)
+	}
+
+	// Update cache with the result
+	p.namespacedMutex.Lock()
+	defer p.namespacedMutex.Unlock()
+
+	for _, r := range resources.APIResources {
+		if r.Name == gvr.Resource {
+			p.namespacedCache[cacheKey] = r.Namespaced
+			return r.Namespaced, nil
+		}
+	}
+
+	return false, fmt.Errorf("resource %q not found", gvr.Resource)
 }
