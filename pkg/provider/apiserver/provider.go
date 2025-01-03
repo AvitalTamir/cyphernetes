@@ -33,15 +33,17 @@ type APIServerProviderConfig struct {
 }
 
 type APIServerProvider struct {
-	clientset      kubernetes.Interface
-	dynamicClient  dynamic.Interface
-	gvrCache       map[string]schema.GroupVersionResource
-	gvrCacheMutex  sync.RWMutex
-	openAPIDoc     *openapi_v3.Document
-	requestChannel chan *apiRequest
-	semaphore      chan struct{}
-	resourceMutex  sync.RWMutex
-	dryRun         bool
+	clientset       kubernetes.Interface
+	dynamicClient   dynamic.Interface
+	gvrCache        map[string]schema.GroupVersionResource
+	gvrCacheMutex   sync.RWMutex
+	openAPIDoc      *openapi_v3.Document
+	requestChannel  chan *apiRequest
+	semaphore       chan struct{}
+	resourceMutex   sync.RWMutex
+	dryRun          bool
+	namespacedCache map[string]bool
+	namespacedMutex sync.RWMutex
 }
 
 type apiRequest struct {
@@ -98,12 +100,13 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	}
 
 	provider := &APIServerProvider{
-		clientset:      clientset,
-		dynamicClient:  dynamicClient,
-		gvrCache:       make(map[string]schema.GroupVersionResource),
-		requestChannel: make(chan *apiRequest),
-		semaphore:      make(chan struct{}, 1),
-		dryRun:         config.DryRun,
+		clientset:       clientset,
+		dynamicClient:   dynamicClient,
+		gvrCache:        make(map[string]schema.GroupVersionResource),
+		requestChannel:  make(chan *apiRequest),
+		semaphore:       make(chan struct{}, 1),
+		dryRun:          config.DryRun,
+		namespacedCache: make(map[string]bool),
 	}
 
 	if config.DryRun {
@@ -914,13 +917,30 @@ func (p *APIServerProvider) GetGVRCacheSnapshot() map[string]schema.GroupVersion
 
 // Add helper method to check if a resource is namespaced
 func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource) (bool, error) {
+	// Create cache key in format "group/version/resource"
+	cacheKey := fmt.Sprintf("%s/%s/%s", gvr.Group, gvr.Version, gvr.Resource)
+
+	// Check cache first
+	p.namespacedMutex.RLock()
+	if namespaced, exists := p.namespacedCache[cacheKey]; exists {
+		p.namespacedMutex.RUnlock()
+		return namespaced, nil
+	}
+	p.namespacedMutex.RUnlock()
+
+	// If not in cache, fetch from API server
 	resources, err := p.clientset.Discovery().ServerResourcesForGroupVersion(gvr.GroupVersion().String())
 	if err != nil {
 		return false, fmt.Errorf("error getting server resources: %w", err)
 	}
 
+	// Update cache with the result
+	p.namespacedMutex.Lock()
+	defer p.namespacedMutex.Unlock()
+
 	for _, r := range resources.APIResources {
 		if r.Name == gvr.Resource {
+			p.namespacedCache[cacheKey] = r.Namespaced
 			return r.Namespaced, nil
 		}
 	}
