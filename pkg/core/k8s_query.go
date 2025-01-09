@@ -1695,7 +1695,6 @@ func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
 	}
 	executorsLock.RUnlock()
 
-	// Create new executor for this context
 	executorsLock.Lock()
 	defer executorsLock.Unlock()
 
@@ -1709,7 +1708,14 @@ func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
 		return nil, fmt.Errorf("main executor instance not initialized")
 	}
 
-	executor, err := NewQueryExecutor(executorInstance.provider)
+	// Create a new provider for this context
+	contextProvider, err := executorInstance.provider.CreateProviderForContext(context)
+	if err != nil {
+		return nil, fmt.Errorf("error creating provider for context %s: %v", context, err)
+	}
+
+	// Create new executor with the context-specific provider
+	executor, err := NewQueryExecutor(contextProvider)
 	if err != nil {
 		return nil, fmt.Errorf("error creating query executor for context %s: %v", context, err)
 	}

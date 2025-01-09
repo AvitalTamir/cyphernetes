@@ -801,25 +801,36 @@ func (p *APIServerProvider) resolveReference(ref string) *openapi_v3.Schema {
 
 // Add this method to implement the Provider interface
 func (p *APIServerProvider) CreateProviderForContext(context string) (provider.Provider, error) {
+	// Create new config for the context
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: context,
 	}
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 
-	// Create new provider with the context's config
-	newProvider, err := NewAPIServerProviderWithConfig(kubeConfig)
+	// Get REST config for the context
+	restConfig, err := kubeConfig.ClientConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create config for context %s: %v", context, err)
 	}
 
-	// Initialize the GVR cache for the new context
-	apiProvider := newProvider.(*APIServerProvider)
-	if err := apiProvider.initGVRCache(); err != nil {
-		return nil, err
+	// Create new clients for this context
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clientset for context %s: %v", context, err)
 	}
 
-	return apiProvider, nil
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client for context %s: %v", context, err)
+	}
+
+	// Create new provider with the context-specific clients
+	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{
+		Clientset:     clientset,
+		DynamicClient: dynamicClient,
+		DryRun:        p.dryRun,
+	})
 }
 
 // Add these methods to APIServerProvider
