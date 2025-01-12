@@ -1200,4 +1200,65 @@ var _ = Describe("Cyphernetes E2E", func() {
 			}, &appsv1.Deployment{})
 		}, timeout, interval).ShouldNot(Succeed())
 	})
+
+	It("Should create a service with relationship to deployment", func() {
+		By("Creating test deployment")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-14",
+				Namespace: testNamespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		By("Waiting for deployment to be created")
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-14",
+			}, &appsv1.Deployment{})
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing match and create query")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		ast, err := core.ParseQuery(`
+			MATCH (d:Deployment)
+			WHERE d.metadata.name = "test-deployment-14"
+			CREATE (d)->(s:Service)
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
 })
