@@ -134,55 +134,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 			}
 
 		case *SetClause:
-			for _, kvp := range c.KeyValuePairs {
-				resultMapKey := strings.Split(kvp.Key, ".")[0]
-				path := []string{}
-				parts := strings.Split(kvp.Key, ".")
-				for i := 1; i < len(parts); i++ {
-					if i > 1 && strings.HasSuffix(parts[i-1], "\\") {
-						path[len(path)-1] = path[len(path)-1][:len(path[len(path)-1])-1] + "." + strings.ReplaceAll(parts[i], "/", "~1")
-					} else {
-						path = append(path, strings.ReplaceAll(parts[i], "/", "~1"))
-					}
-				}
-
-				resources := resultMap[resultMapKey].([]map[string]interface{})
-
-				// Find the matching node from the stored match nodes
-				var nodeKind string
-				for _, node := range q.matchNodes {
-					if node.ResourceProperties.Name == resultMapKey {
-						nodeKind = node.ResourceProperties.Kind
-						break
-					}
-				}
-				if nodeKind == "" {
-					return *results, fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
-				}
-
-				for _, resource := range resources {
-					// Create a single patch that works with the existing structure
-					patches := createCompatiblePatch(path, kvp.Value)
-
-					// Marshal the patches to JSON
-					patchJSON, err := json.Marshal(patches)
-					if err != nil {
-						return *results, fmt.Errorf("error marshalling patches: %s", err)
-					}
-
-					metadata := resource["metadata"].(map[string]interface{})
-					name := metadata["name"].(string)
-					namespace := getNamespaceName(metadata)
-
-					// Apply the patches to the resource using the kind from MATCH clause
-					err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
-					if err != nil {
-						return *results, fmt.Errorf("error patching resource: %s", err)
-					}
-
-					// Update the resultMap
-					updateResultMap(resource, path, kvp.Value)
-				}
+			err := q.handleSetClause(c)
+			if err != nil {
+				return *results, fmt.Errorf("error handling SET clause: %w", err)
 			}
 
 		case *DeleteClause:
@@ -1045,18 +999,55 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 	return []interface{}{patch}
 }
 
+func setValueAtPath(data interface{}, path string, value interface{}) error {
+	// Convert path to array of parts
+	parts := strings.Split(strings.TrimPrefix(path, "."), ".")
+
+	// Create compatible patch format
+	patches := createCompatiblePatch(parts, value)
+
+	// Apply patches to the data
+	if m, ok := data.(map[string]interface{}); ok {
+		// First update the in-memory representation
+		updateResultMap(m, parts, value)
+
+		// Then apply the JSON patch if needed
+		patchJSON, err := json.Marshal(patches)
+		if err != nil {
+			return fmt.Errorf("error marshalling patches: %s", err)
+		}
+
+		// Store the patch for later use if needed
+		if metadata, ok := m["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				logDebug("Created patch for %s: %s", name, string(patchJSON))
+			}
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("data must be a map[string]interface{}, got %T", data)
+}
+
+// Move updateResultMap to be near setValueAtPath for better code organization
 func updateResultMap(resource map[string]interface{}, path []string, value interface{}) {
 	current := resource
-	for i, key := range path {
-		if i == len(path)-1 {
-			current[key] = value
-			return
+	for i := 0; i < len(path)-1; i++ {
+		part := path[i]
+		if current[part] == nil {
+			current[part] = make(map[string]interface{})
 		}
-		if _, ok := current[key]; !ok {
-			current[key] = make(map[string]interface{})
+		if m, ok := current[part].(map[string]interface{}); ok {
+			current = m
+		} else {
+			// If it's not a map, create one
+			newMap := make(map[string]interface{})
+			current[part] = newMap
+			current = newMap
 		}
-		current = current[key].(map[string]interface{})
 	}
+	current[path[len(path)-1]] = value
 }
 
 func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJSON []byte) error {
@@ -1497,7 +1488,6 @@ func GetQueryExecutorInstance(p provider.Provider) *QueryExecutor {
 	return executorInstance
 }
 
-// Add this getter method for the provider
 func (q *QueryExecutor) Provider() provider.Provider {
 	return q.provider
 }
@@ -1949,7 +1939,6 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	return modified
 }
 
-// Add this new function to handle wildcard paths
 func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
 	parts := strings.Split(path, "[*]")
 	return evaluateWildcardPathRecursive(resource, parts, 0, filterValue, operator)
@@ -2090,11 +2079,5 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 		}
 	}
 
-	return nil
-}
-
-func setValueAtPath(data interface{}, path string, value interface{}) error {
-	// Implementation to set value at the given path
-	// This would need to handle the actual update of the value in the data structure
 	return nil
 }
