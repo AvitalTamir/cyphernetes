@@ -35,7 +35,7 @@ jobs:
     - name: Create the operator manifests
       run: make operator-manifests
     - name: Run tests
-      run: make test
+      run: make test-all
     - name: Run web tests
       run: make web-test
     - name: Apply operator test CRDs

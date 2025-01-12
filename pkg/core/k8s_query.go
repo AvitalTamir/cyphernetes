@@ -134,55 +134,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 			}
 
 		case *SetClause:
-			for _, kvp := range c.KeyValuePairs {
-				resultMapKey := strings.Split(kvp.Key, ".")[0]
-				path := []string{}
-				parts := strings.Split(kvp.Key, ".")
-				for i := 1; i < len(parts); i++ {
-					if i > 1 && strings.HasSuffix(parts[i-1], "\\") {
-						path[len(path)-1] = path[len(path)-1][:len(path[len(path)-1])-1] + "." + strings.ReplaceAll(parts[i], "/", "~1")
-					} else {
-						path = append(path, strings.ReplaceAll(parts[i], "/", "~1"))
-					}
-				}
-
-				resources := resultMap[resultMapKey].([]map[string]interface{})
-
-				// Find the matching node from the stored match nodes
-				var nodeKind string
-				for _, node := range q.matchNodes {
-					if node.ResourceProperties.Name == resultMapKey {
-						nodeKind = node.ResourceProperties.Kind
-						break
-					}
-				}
-				if nodeKind == "" {
-					return *results, fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
-				}
-
-				for _, resource := range resources {
-					// Create a single patch that works with the existing structure
-					patches := createCompatiblePatch(path, kvp.Value)
-
-					// Marshal the patches to JSON
-					patchJSON, err := json.Marshal(patches)
-					if err != nil {
-						return *results, fmt.Errorf("error marshalling patches: %s", err)
-					}
-
-					metadata := resource["metadata"].(map[string]interface{})
-					name := metadata["name"].(string)
-					namespace := getNamespaceName(metadata)
-
-					// Apply the patches to the resource using the kind from MATCH clause
-					err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
-					if err != nil {
-						return *results, fmt.Errorf("error patching resource: %s", err)
-					}
-
-					// Update the resultMap
-					updateResultMap(resource, path, kvp.Value)
-				}
+			err := q.handleSetClause(c)
+			if err != nil {
+				return *results, fmt.Errorf("error handling SET clause: %w", err)
 			}
 
 		case *DeleteClause:
@@ -1035,28 +989,110 @@ func toFloat64(v interface{}) (float64, error) {
 }
 
 func createCompatiblePatch(path []string, value interface{}) []interface{} {
-	// Create a JSON Patch operation
+	// Special handling for metadata fields
+	if path[0] == "metadata" {
+		if len(path) > 1 && path[1] == "annotations" {
+			// For annotations, we need to ensure the annotations map exists first
+			patches := make([]interface{}, 0)
+
+			// First patch: test if annotations exist
+			testPatch := map[string]interface{}{
+				"op":    "test",
+				"path":  "/metadata/annotations",
+				"value": map[string]interface{}{},
+			}
+
+			// Second patch: add annotations if they don't exist
+			addPatch := map[string]interface{}{
+				"op":    "add",
+				"path":  "/metadata/annotations",
+				"value": map[string]interface{}{},
+			}
+
+			// Third patch: set the specific annotation
+			valuePatch := map[string]interface{}{
+				"op":    "add",
+				"path":  "/" + strings.Join(path, "/"),
+				"value": value,
+			}
+
+			patches = append(patches, testPatch)
+			patches = append(patches, addPatch)
+			patches = append(patches, valuePatch)
+
+			return patches
+		}
+	}
+
+	// For spec fields, ensure the path is properly formatted
+	jsonPath := "/" + strings.Join(path, "/")
+
+	// For array indices, convert [n] to /n
+	re := regexp.MustCompile(`\[(\d+)\]`)
+	jsonPath = re.ReplaceAllString(jsonPath, "/$1")
+
+	// Create the patch operation
 	patch := map[string]interface{}{
 		"op":    "replace",
-		"path":  "/" + strings.Join(path, "/"),
+		"path":  jsonPath,
 		"value": value,
 	}
+
+	// For debugging
+	logDebug("Created patch: %+v", patch)
 
 	return []interface{}{patch}
 }
 
+func setValueAtPath(data interface{}, path string, value interface{}) error {
+	// Convert path to array of parts
+	parts := strings.Split(strings.TrimPrefix(path, "."), ".")
+
+	// Create compatible patch format
+	patches := createCompatiblePatch(parts, value)
+
+	// Apply patches to the data
+	if m, ok := data.(map[string]interface{}); ok {
+		// First update the in-memory representation
+		updateResultMap(m, parts, value)
+
+		// Then apply the JSON patch if needed
+		patchJSON, err := json.Marshal(patches)
+		if err != nil {
+			return fmt.Errorf("error marshalling patches: %s", err)
+		}
+
+		// Store the patch for later use if needed
+		if metadata, ok := m["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				logDebug("Created patch for %s: %s", name, string(patchJSON))
+			}
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("data must be a map[string]interface{}, got %T", data)
+}
+
+// Move updateResultMap to be near setValueAtPath for better code organization
 func updateResultMap(resource map[string]interface{}, path []string, value interface{}) {
 	current := resource
-	for i, key := range path {
-		if i == len(path)-1 {
-			current[key] = value
-			return
+	for i := 0; i < len(path)-1; i++ {
+		part := path[i]
+		if current[part] == nil {
+			current[part] = make(map[string]interface{})
 		}
-		if _, ok := current[key]; !ok {
-			current[key] = make(map[string]interface{})
+		if m, ok := current[part].(map[string]interface{}); ok {
+			current = m
+		} else {
+			// If it's not a map, create one
+			newMap := make(map[string]interface{})
+			current[part] = newMap
+			current = newMap
 		}
-		current = current[key].(map[string]interface{})
 	}
+	current[path[len(path)-1]] = value
 }
 
 func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJSON []byte) error {
@@ -1497,7 +1533,6 @@ func GetQueryExecutorInstance(p provider.Provider) *QueryExecutor {
 	return executorInstance
 }
 
-// Add this getter method for the provider
 func (q *QueryExecutor) Provider() provider.Provider {
 	return q.provider
 }
@@ -1592,78 +1627,24 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					path := filter.Key
 					path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
-					// Get value using jsonpath
-					value, err := jsonpath.JsonPathLookup(resource, path)
-					if err != nil {
-						keep = false
-						break
-					}
+					// If path contains wildcards, we need special handling
+					if strings.Contains(path, "[*]") {
+						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+					} else {
+						// Regular path handling
+						value, err := jsonpath.JsonPathLookup(resource, path)
+						if err != nil {
+							keep = false
+							break
+						}
 
-					// Convert and compare values
-					resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-					if err != nil {
-						keep = false
-						break
-					}
+						resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+						if err != nil {
+							keep = false
+							break
+						}
 
-					// Compare based on operator
-					switch filter.Operator {
-					case "EQUALS", "=", "==":
-						if resourceValue != filterValue {
-							keep = false
-						}
-					case "GREATER_THAN", ">":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv <= fv {
-									keep = false
-								}
-							}
-						}
-					case "LESS_THAN", "<":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv >= fv {
-									keep = false
-								}
-							}
-						}
-					case "GREATER_THAN_EQUALS", ">=":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv < fv {
-									keep = false
-								}
-							}
-						}
-					case "LESS_THAN_EQUALS", "<=":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv > fv {
-									keep = false
-								}
-							}
-						}
-					case "NOT_EQUALS", "!=":
-						if resourceValue == filterValue {
-							keep = false
-						}
-					case "CONTAINS":
-						strA := fmt.Sprintf("%v", resourceValue)
-						strB := fmt.Sprintf("%v", filterValue)
-						if !strings.Contains(strA, strB) {
-							keep = false
-						}
-					case "REGEX_COMPARE":
-						if filterValueStr, ok := filterValue.(string); ok {
-							if resultValueStr, ok := resourceValue.(string); ok {
-								if regex, err := regexp.Compile(filterValueStr); err == nil {
-									if !regex.MatchString(resultValueStr) {
-										keep = false
-									}
-								}
-							}
-						}
+						keep = compareValues(resourceValue, filterValue, filter.Operator)
 					}
 
 					if !keep {
@@ -1685,6 +1666,52 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	}
 
 	return nil
+}
+
+func compareValues(resourceValue, filterValue interface{}, operator string) bool {
+	switch operator {
+	case "EQUALS", "=", "==":
+		return resourceValue == filterValue
+	case "NOT_EQUALS", "!=":
+		return resourceValue != filterValue
+	case "GREATER_THAN", ">":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv > fv
+			}
+		}
+	case "LESS_THAN", "<":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv < fv
+			}
+		}
+	case "GREATER_THAN_EQUALS", ">=":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv >= fv
+			}
+		}
+	case "LESS_THAN_EQUALS", "<=":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv <= fv
+			}
+		}
+	case "CONTAINS":
+		strA := fmt.Sprintf("%v", resourceValue)
+		strB := fmt.Sprintf("%v", filterValue)
+		return strings.Contains(strA, strB)
+	case "REGEX_COMPARE":
+		if filterValueStr, ok := filterValue.(string); ok {
+			if resultValueStr, ok := resourceValue.(string); ok {
+				if regex, err := regexp.Compile(filterValueStr); err == nil {
+					return regex.MatchString(resultValueStr)
+				}
+			}
+		}
+	}
+	return false
 }
 
 func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
@@ -1955,4 +1982,159 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	}
 
 	return modified
+}
+
+func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
+	parts := strings.Split(path, "[*]")
+	return evaluateWildcardPathRecursive(resource, parts, 0, filterValue, operator)
+}
+
+func evaluateWildcardPathRecursive(data interface{}, parts []string, depth int, filterValue interface{}, operator string) bool {
+	if depth == len(parts)-1 {
+		// Last part - evaluate the value
+		lastPath := strings.TrimPrefix(parts[depth], ".")
+		if !strings.HasPrefix(lastPath, "$.") {
+			lastPath = "$." + lastPath
+		}
+		value, err := jsonpath.JsonPathLookup(data, lastPath)
+		if err != nil {
+			return false
+		}
+		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
+		if err != nil {
+			return false
+		}
+		return compareValues(resourceValue, filterValue, operator)
+	}
+
+	// Get the array at current level
+	currentPath := parts[depth]
+	if !strings.HasPrefix(currentPath, "$.") {
+		currentPath = "$." + currentPath
+	}
+	// Remove trailing dot if exists
+	currentPath = strings.TrimSuffix(currentPath, ".")
+
+	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	if err != nil {
+		return false
+	}
+
+	// Handle different array types
+	switch arr := array.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range arr {
+			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// Update the SET clause handling to support wildcards
+func (q *QueryExecutor) handleSetClause(c *SetClause) error {
+	for _, kvp := range c.KeyValuePairs {
+		resultMapKey := strings.Split(kvp.Key, ".")[0]
+		resources := resultMap[resultMapKey].([]map[string]interface{})
+
+		// Find the matching node from the stored match nodes
+		var nodeKind string
+		for _, node := range q.matchNodes {
+			if node.ResourceProperties.Name == resultMapKey {
+				nodeKind = node.ResourceProperties.Kind
+				break
+			}
+		}
+		if nodeKind == "" {
+			return fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
+		}
+
+		for _, resource := range resources {
+			if strings.Contains(kvp.Key, "[*]") {
+				// Handle wildcard updates
+				err := applyWildcardUpdate(resource, kvp.Key, kvp.Value)
+				if err != nil {
+					return err
+				}
+			} else {
+				// Regular path update
+				patches := createCompatiblePatch(strings.Split(kvp.Key, ".")[1:], kvp.Value)
+				patchJSON, err := json.Marshal(patches)
+				if err != nil {
+					return fmt.Errorf("error marshalling patches: %s", err)
+				}
+
+				metadata := resource["metadata"].(map[string]interface{})
+				name := metadata["name"].(string)
+				namespace := getNamespaceName(metadata)
+
+				logDebug("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
+				logDebug("Patch JSON: %s", string(patchJSON))
+				logDebug("Current resource state: %+v", resource)
+
+				err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
+				if err != nil {
+					return fmt.Errorf("error patching resource: %s", err)
+				}
+
+				// Verify the patch was applied
+				updatedResource, err := q.provider.GetK8sResources(nodeKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
+				if err != nil {
+					logDebug("Error getting updated resource: %v", err)
+				} else {
+					logDebug("Updated resource state: %+v", updatedResource)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Add this new function to handle wildcard updates
+func applyWildcardUpdate(resource interface{}, path string, value interface{}) error {
+	parts := strings.Split(path, "[*]")
+	return applyWildcardUpdateRecursive(resource, parts, 0, value)
+}
+
+func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, value interface{}) error {
+	if depth == len(parts)-1 {
+		// Last part - set the value
+		return setValueAtPath(data, parts[depth], value)
+	}
+
+	// Get the array at current level
+	currentPath := parts[depth]
+	if !strings.HasSuffix(currentPath, ".") {
+		currentPath += "."
+	}
+	array, err := jsonpath.JsonPathLookup(data, currentPath[:len(currentPath)-1])
+	if err != nil {
+		return err
+	}
+
+	// Update all elements in the array
+	switch arr := array.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

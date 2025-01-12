@@ -79,7 +79,7 @@ func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body inte
 	return nil
 }
 
-func (m *MockProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+func (m *MockProvider) PatchK8sResource(group, version, resource string, patch []byte) error {
 	return nil
 }
 

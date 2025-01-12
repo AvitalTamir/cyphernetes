@@ -396,60 +396,61 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 	return err
 }
 
-func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
 		return err
 	}
 
-	// Convert body to JSON patch format if it's not already
-	var patchData []byte
-	switch data := body.(type) {
-	case []byte:
-		patchData = data
-	case string:
-		patchData = []byte(data)
-	default:
-		patchData, err = json.Marshal(body)
+	// Parse the patch to handle errors better
+	var patches []interface{}
+	if err := json.Unmarshal(patchJSON, &patches); err != nil {
+		return fmt.Errorf("invalid patch JSON: %v", err)
+	}
+
+	fmt.Printf("Applying patch to %s/%s in namespace %s\n", kind, name, namespace)
+	fmt.Printf("Full patch JSON: %s\n", string(patchJSON))
+
+	// Get current state
+	current, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		fmt.Printf("Error getting current state: %v\n", err)
+	} else {
+		fmt.Printf("Current state: %+v\n", current)
+	}
+
+	// Apply each patch operation
+	for _, patch := range patches {
+		patchData, err := json.Marshal([]interface{}{patch})
 		if err != nil {
-			return fmt.Errorf("error marshalling patch data: %v", err)
+			return fmt.Errorf("error marshalling patch: %v", err)
 		}
-	}
 
-	patchOpts := metav1.PatchOptions{}
-	if p.dryRun {
-		patchOpts.DryRun = []string{metav1.DryRunAll}
-	}
+		fmt.Printf("Applying individual patch: %s\n", string(patchData))
 
-	if namespace != "" {
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 			context.TODO(),
 			name,
 			types.JSONPatchType,
 			patchData,
-			patchOpts,
+			metav1.PatchOptions{},
 		)
-		if err == nil {
-			if p.dryRun {
-				fmt.Printf("Dry run mode: would patch %s/%s\n", strings.ToLower(kind), name)
-			} else {
-				fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
-			}
+
+		if err != nil {
+			fmt.Printf("Error applying patch: %v\n", err)
+			return fmt.Errorf("error applying patch: %v", err)
 		}
-	} else {
-		_, err = p.dynamicClient.Resource(gvr).Patch(
-			context.TODO(),
-			name,
-			types.JSONPatchType,
-			patchData,
-			patchOpts,
-		)
-		if err == nil {
-			fmt.Printf("Patched %s/%s\n", strings.ToLower(kind), name)
+
+		// Get state after patch
+		updated, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Printf("Error getting updated state: %v\n", err)
+		} else {
+			fmt.Printf("State after patch: %+v\n", updated)
 		}
 	}
 
-	return err
+	return nil
 }
 
 type GroupVersion interface {
