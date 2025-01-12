@@ -286,4 +286,76 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 		})
 	})
+
+	Context("Label Update Operations", func() {
+		It("Should update deployment labels correctly", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-3",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app": "test",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:1.19",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a SET query to update labels")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+				MATCH (d:Deployment {name: "test-deployment-3"})
+				SET d.metadata.labels.environment = "staging"
+				RETURN d
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = executor.Execute(ast, "default")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the label update in the cluster")
+			var updatedDeployment appsv1.Deployment
+
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: "default",
+					Name:      "test-deployment-3",
+				}, &updatedDeployment)
+				if err != nil {
+					return ""
+				}
+				return updatedDeployment.Labels["environment"]
+			}, timeout*4, interval).Should(Equal("staging"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
+	})
 })
