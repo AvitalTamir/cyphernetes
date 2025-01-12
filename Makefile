@@ -9,7 +9,7 @@ all: operator-manifests bt
 	@echo "🎉 Done!"
 
 # Build then Test
-bt: build test
+bt: build test-all
 
 # Define how to build the project
 build: web-build
