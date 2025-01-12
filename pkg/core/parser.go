@@ -710,11 +710,16 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 			} else if p.current.Type == LBRACKET {
 				p.advance()
 				path.WriteString("[")
-				if p.current.Type != NUMBER {
-					return nil, fmt.Errorf("expected number in array index, got \"%v\"", p.current.Literal)
+				// Add support for wildcard
+				if p.current.Type == ILLEGAL && p.current.Literal == "*" {
+					path.WriteString("*")
+					p.advance()
+				} else if p.current.Type == NUMBER {
+					path.WriteString(p.current.Literal)
+					p.advance()
+				} else {
+					return nil, fmt.Errorf("expected number or * in array index, got \"%v\"", p.current.Literal)
 				}
-				path.WriteString(p.current.Literal)
-				p.advance()
 				if p.current.Type != RBRACKET {
 					return nil, fmt.Errorf("expected closing bracket, got \"%v\"", p.current.Literal)
 				}

@@ -102,6 +102,9 @@ func (l *Lexer) NextToken() Token {
 	case scanner.String:
 		return Token{Type: STRING, Literal: l.s.TokenText()}
 
+	case '*':
+		return Token{Type: ILLEGAL, Literal: "*"}
+
 	case '[':
 		return Token{Type: LBRACKET, Literal: "["}
 	case ']':

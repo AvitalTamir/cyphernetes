@@ -944,6 +944,98 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with array wildcard in WHERE clause",
+			input: `MATCH (pod:Pod) WHERE pod.spec.containers[*].image = "nginx" RETURN pod.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "pod",
+									Kind: "Pod",
+								},
+							},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{
+								Key:      "pod.spec.containers[*].image",
+								Value:    "nginx",
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "pod.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with multiple array wildcards in WHERE",
+			input: `MATCH (pod:Pod) WHERE pod.spec.containers[*].volumeMounts[*].name = "config" RETURN pod`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "pod",
+									Kind: "Pod",
+								},
+							},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{
+								Key:      "pod.spec.containers[*].volumeMounts[*].name",
+								Value:    "config",
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "pod"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with array wildcard in SET clause",
+			input: `MATCH (d:Deployment) SET d.spec.template.spec.containers[*].image = "nginx:latest" RETURN d`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+								},
+							},
+						},
+					},
+					&SetClause{
+						KeyValuePairs: []*KeyValuePair{
+							{
+								Key:      "d.spec.template.spec.containers[*].image",
+								Value:    "nginx:latest",
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -987,64 +1079,64 @@ func TestRecursiveParser(t *testing.T) {
 
 func TestParserErrors(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		wantErr string
+		name     string
+		input    string
+		contains string
 	}{
 		{
-			name:    "incomplete match query",
-			input:   "MATCH (pod:Pod)",
-			wantErr: "incomplete expression",
+			name:     "incomplete match query",
+			input:    "MATCH (pod:Pod)",
+			contains: "incomplete expression",
 		},
 		{
-			name:    "missing closing parenthesis",
-			input:   "MATCH (pod:Pod RETURN pod",
-			wantErr: "expected )",
+			name:     "missing closing parenthesis",
+			input:    "MATCH (pod:Pod RETURN pod",
+			contains: "expected )",
 		},
 		{
-			name:    "invalid relationship direction",
-			input:   "MATCH (pod:Pod)<<(svc:Service) RETURN pod",
-			wantErr: "unexpected relationship token",
+			name:     "invalid relationship direction",
+			input:    "MATCH (pod:Pod)<<(svc:Service) RETURN pod",
+			contains: "unexpected relationship token",
 		},
 		{
-			name:    "missing kind after colon",
-			input:   "MATCH (pod:) RETURN pod",
-			wantErr: "expected kind identifier",
+			name:     "missing kind after colon",
+			input:    "MATCH (pod:) RETURN pod",
+			contains: "expected kind identifier",
 		},
 		{
-			name:    "invalid operator in where clause",
-			input:   "MATCH (pod:Pod) WHERE pod.metadata.name ?? 'nginx' RETURN pod",
-			wantErr: "expected operator",
+			name:     "invalid operator in where clause",
+			input:    "MATCH (pod:Pod) WHERE pod.metadata.name ?? 'nginx' RETURN pod",
+			contains: "expected operator",
 		},
 		{
-			name:    "invalid clause combination",
-			input:   "CREATE (pod:Pod) DELETE pod",
-			wantErr: "DELETE can only follow MATCH",
+			name:     "invalid clause combination",
+			input:    "CREATE (pod:Pod) DELETE pod",
+			contains: "DELETE can only follow MATCH",
 		},
 		{
-			name:    "missing return value",
-			input:   "MATCH (pod:Pod) RETURN",
-			wantErr: "expected identifier",
+			name:     "missing return value",
+			input:    "MATCH (pod:Pod) RETURN",
+			contains: "expected identifier",
 		},
 		{
-			name:    "invalid array index",
-			input:   "MATCH (pod:Pod) WHERE pod.spec.containers[a].image = 'nginx' RETURN pod",
-			wantErr: "expected number in array index",
+			name:     "invalid array index",
+			input:    "MATCH (pod:Pod) WHERE pod.spec.containers[a].image = 'nginx' RETURN pod",
+			contains: "expected number or * in array index",
 		},
 		{
-			name:    "invalid relationship property",
-			input:   `MATCH (d:Deployment)-[r:EXPOSES {invalid}]->(s:Service) RETURN d`,
-			wantErr: "expected :",
+			name:     "invalid relationship property",
+			input:    `MATCH (d:Deployment)-[r:EXPOSES {invalid}]->(s:Service) RETURN d`,
+			contains: "expected :",
 		},
 		{
-			name:    "invalid IN clause",
-			input:   `IN production, MATCH (d:Deployment) RETURN d`,
-			wantErr: "expected identifier",
+			name:     "invalid IN clause",
+			input:    `IN production, MATCH (d:Deployment) RETURN d`,
+			contains: "expected identifier",
 		},
 		{
-			name:    "invalid array index in SET",
-			input:   `MATCH (d:Deployment) SET d.spec.containers[a].image = "nginx" RETURN d`,
-			wantErr: "expected number in array index",
+			name:     "invalid array index in SET",
+			input:    `MATCH (d:Deployment) SET d.spec.containers[a].image = "nginx" RETURN d`,
+			contains: "expected number or * in array index",
 		},
 	}
 
@@ -1055,12 +1147,12 @@ func TestParserErrors(t *testing.T) {
 			parser := NewRecursiveParser(tt.input)
 			_, err := parser.Parse()
 			if err == nil {
-				t.Errorf("ParseQuery() expected error containing %q, got nil", tt.wantErr)
+				t.Errorf("ParseQuery() expected error containing %q, got nil", tt.contains)
 				return
 			}
 			t.Logf("Got error: %v", err)
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("ParseQuery() error = %v, want error containing %q", err, tt.wantErr)
+			if !strings.Contains(err.Error(), tt.contains) {
+				t.Errorf("ParseQuery() error = %v, want error containing %q", err, tt.contains)
 			}
 		})
 	}

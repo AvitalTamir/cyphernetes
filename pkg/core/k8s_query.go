@@ -1592,9 +1592,42 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					path := filter.Key
 					path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
+					// Handle array wildcards by replacing [*] with [0]
+					// This is a simplification - in a real implementation you might want to check all array elements
+					path = strings.Replace(path, "[*]", "[0]", -1)
+
 					// Get value using jsonpath
 					value, err := jsonpath.JsonPathLookup(resource, path)
 					if err != nil {
+						// If the path contains wildcards and lookup fails, try to handle array access differently
+						if strings.Contains(filter.Key, "[*]") {
+							// Try to get the array and check each element
+							arrayPath := path[:strings.Index(path, "[*]")]
+							array, err := jsonpath.JsonPathLookup(resource, arrayPath)
+							if err != nil {
+								keep = false
+								break
+							}
+
+							// If we found an array, check each element
+							if arr, ok := array.([]interface{}); ok {
+								keep = false
+								for _, elem := range arr {
+									// Convert and compare values
+									resourceValue, filterValue, err := convertToComparableTypes(elem, filter.Value)
+									if err != nil {
+										continue
+									}
+
+									// If any element matches, keep the resource
+									if compareValues(resourceValue, filterValue, filter.Operator) {
+										keep = true
+										break
+									}
+								}
+							}
+							continue
+						}
 						keep = false
 						break
 					}
@@ -1685,6 +1718,52 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	}
 
 	return nil
+}
+
+func compareValues(resourceValue, filterValue interface{}, operator string) bool {
+	switch operator {
+	case "EQUALS", "=", "==":
+		return resourceValue == filterValue
+	case "NOT_EQUALS", "!=":
+		return resourceValue != filterValue
+	case "GREATER_THAN", ">":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv > fv
+			}
+		}
+	case "LESS_THAN", "<":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv < fv
+			}
+		}
+	case "GREATER_THAN_EQUALS", ">=":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv >= fv
+			}
+		}
+	case "LESS_THAN_EQUALS", "<=":
+		if rv, ok := resourceValue.(float64); ok {
+			if fv, ok := filterValue.(float64); ok {
+				return rv <= fv
+			}
+		}
+	case "CONTAINS":
+		strA := fmt.Sprintf("%v", resourceValue)
+		strB := fmt.Sprintf("%v", filterValue)
+		return strings.Contains(strA, strB)
+	case "REGEX_COMPARE":
+		if filterValueStr, ok := filterValue.(string); ok {
+			if resultValueStr, ok := resourceValue.(string); ok {
+				if regex, err := regexp.Compile(filterValueStr); err == nil {
+					return regex.MatchString(resultValueStr)
+				}
+			}
+		}
+	}
+	return false
 }
 
 func GetContextQueryExecutor(context string) (*QueryExecutor, error) {
