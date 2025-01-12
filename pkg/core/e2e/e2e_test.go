@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,49 +30,38 @@ var _ = Describe("Cyphernetes E2E", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 
-		// Clean up any existing test resources
 		By("Cleaning up any existing test resources")
 
-		// Delete test-deployment if it exists
-		testDeployment1 := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment",
-				Namespace: "default",
-			},
-		}
-		err := k8sClient.Delete(ctx, testDeployment1)
-		if err != nil && !apierrors.IsNotFound(err) {
-			Expect(err).NotTo(HaveOccurred())
+		// List of deployments to clean up
+		deploymentsToClean := []string{
+			"test-deployment",
+			"test-deployment-2",
+			"test-deployment-3",
+			"test-deployment-4",
+			"test-deployment-5",
 		}
 
-		// Delete test-deployment-2 if it exists
-		testDeployment2 := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-deployment-2",
-				Namespace: "default",
-			},
-		}
-		err = k8sClient.Delete(ctx, testDeployment2)
-		if err != nil && !apierrors.IsNotFound(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
+		for _, name := range deploymentsToClean {
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: "default",
+				},
+			}
+			err := k8sClient.Delete(ctx, deployment)
+			if err != nil && !apierrors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
-		// Wait for resources to be deleted
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: "default",
-				Name:      "test-deployment",
-			}, &appsv1.Deployment{})
-			return apierrors.IsNotFound(err)
-		}, timeout, interval).Should(BeTrue())
-
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, client.ObjectKey{
-				Namespace: "default",
-				Name:      "test-deployment-2",
-			}, &appsv1.Deployment{})
-			return apierrors.IsNotFound(err)
-		}, timeout, interval).Should(BeTrue())
+			// Wait for deletion
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: "default",
+					Name:      name,
+				}, &appsv1.Deployment{})
+				return apierrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+		}
 	})
 
 	Context("Basic Query Operations", func() {
@@ -438,6 +428,96 @@ var _ = Describe("Cyphernetes E2E", func() {
 				}
 				return updatedDeployment.Labels["environment"]
 			}, timeout*4, interval).Should(Equal("production"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
+	})
+
+	Context("Container Resource Update Operations", func() {
+		It("Should update container resource limits correctly", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-5",
+					Namespace: "default",
+					Labels: map[string]string{
+						"app": "test",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:1.19",
+									Resources: corev1.ResourceRequirements{
+										Limits: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("100m"),
+											corev1.ResourceMemory: resource.MustParse("128Mi"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a SET query to update container resources")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+				MATCH (d:Deployment {name: "test-deployment-5"})
+				SET d.spec.template.spec.containers[0].resources.limits.cpu = "200m",
+					d.spec.template.spec.containers[0].resources.limits.memory = "256Mi"
+				RETURN d
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = executor.Execute(ast, "default")
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the resource updates in the cluster")
+			var updatedDeployment appsv1.Deployment
+
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: "default",
+					Name:      "test-deployment-5",
+				}, &updatedDeployment)
+				if err != nil {
+					return ""
+				}
+				return updatedDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()
+			}, timeout*4, interval).Should(Equal("200m"))
+
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: "default",
+					Name:      "test-deployment-5",
+				}, &updatedDeployment)
+				if err != nil {
+					return ""
+				}
+				return updatedDeployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()
+			}, timeout*4, interval).Should(Equal("256Mi"))
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
