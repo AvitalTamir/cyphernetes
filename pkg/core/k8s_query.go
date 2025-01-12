@@ -989,12 +989,57 @@ func toFloat64(v interface{}) (float64, error) {
 }
 
 func createCompatiblePatch(path []string, value interface{}) []interface{} {
-	// Create a JSON Patch operation
+	// Special handling for metadata fields
+	if path[0] == "metadata" {
+		if len(path) > 1 && path[1] == "annotations" {
+			// For annotations, we need to ensure the annotations map exists first
+			patches := make([]interface{}, 0)
+
+			// First patch: test if annotations exist
+			testPatch := map[string]interface{}{
+				"op":    "test",
+				"path":  "/metadata/annotations",
+				"value": map[string]interface{}{},
+			}
+
+			// Second patch: add annotations if they don't exist
+			addPatch := map[string]interface{}{
+				"op":    "add",
+				"path":  "/metadata/annotations",
+				"value": map[string]interface{}{},
+			}
+
+			// Third patch: set the specific annotation
+			valuePatch := map[string]interface{}{
+				"op":    "add",
+				"path":  "/" + strings.Join(path, "/"),
+				"value": value,
+			}
+
+			patches = append(patches, testPatch)
+			patches = append(patches, addPatch)
+			patches = append(patches, valuePatch)
+
+			return patches
+		}
+	}
+
+	// For spec fields, ensure the path is properly formatted
+	jsonPath := "/" + strings.Join(path, "/")
+
+	// For array indices, convert [n] to /n
+	re := regexp.MustCompile(`\[(\d+)\]`)
+	jsonPath = re.ReplaceAllString(jsonPath, "/$1")
+
+	// Create the patch operation
 	patch := map[string]interface{}{
 		"op":    "replace",
-		"path":  "/" + strings.Join(path, "/"),
+		"path":  jsonPath,
 		"value": value,
 	}
+
+	// For debugging
+	logDebug("Created patch: %+v", patch)
 
 	return []interface{}{patch}
 }
@@ -2031,9 +2076,21 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				name := metadata["name"].(string)
 				namespace := getNamespaceName(metadata)
 
+				logDebug("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
+				logDebug("Patch JSON: %s", string(patchJSON))
+				logDebug("Current resource state: %+v", resource)
+
 				err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
 				if err != nil {
 					return fmt.Errorf("error patching resource: %s", err)
+				}
+
+				// Verify the patch was applied
+				updatedResource, err := q.provider.GetK8sResources(nodeKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
+				if err != nil {
+					logDebug("Error getting updated resource: %v", err)
+				} else {
+					logDebug("Updated resource state: %+v", updatedResource)
 				}
 			}
 		}

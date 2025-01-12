@@ -32,9 +32,17 @@ build-all-platforms:
 	@echo "🎉 Done!"
 
 # Define how to run tests
+.PHONY: test-all
+test-all: test test-e2e
+
 test:
 	@echo "🧪 Running tests..."
 	go test ./...
+
+.PHONY: test-e2e
+test-e2e:
+	go install github.com/onsi/ginkgo/v2/ginkgo@latest
+	ginkgo -v ./pkg/core/e2e
 
 operator-manifests:
 	@echo "🤖 Creating operator manifests..."
