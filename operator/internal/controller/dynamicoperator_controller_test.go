@@ -18,12 +18,14 @@ import (
 	operatorv1 "github.com/avitaltamir/cyphernetes/operator/api/v1"
 	core "github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"github.com/stretchr/testify/mock"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 )
 
 type MockProvider struct {
+	mock.Mock
 	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
 }
@@ -53,10 +55,19 @@ func (m *MockProvider) FindGVR(resourceKind string) (schema.GroupVersionResource
 }
 
 func NewMockProvider(clientset kubernetes.Interface, dynamicClient dynamic.Interface) provider.Provider {
-	return &MockProvider{
+	m := &MockProvider{
 		clientset:     clientset,
 		dynamicClient: dynamicClient,
 	}
+
+	// Set up default mock behavior
+	m.On("PatchK8sResource",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.AnythingOfType("[]uint8")).Return(nil)
+
+	return m
 }
 
 func (m *MockProvider) GetClientset() (kubernetes.Interface, error) {
@@ -83,7 +94,7 @@ func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body inte
 	return nil
 }
 
-func (m *MockProvider) PatchK8sResource(kind, name, namespace string, body interface{}) error {
+func (m *MockProvider) PatchK8sResource(group, version, resource string, patch []byte) error {
 	return nil
 }
 
