@@ -1261,4 +1261,234 @@ var _ = Describe("Cyphernetes E2E", func() {
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
+
+	It("Should traverse and return elements from a chain of connected resources", func() {
+		By("Creating first chain of resources")
+		testDeployment1 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-chain-1",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-chain-1",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-chain-1",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-chain-1",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+								EnvFrom: []corev1.EnvFromSource{
+									{
+										ConfigMapRef: &corev1.ConfigMapEnvSource{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: "test-cm-1",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment1)).Should(Succeed())
+
+		testService1 := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service-chain-1",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-chain-1",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "test-chain-1",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port: 80,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testService1)).Should(Succeed())
+
+		// Create second chain with similar structure
+		testDeployment2 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-chain-2",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-chain-2",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-chain-2",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-chain-2",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+								EnvFrom: []corev1.EnvFromSource{
+									{
+										ConfigMapRef: &corev1.ConfigMapEnvSource{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: "test-cm-2",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment2)).Should(Succeed())
+
+		testService2 := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service-chain-2",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-chain-2",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "test-chain-2",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port: 80,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testService2)).Should(Succeed())
+
+		By("Waiting for resources to be created")
+		Eventually(func() error {
+			// Check deployment
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-chain-1",
+			}, &appsv1.Deployment{})
+			if err != nil {
+				return err
+			}
+
+			// Check replicaset
+			var rsList appsv1.ReplicaSetList
+			err = k8sClient.List(ctx, &rsList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain-1"})
+			if err != nil || len(rsList.Items) == 0 {
+				return fmt.Errorf("replicaset not found")
+			}
+
+			// Check pods
+			var podList corev1.PodList
+			err = k8sClient.List(ctx, &podList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain-1"})
+			if err != nil || len(podList.Items) == 0 {
+				return fmt.Errorf("pods not found")
+			}
+
+			return nil
+		}, timeout, interval).Should(Succeed())
+
+		// After waiting for first chain
+		By("Waiting for second chain resources")
+		Eventually(func() error {
+			// Check deployment
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-chain-2",
+			}, &appsv1.Deployment{})
+			if err != nil {
+				return err
+			}
+
+			// Check replicaset
+			var rsList appsv1.ReplicaSetList
+			err = k8sClient.List(ctx, &rsList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain-2"})
+			if err != nil || len(rsList.Items) == 0 {
+				return fmt.Errorf("replicaset not found")
+			}
+
+			// Check pods
+			var podList corev1.PodList
+			err = k8sClient.List(ctx, &podList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain-2"})
+			if err != nil || len(podList.Items) == 0 {
+				return fmt.Errorf("pods not found")
+			}
+
+			return nil
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing chain traversal query")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		ast, err := core.ParseQuery(`
+			MATCH (p:Pod)->(rs:ReplicaSet)->(d:Deployment)->(s:Service)
+			RETURN p.metadata.name AS pod_name,
+				   rs.metadata.name AS replicaset_name,
+				   d.metadata.name AS deployment_name,
+				   s.metadata.name AS service_name
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the chain results")
+		Expect(result.Data).To(HaveKey("d"))
+		chains, ok := result.Data["d"].([]interface{})
+		Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+		Expect(chains).To(HaveLen(2))
+
+		// Verify both chains are present
+		chainNames := make([]string, 0)
+		for _, chain := range chains {
+			chainData := chain.(map[string]interface{})
+			chainNames = append(chainNames, chainData["deployment_name"].(string))
+		}
+		Expect(chainNames).To(ConsistOf("test-deployment-chain-1", "test-deployment-chain-2"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment1)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, testService1)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, testService2)).Should(Succeed())
+	})
 })

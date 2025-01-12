@@ -79,7 +79,7 @@ var _ = AfterSuite(func() {
 	Eventually(func() bool {
 		err := k8sClient.Get(context.Background(), client.ObjectKey{Name: testNamespace}, &corev1.Namespace{})
 		return apierrors.IsNotFound(err)
-	}, timeout*2, interval).Should(BeTrue())
+	}, timeout*6, interval).Should(BeTrue())
 
 	err = testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
