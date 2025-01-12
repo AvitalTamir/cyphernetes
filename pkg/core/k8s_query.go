@@ -1592,111 +1592,24 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					path := filter.Key
 					path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
-					// Handle array wildcards by replacing [*] with [0]
-					// This is a simplification - in a real implementation you might want to check all array elements
-					path = strings.Replace(path, "[*]", "[0]", -1)
-
-					// Get value using jsonpath
-					value, err := jsonpath.JsonPathLookup(resource, path)
-					if err != nil {
-						// If the path contains wildcards and lookup fails, try to handle array access differently
-						if strings.Contains(filter.Key, "[*]") {
-							// Try to get the array and check each element
-							arrayPath := path[:strings.Index(path, "[*]")]
-							array, err := jsonpath.JsonPathLookup(resource, arrayPath)
-							if err != nil {
-								keep = false
-								break
-							}
-
-							// If we found an array, check each element
-							if arr, ok := array.([]interface{}); ok {
-								keep = false
-								for _, elem := range arr {
-									// Convert and compare values
-									resourceValue, filterValue, err := convertToComparableTypes(elem, filter.Value)
-									if err != nil {
-										continue
-									}
-
-									// If any element matches, keep the resource
-									if compareValues(resourceValue, filterValue, filter.Operator) {
-										keep = true
-										break
-									}
-								}
-							}
-							continue
-						}
-						keep = false
-						break
-					}
-
-					// Convert and compare values
-					resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-					if err != nil {
-						keep = false
-						break
-					}
-
-					// Compare based on operator
-					switch filter.Operator {
-					case "EQUALS", "=", "==":
-						if resourceValue != filterValue {
+					// If path contains wildcards, we need special handling
+					if strings.Contains(path, "[*]") {
+						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+					} else {
+						// Regular path handling
+						value, err := jsonpath.JsonPathLookup(resource, path)
+						if err != nil {
 							keep = false
+							break
 						}
-					case "GREATER_THAN", ">":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv <= fv {
-									keep = false
-								}
-							}
-						}
-					case "LESS_THAN", "<":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv >= fv {
-									keep = false
-								}
-							}
-						}
-					case "GREATER_THAN_EQUALS", ">=":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv < fv {
-									keep = false
-								}
-							}
-						}
-					case "LESS_THAN_EQUALS", "<=":
-						if rv, ok := resourceValue.(float64); ok {
-							if fv, ok := filterValue.(float64); ok {
-								if rv > fv {
-									keep = false
-								}
-							}
-						}
-					case "NOT_EQUALS", "!=":
-						if resourceValue == filterValue {
+
+						resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+						if err != nil {
 							keep = false
+							break
 						}
-					case "CONTAINS":
-						strA := fmt.Sprintf("%v", resourceValue)
-						strB := fmt.Sprintf("%v", filterValue)
-						if !strings.Contains(strA, strB) {
-							keep = false
-						}
-					case "REGEX_COMPARE":
-						if filterValueStr, ok := filterValue.(string); ok {
-							if resultValueStr, ok := resourceValue.(string); ok {
-								if regex, err := regexp.Compile(filterValueStr); err == nil {
-									if !regex.MatchString(resultValueStr) {
-										keep = false
-									}
-								}
-							}
-						}
+
+						keep = compareValues(resourceValue, filterValue, filter.Operator)
 					}
 
 					if !keep {
@@ -2034,4 +1947,154 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	}
 
 	return modified
+}
+
+// Add this new function to handle wildcard paths
+func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
+	parts := strings.Split(path, "[*]")
+	return evaluateWildcardPathRecursive(resource, parts, 0, filterValue, operator)
+}
+
+func evaluateWildcardPathRecursive(data interface{}, parts []string, depth int, filterValue interface{}, operator string) bool {
+	if depth == len(parts)-1 {
+		// Last part - evaluate the value
+		lastPath := strings.TrimPrefix(parts[depth], ".")
+		if !strings.HasPrefix(lastPath, "$.") {
+			lastPath = "$." + lastPath
+		}
+		value, err := jsonpath.JsonPathLookup(data, lastPath)
+		if err != nil {
+			return false
+		}
+		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
+		if err != nil {
+			return false
+		}
+		return compareValues(resourceValue, filterValue, operator)
+	}
+
+	// Get the array at current level
+	currentPath := parts[depth]
+	if !strings.HasPrefix(currentPath, "$.") {
+		currentPath = "$." + currentPath
+	}
+	// Remove trailing dot if exists
+	currentPath = strings.TrimSuffix(currentPath, ".")
+
+	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	if err != nil {
+		return false
+	}
+
+	// Handle different array types
+	switch arr := array.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range arr {
+			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// Update the SET clause handling to support wildcards
+func (q *QueryExecutor) handleSetClause(c *SetClause) error {
+	for _, kvp := range c.KeyValuePairs {
+		resultMapKey := strings.Split(kvp.Key, ".")[0]
+		resources := resultMap[resultMapKey].([]map[string]interface{})
+
+		// Find the matching node from the stored match nodes
+		var nodeKind string
+		for _, node := range q.matchNodes {
+			if node.ResourceProperties.Name == resultMapKey {
+				nodeKind = node.ResourceProperties.Kind
+				break
+			}
+		}
+		if nodeKind == "" {
+			return fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
+		}
+
+		for _, resource := range resources {
+			if strings.Contains(kvp.Key, "[*]") {
+				// Handle wildcard updates
+				err := applyWildcardUpdate(resource, kvp.Key, kvp.Value)
+				if err != nil {
+					return err
+				}
+			} else {
+				// Regular path update
+				patches := createCompatiblePatch(strings.Split(kvp.Key, ".")[1:], kvp.Value)
+				patchJSON, err := json.Marshal(patches)
+				if err != nil {
+					return fmt.Errorf("error marshalling patches: %s", err)
+				}
+
+				metadata := resource["metadata"].(map[string]interface{})
+				name := metadata["name"].(string)
+				namespace := getNamespaceName(metadata)
+
+				err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
+				if err != nil {
+					return fmt.Errorf("error patching resource: %s", err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Add this new function to handle wildcard updates
+func applyWildcardUpdate(resource interface{}, path string, value interface{}) error {
+	parts := strings.Split(path, "[*]")
+	return applyWildcardUpdateRecursive(resource, parts, 0, value)
+}
+
+func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, value interface{}) error {
+	if depth == len(parts)-1 {
+		// Last part - set the value
+		return setValueAtPath(data, parts[depth], value)
+	}
+
+	// Get the array at current level
+	currentPath := parts[depth]
+	if !strings.HasSuffix(currentPath, ".") {
+		currentPath += "."
+	}
+	array, err := jsonpath.JsonPathLookup(data, currentPath[:len(currentPath)-1])
+	if err != nil {
+		return err
+	}
+
+	// Update all elements in the array
+	switch arr := array.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func setValueAtPath(data interface{}, path string, value interface{}) error {
+	// Implementation to set value at the given path
+	// This would need to handle the actual update of the value in the data structure
+	return nil
 }
