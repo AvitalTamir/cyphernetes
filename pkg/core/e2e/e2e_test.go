@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -29,39 +28,6 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-
-		By("Cleaning up any existing test resources")
-
-		// List of deployments to clean up
-		deploymentsToClean := []string{
-			"test-deployment",
-			"test-deployment-2",
-			"test-deployment-3",
-			"test-deployment-4",
-			"test-deployment-5",
-		}
-
-		for _, name := range deploymentsToClean {
-			deployment := &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: "default",
-				},
-			}
-			err := k8sClient.Delete(ctx, deployment)
-			if err != nil && !apierrors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			// Wait for deletion
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
-					Name:      name,
-				}, &appsv1.Deployment{})
-				return apierrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue())
-		}
 	})
 
 	Context("Basic Query Operations", func() {
@@ -70,7 +36,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment",
-					Namespace: "default",
+					Namespace: testNamespace,
 					Labels: map[string]string{
 						"app": "test",
 					},
@@ -115,7 +81,7 @@ var _ = Describe("Cyphernetes E2E", func() {
             `)
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err := executor.Execute(ast, "default")
+			result, err := executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(result.Data).To(HaveKey("d"))
@@ -160,7 +126,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment-2",
-					Namespace: "default",
+					Namespace: testNamespace,
 				},
 				Spec: appsv1.DeploymentSpec{
 					Selector: &metav1.LabelSelector{
@@ -190,7 +156,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			// Wait for deployment to be ready before attempting update
 			Eventually(func() error {
 				return k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-2",
 				}, &appsv1.Deployment{})
 			}, timeout, interval).Should(Succeed())
@@ -210,7 +176,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			core.LogLevel = "debug"
-			_, err = executor.Execute(ast, "default") // Don't check the result immediately
+			_, err = executor.Execute(ast, testNamespace) // Don't check the result immediately
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the update in the cluster")
@@ -219,7 +185,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			// First wait for the generation to be incremented and observed
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-2",
 				}, &updatedDeployment)
 				if err != nil {
@@ -235,7 +201,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			// Then wait for the rollout to complete
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-2",
 				}, &updatedDeployment)
 				if err != nil {
@@ -257,7 +223,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			// Finally check the image
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-2",
 				}, &updatedDeployment)
 				if err != nil {
@@ -283,7 +249,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment-3",
-					Namespace: "default",
+					Namespace: testNamespace,
 					Labels: map[string]string{
 						"app": "test",
 					},
@@ -327,7 +293,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			`)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = executor.Execute(ast, "default")
+			_, err = executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the label update in the cluster")
@@ -335,7 +301,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-3",
 				}, &updatedDeployment)
 				if err != nil {
@@ -355,7 +321,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment-4",
-					Namespace: "default",
+					Namespace: testNamespace,
 					Labels: map[string]string{
 						"app": "test",
 					},
@@ -401,7 +367,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			`)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = executor.Execute(ast, "default")
+			_, err = executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the updates in the cluster")
@@ -409,7 +375,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() int32 {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-4",
 				}, &updatedDeployment)
 				if err != nil {
@@ -420,7 +386,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-4",
 				}, &updatedDeployment)
 				if err != nil {
@@ -440,7 +406,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment-5",
-					Namespace: "default",
+					Namespace: testNamespace,
 					Labels: map[string]string{
 						"app": "test",
 					},
@@ -491,7 +457,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			`)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = executor.Execute(ast, "default")
+			_, err = executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the resource updates in the cluster")
@@ -499,7 +465,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-5",
 				}, &updatedDeployment)
 				if err != nil {
@@ -510,7 +476,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-5",
 				}, &updatedDeployment)
 				if err != nil {
@@ -530,7 +496,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			testDeployment := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-deployment-6",
-					Namespace: "default",
+					Namespace: testNamespace,
 					Labels: map[string]string{
 						"app": "test",
 					},
@@ -578,7 +544,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			`)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = executor.Execute(ast, "default")
+			_, err = executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the image update in the cluster")
@@ -586,7 +552,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, client.ObjectKey{
-					Namespace: "default",
+					Namespace: testNamespace,
 					Name:      "test-deployment-6",
 				}, &updatedDeployment)
 				if err != nil {
@@ -594,6 +560,97 @@ var _ = Describe("Cyphernetes E2E", func() {
 				}
 				return updatedDeployment.Spec.Template.Spec.Containers[1].Image
 			}, timeout*4, interval).Should(Equal("busybox:1.33"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
+	})
+
+	Context("Complex Query Operations", func() {
+		It("Should retrieve deployment information correctly", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-7",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app": "test",
+						"env": "staging",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: ptr.To(int32(2)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:1.19",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a MATCH query to retrieve deployment information")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE d.metadata.labels.env = "staging"
+				RETURN d.metadata.name, d.spec.replicas, d.metadata.labels.app
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the retrieved information")
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok := result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).NotTo(BeEmpty(), "Expected at least one deployment")
+
+			deploymentInfo, ok := deployments[0].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected deployment info to be a map")
+
+			metadata, ok := deploymentInfo["metadata"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected metadata to be a map")
+			Expect(metadata["name"]).To(Equal("test-deployment-7"))
+
+			spec, ok := deploymentInfo["spec"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected spec to be a map")
+
+			var replicas int64
+			switch r := spec["replicas"].(type) {
+			case float64:
+				replicas = int64(r)
+			case int64:
+				replicas = r
+			default:
+				Fail(fmt.Sprintf("Unexpected type for replicas: %T", spec["replicas"]))
+			}
+			Expect(replicas).To(Equal(int64(2)))
+
+			labels, ok := metadata["labels"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected labels to be a map")
+			Expect(labels["app"]).To(Equal("test"))
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
