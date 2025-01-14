@@ -5,9 +5,11 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -23,11 +25,62 @@ var webFS embed.FS
 var WebCmd = &cobra.Command{
 	Use:   "web",
 	Short: "Start the Cyphernetes web interface",
-	Run:   runWeb,
+	Long: `Start the Cyphernetes web interface.
+
+If the specified port is in use, it will attempt to find the next available port.`,
+	Run: runWeb,
+}
+
+var (
+	webPort    string
+	maxPortTry = 10 // Maximum number of ports to try
+)
+
+func init() {
+	WebCmd.Flags().StringVarP(&webPort, "port", "p", "8080", "Port to run the web interface on")
+}
+
+// checkPort attempts to listen on a port to check if it's available
+func checkPort(port string) error {
+	// Try to bind to all interfaces, just like the actual server will
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return err
+	}
+	listener.Close()
+	return nil
+}
+
+// findAvailablePort finds the next available port starting from the given port
+func findAvailablePort(startPort string) (string, error) {
+	port, err := strconv.Atoi(startPort)
+	if err != nil {
+		return "", fmt.Errorf("invalid port number: %s", startPort)
+	}
+
+	for i := 0; i < maxPortTry; i++ {
+		currentPort := strconv.Itoa(port + i)
+		err := checkPort(currentPort)
+		if err == nil {
+			return currentPort, nil
+		}
+	}
+	return "", fmt.Errorf("no available ports found in range %d-%d", port, port+maxPortTry-1)
 }
 
 func runWeb(cmd *cobra.Command, args []string) {
-	port := "8080"
+	// Find an available port
+	port, err := findAvailablePort(webPort)
+	if err != nil {
+		fmt.Printf("Error finding available port: %v\n", err)
+		os.Exit(1)
+	}
+
+	// If we're using a different port than requested, inform the user
+	if port != webPort {
+		fmt.Printf("Port %s is in use, using port %s instead\n", webPort, port)
+	}
+
 	url := fmt.Sprintf("http://localhost:%s", port)
 
 	// Create the API server provider
@@ -64,7 +117,7 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Create a new http.Server
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    ":" + port, // Bind to all interfaces for better compatibility
 		Handler: router,
 	}
 
