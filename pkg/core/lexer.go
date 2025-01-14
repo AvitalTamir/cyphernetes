@@ -15,6 +15,7 @@ type Lexer struct {
 	inContexts    bool
 	inNodeLabel   bool
 	inPropertyKey bool
+	inJsonData    bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -113,13 +114,12 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: NUMBER, Literal: l.s.TokenText()}
 
 	case scanner.String:
-		// If we're in a property key position, treat quoted strings as identifiers
-		if l.inNodeLabel && l.inPropertyKey {
-			lit := strings.Trim(l.s.TokenText(), "\"")
-			l.inPropertyKey = false // Reset after handling the key
-			return Token{Type: IDENT, Literal: lit}
+		lit := l.s.TokenText()
+		if l.inNodeLabel && l.inPropertyKey && !l.inJsonData {
+			l.inPropertyKey = false
+			return Token{Type: IDENT, Literal: strings.Trim(lit, "\"")}
 		}
-		return Token{Type: STRING, Literal: l.s.TokenText()}
+		return Token{Type: STRING, Literal: lit}
 
 	case '*':
 		return Token{Type: ILLEGAL, Literal: "*"}
@@ -142,18 +142,24 @@ func (l *Lexer) NextToken() Token {
 		l.inNodeLabel = false
 		return Token{Type: RPAREN, Literal: ")"}
 	case '{':
-		l.inPropertyKey = true // Next token will be a property key
+		if !l.inNodeLabel && !l.inPropertyKey {
+			l.inJsonData = true
+		}
+		l.inPropertyKey = true
 		return Token{Type: LBRACE, Literal: "{"}
 	case '}':
+		l.inJsonData = false
 		return Token{Type: RBRACE, Literal: "}"}
 	case ':':
 		if !l.inNodeLabel {
 			l.inNodeLabel = true
 		}
-		l.inPropertyKey = false // After colon comes the value
+		l.inPropertyKey = false
 		return Token{Type: COLON, Literal: ":"}
 	case ',':
-		l.inPropertyKey = true // After comma comes another key
+		if !l.inJsonData {
+			l.inPropertyKey = true
+		}
 		return Token{Type: COMMA, Literal: ","}
 	case '.':
 		return Token{Type: DOT, Literal: "."}
@@ -228,4 +234,9 @@ func (l *Lexer) Peek() rune {
 // Add method to set context parsing state
 func (l *Lexer) SetParsingContexts(parsing bool) {
 	l.inContexts = parsing
+}
+
+// Add method to set JSON data parsing state
+func (l *Lexer) SetParsingJsonData(parsing bool) {
+	l.inJsonData = true
 }

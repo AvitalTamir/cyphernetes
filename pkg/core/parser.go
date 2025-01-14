@@ -324,56 +324,72 @@ func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, erro
 
 	if p.current.Type == LBRACE {
 		p.advance()
-		// Check if this is a JSON object
-		if p.current.Type == STRING {
-			// Collect all tokens until matching closing brace
-			var jsonBuilder strings.Builder
-			jsonBuilder.WriteString("{")
-			braceCount := 1
 
-			for braceCount > 0 {
+		// Check if this is a CREATE statement with JSON data
+		if p.current.Type == IDENT && (p.current.Literal == "metadata" || p.current.Literal == "spec") {
+			// Build the JSON object
+			var jsonBuilder strings.Builder
+			jsonBuilder.WriteString("{\n")
+			depth := 1
+
+			for depth > 0 {
+				if p.current.Type == EOF {
+					return nil, fmt.Errorf("unexpected EOF in JSON data")
+				}
+
+				// Format the JSON properly
 				switch p.current.Type {
-				case LBRACE:
-					braceCount++
-					jsonBuilder.WriteString("{")
-				case RBRACE:
-					braceCount--
-					if braceCount >= 0 {
-						jsonBuilder.WriteString("}")
-					}
+				case IDENT:
+					jsonBuilder.WriteString("\"" + p.current.Literal + "\"")
 				case STRING:
 					jsonBuilder.WriteString(p.current.Literal)
 				case COLON:
-					jsonBuilder.WriteString(":")
+					jsonBuilder.WriteString(": ")
 				case COMMA:
-					jsonBuilder.WriteString(",")
+					jsonBuilder.WriteString(",\n")
+				case LBRACE:
+					jsonBuilder.WriteString("{\n")
+					depth++
+				case RBRACE:
+					depth--
+					if depth >= 0 {
+						jsonBuilder.WriteString("\n}")
+					}
 				case LBRACKET:
 					jsonBuilder.WriteString("[")
 				case RBRACKET:
 					jsonBuilder.WriteString("]")
-				case NUMBER:
-					jsonBuilder.WriteString(p.current.Literal)
 				default:
-					return nil, fmt.Errorf("unexpected token in JSON: \"%v\"", p.current.Literal)
+					jsonBuilder.WriteString(p.current.Literal)
 				}
-				if braceCount > 0 {
+
+				if depth > 0 {
 					p.advance()
 				}
 			}
 			jsonData = jsonBuilder.String()
 			p.advance() // consume final }
+
+			// Don't expect another closing brace for JSON data
+			return &ResourceProperties{
+				Name:       name,
+				Kind:       kind,
+				Properties: nil,
+				JsonData:   jsonData,
+			}, nil
 		} else {
-			// Parse as regular properties
+			// Regular property parsing
 			props, err := p.parseProperties()
 			if err != nil {
 				return nil, err
 			}
 			properties = props
-			if p.current.Type != RBRACE {
-				return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
-			}
-			p.advance()
 		}
+
+		if p.current.Type != RBRACE {
+			return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
+		}
+		p.advance()
 	}
 
 	return &ResourceProperties{
@@ -824,6 +840,30 @@ func (p *Parser) parseValue() (interface{}, error) {
 	case NULL:
 		p.advance()
 		return nil, nil
+	case LBRACE:
+		// Collect all tokens until matching }
+		var jsonBuilder strings.Builder
+		jsonBuilder.WriteString("{")
+		depth := 1
+		p.advance()
+
+		for depth > 0 {
+			if p.current.Type == EOF {
+				return nil, fmt.Errorf("unexpected EOF in JSON data")
+			}
+			jsonBuilder.WriteString(p.current.Literal)
+			if p.current.Type == LBRACE {
+				depth++
+			}
+			if p.current.Type == RBRACE {
+				depth--
+			}
+			if depth > 0 {
+				p.advance()
+			}
+		}
+		p.advance() // consume final }
+		return jsonBuilder.String(), nil
 	default:
 		return nil, fmt.Errorf("expected value, got \"%v\"", p.current.Literal)
 	}
