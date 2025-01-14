@@ -12,8 +12,9 @@ type Lexer struct {
 		lit     string
 		hasNext bool
 	}
-	inContexts  bool
-	inNodeLabel bool
+	inContexts    bool
+	inNodeLabel   bool
+	inPropertyKey bool
 }
 
 func NewLexer(input string) *Lexer {
@@ -49,6 +50,7 @@ func (l *Lexer) NextToken() Token {
 
 	case scanner.Ident:
 		lit := l.s.TokenText()
+		debugLog("Lexer got IDENT token: '%s'", lit)
 		if !l.inNodeLabel {
 			switch strings.ToUpper(lit) {
 			case "MATCH":
@@ -78,14 +80,23 @@ func (l *Lexer) NextToken() Token {
 			case "NULL":
 				return Token{Type: NULL, Literal: lit}
 			default:
+				debugLog("Returning IDENT token: '%s'", lit)
 				return Token{Type: IDENT, Literal: lit}
 			}
 		}
 		var fullLit strings.Builder
 		fullLit.WriteString(lit)
 
-		for l.s.Peek() == '.' {
-			l.s.Next() // consume dot
+		// Handle dots in identifiers
+		for l.s.Peek() == '.' || l.s.Peek() == '"' {
+			next := l.s.Next()
+			debugLog("Lexer peeked: '%c'", next)
+			if next == '"' {
+				// Include quotes in the identifier
+				fullLit.WriteRune('"')
+				debugLog("Added quote to identifier: '%s'", fullLit.String())
+				continue
+			}
 			fullLit.WriteRune('.')
 
 			tok := l.s.Scan()
@@ -93,13 +104,21 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: ILLEGAL, Literal: fullLit.String()}
 			}
 			fullLit.WriteString(l.s.TokenText())
+			debugLog("Built identifier: '%s'", fullLit.String())
 		}
+		debugLog("Final identifier: '%s'", fullLit.String())
 		return Token{Type: IDENT, Literal: fullLit.String()}
 
 	case scanner.Int:
 		return Token{Type: NUMBER, Literal: l.s.TokenText()}
 
 	case scanner.String:
+		// If we're in a property key position, treat quoted strings as identifiers
+		if l.inNodeLabel && l.inPropertyKey {
+			lit := strings.Trim(l.s.TokenText(), "\"")
+			l.inPropertyKey = false // Reset after handling the key
+			return Token{Type: IDENT, Literal: lit}
+		}
 		return Token{Type: STRING, Literal: l.s.TokenText()}
 
 	case '*':
@@ -123,13 +142,18 @@ func (l *Lexer) NextToken() Token {
 		l.inNodeLabel = false
 		return Token{Type: RPAREN, Literal: ")"}
 	case '{':
+		l.inPropertyKey = true // Next token will be a property key
 		return Token{Type: LBRACE, Literal: "{"}
 	case '}':
 		return Token{Type: RBRACE, Literal: "}"}
 	case ':':
-		l.inNodeLabel = true
+		if !l.inNodeLabel {
+			l.inNodeLabel = true
+		}
+		l.inPropertyKey = false // After colon comes the value
 		return Token{Type: COLON, Literal: ":"}
 	case ',':
+		l.inPropertyKey = true // After comma comes another key
 		return Token{Type: COMMA, Literal: ","}
 	case '.':
 		return Token{Type: DOT, Literal: "."}

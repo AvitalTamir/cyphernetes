@@ -656,10 +656,16 @@ func (p *Parser) parseProperties() (*Properties, error) {
 	var propertyList []*Property
 
 	for {
+		debugLog("Parsing property, current token: type=%v literal='%s'", p.current.Type, p.current.Literal)
+
 		if p.current.Type != IDENT && p.current.Type != STRING {
 			return nil, fmt.Errorf("expected property key, got \"%v\"", p.current.Literal)
 		}
-		key := p.current.Literal
+
+		// Always trim quotes from property keys
+		key := strings.Trim(p.current.Literal, "\"")
+		debugLog("Property key after trim: '%s'", key)
+
 		p.advance()
 
 		if p.current.Type != COLON {
@@ -676,6 +682,7 @@ func (p *Parser) parseProperties() (*Properties, error) {
 			Key:   key,
 			Value: value,
 		})
+		debugLog("Added property: key='%s' value='%v'", key, value)
 
 		if p.current.Type != COMMA {
 			break
