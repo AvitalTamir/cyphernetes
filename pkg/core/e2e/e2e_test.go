@@ -1767,4 +1767,73 @@ var _ = Describe("Cyphernetes E2E", func() {
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
 	})
+
+	It("Should create resources with complex JSON", func() {
+		By("Creating a deployment with complex JSON")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		query := `CREATE (d:Deployment {
+			"metadata": {
+				"name": "test-deployment-json",
+				"namespace": "` + testNamespace + `",
+				"labels": {
+					"app": "test-json"
+				}
+			},
+			"spec": {
+				"selector": {
+					"matchLabels": {
+						"app": "test-json"
+					}
+				},
+				"template": {
+					"metadata": {
+						"labels": {
+							"app": "test-json"
+						}
+					},
+					"spec": {
+						"containers": [
+							{
+								"name": "nginx",
+								"image": "nginx:latest"
+							}
+						]
+					}
+				}
+			}
+		})`
+
+		ast, err := core.ParseQuery(query)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the deployment was created correctly")
+		var deployment appsv1.Deployment
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-json",
+			}, &deployment)
+		}, timeout, interval).Should(Succeed())
+
+		// Verify deployment properties
+		Expect(deployment.ObjectMeta.Labels["app"]).To(Equal("test-json"))
+		Expect(deployment.Spec.Template.Labels["app"]).To(Equal("test-json"))
+		Expect(deployment.Spec.Selector.MatchLabels["app"]).To(Equal("test-json"))
+
+		containers := deployment.Spec.Template.Spec.Containers
+		Expect(containers).To(HaveLen(1))
+		Expect(containers[0].Name).To(Equal("nginx"))
+		Expect(containers[0].Image).To(Equal("nginx:latest"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, &deployment)).Should(Succeed())
+	})
 })
