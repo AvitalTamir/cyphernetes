@@ -8,9 +8,10 @@ import (
 )
 
 type Parser struct {
-	lexer   *Lexer
-	current Token
-	pos     int
+	lexer    *Lexer
+	current  Token
+	pos      int
+	inCreate bool
 }
 
 func NewRecursiveParser(input string) *Parser {
@@ -157,10 +158,12 @@ func isCreateClause(c Clause) bool {
 // parseFirstClause parses either a MATCH or CREATE clause
 func (p *Parser) parseFirstClause() (Clause, error) {
 	switch p.current.Type {
+	case CREATE:
+		p.inCreate = true                     // Set flag
+		defer func() { p.inCreate = false }() // Reset when done
+		return p.parseCreateClause()
 	case MATCH:
 		return p.parseMatchClause()
-	case CREATE:
-		return p.parseCreateClause()
 	default:
 		return nil, fmt.Errorf("expected MATCH or CREATE, got \"%v\"", p.current.Literal)
 	}
@@ -196,19 +199,18 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 
 // parseCreateClause parses: CREATE NodeRelationshipList
 func (p *Parser) parseCreateClause() (*CreateClause, error) {
-	if p.current.Type != CREATE {
-		return nil, fmt.Errorf("expected CREATE, got \"%v\"", p.current.Literal)
-	}
-	p.advance()
+	p.advance()                           // consume CREATE token
+	p.inCreate = true                     // Set flag
+	defer func() { p.inCreate = false }() // Reset when done
 
-	nodeRels, err := p.parseNodeRelationshipList()
+	nodeList, err := p.parseNodeRelationshipList()
 	if err != nil {
 		return nil, err
 	}
 
 	return &CreateClause{
-		Nodes:         nodeRels.Nodes,
-		Relationships: nodeRels.Relationships,
+		Nodes:         nodeList.Nodes,
+		Relationships: nodeList.Relationships,
 	}, nil
 }
 
@@ -325,8 +327,8 @@ func (p *Parser) parseResourceProperties(name string) (*ResourceProperties, erro
 	if p.current.Type == LBRACE {
 		p.advance()
 
-		// Check if this is a CREATE statement with JSON data
-		if p.current.Type == IDENT && (p.current.Literal == "metadata" || p.current.Literal == "spec") {
+		// Check if we're in a CREATE statement
+		if p.inCreate && p.current.Type == IDENT {
 			// Build the JSON object
 			var jsonBuilder strings.Builder
 			jsonBuilder.WriteString("{\n")
