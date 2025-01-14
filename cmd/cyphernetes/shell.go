@@ -32,6 +32,27 @@ var ctx string
 var ShellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Launch an interactive shell",
+	Long:  `Start an interactive shell for executing Cypher-inspired queries against Kubernetes.`,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// Validate format flag
+		f := cmd.Flag("format").Value.String()
+		if f != "yaml" && f != "json" {
+			return fmt.Errorf("invalid value for --format: must be 'json' or 'yaml'")
+		}
+		// Get the name of the current Kubernetes context
+		contextName, namespace, err := getCurrentContext()
+		if err != nil {
+			return fmt.Errorf("error getting current context: %v", err)
+		}
+		ctx = contextName
+
+		if namespace != "" && namespace != "default" {
+			core.Namespace = namespace
+		}
+
+		// Initialize kubernetes before running the command
+		return initializeKubernetes()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		showSplash()
 
@@ -678,21 +699,12 @@ func init() {
 		}
 	}
 
-	// Get the name of the current Kubernetes context
-	contextName, namespace, err := getCurrentContext()
-	if err != nil {
-		fmt.Println("Error getting current context: ", err)
-		return
-	}
-	ctx = contextName
-
-	if namespace != "" && namespace != "default" {
-		core.Namespace = namespace
-	}
-
 	if _, exists := os.LookupEnv("NO_COLOR"); exists {
 		core.NoColor = true
 	}
+
+	// Add format flag to shell command
+	ShellCmd.Flags().StringVar(&core.OutputFormat, "format", "json", "Output format (json or yaml)")
 }
 
 func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {

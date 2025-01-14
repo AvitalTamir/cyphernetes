@@ -23,6 +23,15 @@ var queryCmd = &cobra.Command{
 	Short: "Execute a Cypher-inspired query against Kubernetes",
 	Long:  `Use the 'query' subcommand to execute a single Cypher-inspired query against your Kubernetes resources.`,
 	Args:  cobra.ExactArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// Validate format flag
+		f := cmd.Flag("format").Value.String()
+		if f != "yaml" && f != "json" {
+			return fmt.Errorf("invalid value for --format: must be 'json' or 'yaml'")
+		}
+		// Initialize kubernetes before running the command
+		return initializeKubernetes()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		provider, err := apiserver.NewAPIServerProvider()
 		if err != nil {
@@ -96,5 +105,6 @@ func runQuery(args []string, w io.Writer) {
 
 func init() {
 	rootCmd.AddCommand(queryCmd)
+	queryCmd.Flags().StringVar(&core.OutputFormat, "format", "json", "Output format (json or yaml)")
 	queryCmd.PersistentFlags().BoolVarP(&returnRawJsonOutput, "raw-output", "r", false, "Disable JSON output formatting")
 }
