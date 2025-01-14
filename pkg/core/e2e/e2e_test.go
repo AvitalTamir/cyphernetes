@@ -1648,7 +1648,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not found"))
 
-		// Create another test deployment for the third test
+		// Create another test deployment for the fourth test
 		testDeployment4 := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-deployment-quoted-4",
@@ -1700,6 +1700,64 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err.Error()).To(ContainSubstring("not found"))
 
 		// Verify second deployment still exists
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-2",
+		}, &appsv1.Deployment{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create another test deployment for the mixed properties test
+		testDeployment5 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-5",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment5)).Should(Succeed())
+
+		By("Executing delete query with mixed quoted and unquoted properties")
+		ast, err = core.ParseQuery(`
+			MATCH (d:Deployment {"name": "test-deployment-quoted-5", namespace: "` + testNamespace + `"})
+			DELETE d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify fifth deployment was deleted
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-5",
+		}, &appsv1.Deployment{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Verify second deployment still exists (final check)
 		err = k8sClient.Get(ctx, client.ObjectKey{
 			Namespace: testNamespace,
 			Name:      "test-deployment-quoted-2",
