@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -176,7 +177,6 @@ var _ = Describe("Cyphernetes E2E", func() {
             `)
 			Expect(err).NotTo(HaveOccurred())
 
-			core.LogLevel = "debug"
 			_, err = executor.Execute(ast, testNamespace) // Don't check the result immediately
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1490,5 +1490,409 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(k8sClient.Delete(ctx, testService1)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, testService2)).Should(Succeed())
+	})
+
+	It("Should handle quoted and unquoted property keys correctly", func() {
+		By("Creating test deployments")
+		testDeployment1 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-1",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment1)).Should(Succeed())
+
+		testDeployment2 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-2",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment2)).Should(Succeed())
+
+		By("Waiting for deployments to be created")
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-quoted-1",
+			}, &appsv1.Deployment{})
+		}, timeout, interval).Should(Succeed())
+
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-quoted-2",
+			}, &appsv1.Deployment{})
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing delete query with quoted metadata.name")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// First test: quoted metadata.name
+		ast, err := core.ParseQuery(`
+			MATCH (d:Deployment {"metadata.name": "test-deployment-quoted-1"})
+			DELETE d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify first deployment was deleted
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-1",
+		}, &appsv1.Deployment{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Create another test deployment for the second test
+		testDeployment3 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-3",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment3)).Should(Succeed())
+
+		By("Executing delete query with quoted name")
+		ast, err = core.ParseQuery(`
+			MATCH (d:Deployment {"name": "test-deployment-quoted-3"})
+			DELETE d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify third deployment was deleted
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-3",
+		}, &appsv1.Deployment{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Create another test deployment for the fourth test
+		testDeployment4 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-4",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment4)).Should(Succeed())
+
+		By("Executing delete query with unquoted name")
+		ast, err = core.ParseQuery(`
+			MATCH (d:Deployment {name: "test-deployment-quoted-4"})
+			DELETE d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify fourth deployment was deleted
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-4",
+		}, &appsv1.Deployment{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Verify second deployment still exists
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-2",
+		}, &appsv1.Deployment{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create another test deployment for the mixed properties test
+		testDeployment5 := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-quoted-5",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-quoted",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-quoted",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-quoted",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment5)).Should(Succeed())
+
+		By("Executing delete query with mixed quoted and unquoted properties")
+		ast, err = core.ParseQuery(`
+			MATCH (d:Deployment {"name": "test-deployment-quoted-5", namespace: "` + testNamespace + `"})
+			DELETE d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify fifth deployment was deleted
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-5",
+		}, &appsv1.Deployment{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Verify second deployment still exists (final check)
+		err = k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: testNamespace,
+			Name:      "test-deployment-quoted-2",
+		}, &appsv1.Deployment{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
+	})
+
+	It("Should create resources with complex JSON", func() {
+		By("Creating a deployment with complex JSON")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		query := `CREATE (d:Deployment {
+			"metadata": {
+				"name": "test-deployment-json",
+				"namespace": "` + testNamespace + `",
+				"labels": {
+					"app": "test-json"
+				}
+			},
+			"spec": {
+				"selector": {
+					"matchLabels": {
+						"app": "test-json"
+					}
+				},
+				"template": {
+					"metadata": {
+						"labels": {
+							"app": "test-json"
+						}
+					},
+					"spec": {
+						"containers": [
+							{
+								"name": "nginx",
+								"image": "nginx:latest"
+							}
+						]
+					}
+				}
+			}
+		})`
+
+		ast, err := core.ParseQuery(query)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the deployment was created correctly")
+		var deployment appsv1.Deployment
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-json",
+			}, &deployment)
+		}, timeout, interval).Should(Succeed())
+
+		// Verify deployment properties
+		Expect(deployment.ObjectMeta.Labels["app"]).To(Equal("test-json"))
+		Expect(deployment.Spec.Template.Labels["app"]).To(Equal("test-json"))
+		Expect(deployment.Spec.Selector.MatchLabels["app"]).To(Equal("test-json"))
+
+		containers := deployment.Spec.Template.Spec.Containers
+		Expect(containers).To(HaveLen(1))
+		Expect(containers[0].Name).To(Equal("nginx"))
+		Expect(containers[0].Image).To(Equal("nginx:latest"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, &deployment)).Should(Succeed())
+	})
+
+	It("Should create ConfigMap with complex JSON", func() {
+		By("Creating a ConfigMap with complex JSON")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		query := `CREATE (c:ConfigMap {
+			"metadata": {
+				"name": "test-configmap-json",
+				"namespace": "` + testNamespace + `",
+				"labels": {
+					"app": "test-json",
+					"type": "config"
+				}
+			},
+			"data": {
+				"config.json": "{\"database\":{\"host\":\"localhost\",\"port\":5432}}",
+				"settings.yaml": "server:\n  port: 8080\n  host: 0.0.0.0",
+				"feature-flags": "ENABLE_CACHE=true\nDEBUG_MODE=false"
+			}
+		})`
+
+		ast, err := core.ParseQuery(query)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the ConfigMap was created correctly")
+		var configMap corev1.ConfigMap
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-configmap-json",
+			}, &configMap)
+		}, timeout, interval).Should(Succeed())
+
+		// Verify ConfigMap properties
+		Expect(configMap.ObjectMeta.Labels["app"]).To(Equal("test-json"))
+		Expect(configMap.ObjectMeta.Labels["type"]).To(Equal("config"))
+
+		// Verify data fields
+		Expect(configMap.Data).To(HaveKey("config.json"))
+		Expect(configMap.Data).To(HaveKey("settings.yaml"))
+		Expect(configMap.Data).To(HaveKey("feature-flags"))
+
+		// Verify specific data content
+		var configJSON map[string]interface{}
+		err = json.Unmarshal([]byte(configMap.Data["config.json"]), &configJSON)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(configJSON).To(HaveKey("database"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, &configMap)).Should(Succeed())
 	})
 })
