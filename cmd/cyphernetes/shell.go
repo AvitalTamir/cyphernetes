@@ -464,18 +464,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 				fmt.Println("Graph layout: Top to Bottom")
 			}
 		} else if input == "help" {
-			fmt.Println("Cyphernetes Interactive Shell")
-			fmt.Println("exit               - Exit the shell")
-			fmt.Println("help               - Print this help message")
-			fmt.Println("\\n <namespace>|all - Change the namespace context")
-			fmt.Println("\\m                 - Toggle multi-line input mode (execute query on ';')")
-			fmt.Println("\\g                 - Toggle graph output")
-			fmt.Println("\\gl                - Toggle graph layout (Left to Right or Top to Bottom)")
-			fmt.Println("\\q                 - Toggle print query execution time")
-			fmt.Println("\\r                 - Toggle raw output (disable color)")
-			fmt.Println("\\d                 - Toggle debug logs")
-			fmt.Println("\\lm                - List all registered macros")
-			fmt.Println(":macro_name [args] - Execute a macro")
+			printHelp()
 		} else if input != "" {
 			executing = true
 			// Process the input if not empty
@@ -740,14 +729,86 @@ func InitShell() {
 		fmt.Printf("Error initializing resource specs: %v\n", err)
 	}
 }
-
 func showSplash() {
 	logDebug("Showing splash")
-	fmt.Println(`
+	splash := `
                 __                    __        
  ______ _____  / /  ___ _______  ___ / /____ ___
 / __/ // / _ \/ _ \/ -_) __/ _ \/ -_) __/ -_|_-<
 \__/\_, / .__/_//_/\__/_/ /_//_/\__/\__/\__/___/
-   /___/_/ Interactive Shell`)
+   /___/_/ Interactive Shell`
+	fmt.Println(wrapInColor(splash, 36))
+	fmt.Println("")
+}
+
+func printHelp() {
+	// Define colors
+	cmdColor := 35     // Purple for commands
+	descColor := 36    // Cyan for descriptions
+	sectionColor := 33 // Yellow for sections
+
+	// Helper function to format command help
+	formatCmd := func(cmd, desc string) string {
+		return fmt.Sprintf("  %s %s",
+			wrapInColor(cmd, cmdColor),
+			wrapInColor(desc, descColor))
+	}
+
+	// Helper function for section headers
+	formatSection := func(title string) string {
+		return wrapInColor(title, sectionColor)
+	}
+
+	fmt.Printf(`%s
+%s
+%s
+%s
+%s
+%s
+%s
+%s
+%s
+%s
+%s
+%s
+
+%s
+%s
+%s
+
+%s
+%s
+%s
+%s
+%s
+
+%s
+%s`,
+		formatSection("Commands:"),
+		formatCmd("\\h, \\help", "Show this help"),
+		formatCmd("\\q, \\quit, \\exit", "Exit the shell"),
+		formatCmd("\\c, \\clear", "Clear the screen"),
+		formatCmd("\\n, \\namespace <name>", "Switch to namespace"),
+		formatCmd("\\A, \\all-namespaces", "Query all namespaces"),
+		formatCmd("\\lm, \\list-macros", "List available macros"),
+		formatCmd("\\t, \\time", "Toggle query execution time display"),
+		formatCmd("\\g, \\graph", "Toggle graph output"),
+		formatCmd("\\gl, \\graph-layout", "Toggle graph layout direction"),
+		formatCmd("\\m, \\multiline", "Toggle multiline input mode"),
+		formatCmd("\\r, \\raw", "Toggle raw JSON output"),
+
+		formatSection("\nQuery syntax:"),
+		wrapInColor("  MATCH (n:Pod) RETURN n;", descColor),
+		wrapInColor("  MATCH (n:Pod)->(s:Service) RETURN n.metadata.name, s.metadata.name;", descColor),
+
+		formatSection("\nMacros:"),
+		formatCmd(":getpo", "List pods"),
+		formatCmd(":getdeploy", "List deployments"),
+		formatCmd(":getsvc", "List services"),
+		wrapInColor("  ... and more, use \\lm to list all available macros", descColor),
+
+		wrapInColor("\nPress Ctrl+D or type \\q to exit", descColor),
+		wrapInColor("Press Ctrl+C to cancel current input", descColor))
+	fmt.Println("")
 	fmt.Println("")
 }
