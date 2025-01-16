@@ -995,31 +995,16 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 			// For annotations, we need to ensure the annotations map exists first
 			patches := make([]interface{}, 0)
 
-			// First patch: test if annotations exist
-			testPatch := map[string]interface{}{
-				"op":    "test",
-				"path":  "/metadata/annotations",
-				"value": map[string]interface{}{},
-			}
-
-			// Second patch: add annotations if they don't exist
+			// Add annotations map with the specific annotation
 			addPatch := map[string]interface{}{
-				"op":    "add",
-				"path":  "/metadata/annotations",
-				"value": map[string]interface{}{},
+				"op":   "add",
+				"path": "/metadata/annotations",
+				"value": map[string]interface{}{
+					path[len(path)-1]: value,
+				},
 			}
 
-			// Third patch: set the specific annotation
-			valuePatch := map[string]interface{}{
-				"op":    "add",
-				"path":  "/" + strings.Join(path, "/"),
-				"value": value,
-			}
-
-			patches = append(patches, testPatch)
 			patches = append(patches, addPatch)
-			patches = append(patches, valuePatch)
-
 			return patches
 		}
 	}
