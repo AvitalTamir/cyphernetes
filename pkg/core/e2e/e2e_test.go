@@ -10,6 +10,8 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -2032,5 +2034,151 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
+})
+
+var _ = Describe("Ambiguous Resource Kinds", func() {
+	It("Should handle ambiguous resource kinds correctly", func() {
+		ctx := context.Background()
+
+		By("Creating a custom resource definition for 'widgets' in a different group")
+		customWidgetCRD := &apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "widgets.custom.example.com",
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: "custom.example.com",
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Plural:   "widgets",
+					Singular: "widget",
+					Kind:     "Widget",
+					ListKind: "WidgetList",
+				},
+				Scope: apiextensionsv1.NamespaceScoped,
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+					{
+						Name:    "v1",
+						Served:  true,
+						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Type: "object",
+								Properties: map[string]apiextensionsv1.JSONSchemaProps{
+									"spec": {
+										Type: "object",
+										Properties: map[string]apiextensionsv1.JSONSchemaProps{
+											"color": {Type: "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		DeferCleanup(func() {
+			By("Cleaning up the Widget CRD")
+			err := k8sClient.Delete(ctx, customWidgetCRD)
+			Expect(err).Should(Or(BeNil(), WithTransform(apierrors.IsNotFound, BeTrue())))
+
+			// Wait for the CRD to be fully deleted
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.custom.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout*2, interval).Should(BeTrue(), "CRD should be deleted")
+		})
+
+		By("Creating the Widget CRD")
+		Expect(k8sClient.Create(ctx, customWidgetCRD)).Should(Succeed())
+
+		// Wait for the CRD to be established
+		Eventually(func() error {
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.custom.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
+			return err
+		}, timeout, interval).Should(Succeed())
+
+		By("Creating another Widget CRD in a different group")
+		otherWidgetCRD := &apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "widgets.other.example.com",
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: "other.example.com",
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Plural:   "widgets",
+					Singular: "widget",
+					Kind:     "Widget",
+					ListKind: "WidgetList",
+				},
+				Scope: apiextensionsv1.NamespaceScoped,
+				Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
+					{
+						Name:    "v1",
+						Served:  true,
+						Storage: true,
+						Schema: &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+								Type: "object",
+								Properties: map[string]apiextensionsv1.JSONSchemaProps{
+									"spec": {
+										Type: "object",
+										Properties: map[string]apiextensionsv1.JSONSchemaProps{
+											"color": {Type: "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		DeferCleanup(func() {
+			By("Cleaning up the other Widget CRD")
+			err := k8sClient.Delete(ctx, otherWidgetCRD)
+			Expect(err).Should(Or(BeNil(), WithTransform(apierrors.IsNotFound, BeTrue())))
+
+			// Wait for the CRD to be fully deleted
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.other.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout*2, interval).Should(BeTrue(), "CRD should be deleted")
+		})
+
+		By("Creating the other Widget CRD")
+		Expect(k8sClient.Create(ctx, otherWidgetCRD)).Should(Succeed())
+
+		// Wait for the CRD to be established
+		Eventually(func() error {
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.other.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
+			return err
+		}, timeout, interval).Should(Succeed())
+
+		By("Creating a provider instance")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying ambiguous kind behavior")
+		// Test case 1: Using just 'Widget' should return error about ambiguity
+		_, err = provider.FindGVR("Widget")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("ambiguous resource kind"))
+		Expect(err.Error()).To(ContainSubstring("widgets.custom.example.com"))
+		Expect(err.Error()).To(ContainSubstring("widgets.other.example.com"))
+
+		// Test case 2: Using fully qualified name for first group should work
+		gvr, err := provider.FindGVR("widgets.custom.example.com")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(gvr.Group).To(Equal("custom.example.com"))
+		Expect(gvr.Resource).To(Equal("widgets"))
+
+		// Test case 3: Using fully qualified name for second group should work
+		gvr, err = provider.FindGVR("widgets.other.example.com")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(gvr.Group).To(Equal("other.example.com"))
+		Expect(gvr.Resource).To(Equal("widgets"))
 	})
 })
