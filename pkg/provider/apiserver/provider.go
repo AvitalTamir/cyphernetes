@@ -408,15 +408,10 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		return fmt.Errorf("invalid patch JSON: %v", err)
 	}
 
-	fmt.Printf("Applying patch to %s/%s in namespace %s\n", kind, name, namespace)
-	fmt.Printf("Full patch JSON: %s\n", string(patchJSON))
-
 	// Get current state
-	current, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		fmt.Printf("Error getting current state: %v\n", err)
-	} else {
-		fmt.Printf("Current state: %+v\n", current)
 	}
 
 	// Apply each patch operation
@@ -425,8 +420,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		if err != nil {
 			return fmt.Errorf("error marshalling patch: %v", err)
 		}
-
-		fmt.Printf("Applying individual patch: %s\n", string(patchData))
 
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 			context.TODO(),
@@ -442,11 +435,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		}
 
 		// Get state after patch
-		updated, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			fmt.Printf("Error getting updated state: %v\n", err)
-		} else {
-			fmt.Printf("State after patch: %+v\n", updated)
 		}
 	}
 
