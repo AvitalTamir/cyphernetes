@@ -1966,4 +1966,71 @@ var _ = Describe("Cyphernetes E2E", func() {
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
+
+	It("Should set non-existent labels", func() {
+		By("Creating a deployment without labels")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-deployment-labels",
+				Namespace: testNamespace,
+				// Deliberately not setting any labels
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		By("Executing a SET query to add a new label")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		ast, err := core.ParseQuery(`
+			MATCH (d:Deployment {name: "test-deployment-labels"})
+			SET d.metadata.labels.foo = "bar"
+			RETURN d
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the label was added")
+		var updatedDeployment appsv1.Deployment
+		Eventually(func() string {
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-deployment-labels",
+			}, &updatedDeployment)
+			if err != nil {
+				return ""
+			}
+			return updatedDeployment.Labels["foo"]
+		}, timeout, interval).Should(Equal("bar"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
 })
