@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,12 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
+
+func stripAnsiEscapes(s string) string {
+	// This regex matches ANSI escape sequences
+	r := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	return r.ReplaceAllString(s, "")
+}
 
 func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
 	// create a unique map of nodes
@@ -25,9 +32,12 @@ func sanitizeGraph(g core.Graph, result string) (core.Graph, error) {
 		g.Nodes = append(g.Nodes, node)
 	}
 
+	// Strip ANSI escape sequences before unmarshalling
+	cleanResult := stripAnsiEscapes(result)
+
 	// unmarshal the result into a map[string]interface{}
 	var resultMap map[string]interface{}
-	err := json.Unmarshal([]byte(result), &resultMap)
+	err := json.Unmarshal([]byte(cleanResult), &resultMap)
 	if err != nil {
 		return g, fmt.Errorf("error unmarshalling result: %w", err)
 	}
