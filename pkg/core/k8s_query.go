@@ -74,6 +74,9 @@ func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
 }
 
 func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
+	if ast == nil {
+		return QueryResult{}, fmt.Errorf("empty query: ast cannot be nil")
+	}
 	if len(ast.Contexts) > 0 {
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
@@ -81,6 +84,9 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 }
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
+	if ast == nil {
+		return QueryResult{}, fmt.Errorf("empty query: ast cannot be nil")
+	}
 	// Reset match nodes at the start of each query
 	q.matchNodes = nil
 

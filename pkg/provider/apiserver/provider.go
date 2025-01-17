@@ -225,6 +225,10 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 
 // Move the FindGVR implementation from k8s_client.go here
 func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, error) {
+	if kind == "" {
+		return schema.GroupVersionResource{}, fmt.Errorf("invalid resource kind: kind cannot be empty")
+	}
+
 	p.gvrCacheMutex.RLock()
 	defer p.gvrCacheMutex.RUnlock()
 
