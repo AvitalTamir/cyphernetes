@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 )
 
@@ -1899,7 +1902,6 @@ var _ = Describe("Cyphernetes E2E", func() {
 	})
 
 	It("Should set non-existent annotations", func() {
-		core.LogLevel = "debug"
 		By("Creating a deployment without annotations")
 		testDeployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2094,10 +2096,19 @@ var _ = Describe("Ambiguous Resource Kinds", func() {
 		Expect(k8sClient.Create(ctx, customWidgetCRD)).Should(Succeed())
 
 		// Wait for the CRD to be established
-		Eventually(func() error {
-			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.custom.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
-			return err
-		}, timeout, interval).Should(Succeed())
+		Eventually(func() bool {
+			var crd apiextensionsv1.CustomResourceDefinition
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.custom.example.com"}, &crd)
+			if err != nil {
+				return false
+			}
+			for _, cond := range crd.Status.Conditions {
+				if cond.Type == "Established" && cond.Status == "True" {
+					return true
+				}
+			}
+			return false
+		}, timeout, interval).Should(BeTrue(), "First CRD should be established")
 
 		By("Creating another Widget CRD in a different group")
 		otherWidgetCRD := &apiextensionsv1.CustomResourceDefinition{
@@ -2152,10 +2163,19 @@ var _ = Describe("Ambiguous Resource Kinds", func() {
 		Expect(k8sClient.Create(ctx, otherWidgetCRD)).Should(Succeed())
 
 		// Wait for the CRD to be established
-		Eventually(func() error {
-			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.other.example.com"}, &apiextensionsv1.CustomResourceDefinition{})
-			return err
-		}, timeout, interval).Should(Succeed())
+		Eventually(func() bool {
+			var crd apiextensionsv1.CustomResourceDefinition
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: "widgets.other.example.com"}, &crd)
+			if err != nil {
+				return false
+			}
+			for _, cond := range crd.Status.Conditions {
+				if cond.Type == "Established" && cond.Status == "True" {
+					return true
+				}
+			}
+			return false
+		}, timeout, interval).Should(BeTrue(), "Second CRD should be established")
 
 		By("Creating a provider instance")
 		provider, err := apiserver.NewAPIServerProvider()
@@ -2180,5 +2200,172 @@ var _ = Describe("Ambiguous Resource Kinds", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(gvr.Group).To(Equal("other.example.com"))
 		Expect(gvr.Resource).To(Equal("widgets"))
+
+		By("Verifying error handling for invalid inputs")
+		// Test case 4: Non-existent resource with invalid characters
+		_, err = provider.FindGVR("ThisIs@CompletelyInvalid!!Resource")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("resource"))
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Test case 5: Empty input
+		_, err = provider.FindGVR("")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
+
+		// Test case 6: Malformed group name
+		_, err = provider.FindGVR("widgets.invalid..group")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Test case 8: Partial group match
+		_, err = provider.FindGVR("widgets.custom")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+
+		// Test case 9: Wrong separator
+		_, err = provider.FindGVR("widgets/custom.example.com")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found"))
+	})
+})
+
+var _ = Describe("Input Validation", func() {
+	var provider provider.Provider
+	var err error
+
+	BeforeEach(func() {
+		provider, err = apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Context("FindGVR", func() {
+		It("should handle invalid inputs correctly", func() {
+			By("Testing empty input")
+			_, err = provider.FindGVR("")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
+
+			By("Testing input with only dots")
+			_, err = provider.FindGVR("...")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+
+			By("Testing input with invalid characters")
+			_, err = provider.FindGVR("pod$")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+
+			By("Testing input with only whitespace")
+			_, err = provider.FindGVR("   ")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+
+			By("Testing extremely long input")
+			longInput := strings.Repeat("a", 1000) + ".example.com"
+			_, err = provider.FindGVR(longInput)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+	})
+
+	Context("GetK8sResources", func() {
+		It("should handle invalid inputs correctly", func() {
+			By("Testing with empty kind")
+			_, err = provider.GetK8sResources("", "", "", "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
+
+			By("Testing with invalid field selector")
+			_, err = provider.GetK8sResources("pod", "invalid==field", "", "default")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("field label not supported"))
+
+			By("Testing with invalid label selector")
+			_, err = provider.GetK8sResources("pod", "", "invalid=label=value", "default")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("found '=', expected: ',' or 'end of string'"))
+
+			By("Testing with non-existent namespace")
+			nonExistentNS := "non-existent-namespace-" + uuid.New().String()
+			result, err := provider.GetK8sResources("pod", "", "", nonExistentNS)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeEmpty(), "Expected empty result for non-existent namespace")
+		})
+	})
+
+	Context("PatchK8sResource", func() {
+		It("should handle invalid inputs correctly", func() {
+			By("Testing with empty kind")
+			err = provider.PatchK8sResource("", "name", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
+
+			By("Creating a test pod")
+			testPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-patch-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			err = provider.CreateK8sResource("pod", "test-patch-pod", "default", testPod)
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func() {
+				_ = provider.DeleteK8sResources("pod", "test-patch-pod", "default")
+			})
+
+			By("Testing with invalid JSON patch")
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`invalid json`))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid"))
+
+			By("Testing with invalid patch operation")
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`[{"op": "invalid", "path": "/metadata/labels/test", "value": "test"}]`))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("the server rejected our request"))
+
+			By("Testing with non-existent resource")
+			err = provider.PatchK8sResource("pod", "non-existent-pod", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+	})
+
+	Context("Query Execution", func() {
+		It("should handle invalid query inputs correctly", func() {
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Testing empty query")
+			_, err = executor.Execute(nil, "default")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("empty query"))
+
+			By("Testing malformed MATCH clause")
+			_, err = core.ParseQuery("MATCH (p:Pod")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("parse error: parsing first clause: expected )"))
+
+			By("Testing invalid WHERE clause")
+			_, err = core.ParseQuery("MATCH (p:Pod) WHERE p.metadata.name = ")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("parse error: parsing first clause: expected value, got \"\""))
+
+			By("Testing invalid relationship")
+			ast, err := core.ParseQuery("MATCH (p:Pod)->(s:NonExistentKind) RETURN p")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = executor.Execute(ast, "default")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error finding API resource >> resource \"NonExistentKind\" not found"))
+		})
 	})
 })
