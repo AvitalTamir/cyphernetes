@@ -991,35 +991,20 @@ func toFloat64(v interface{}) (float64, error) {
 func createCompatiblePatch(path []string, value interface{}) []interface{} {
 	// Special handling for metadata fields
 	if path[0] == "metadata" {
-		if len(path) > 1 && path[1] == "annotations" {
-			// For annotations, we need to ensure the annotations map exists first
+		if len(path) > 1 && (path[1] == "annotations" || path[1] == "labels") {
+			// For annotations and labels, we need to ensure the map exists first
 			patches := make([]interface{}, 0)
 
-			// First patch: test if annotations exist
-			testPatch := map[string]interface{}{
-				"op":    "test",
-				"path":  "/metadata/annotations",
-				"value": map[string]interface{}{},
-			}
-
-			// Second patch: add annotations if they don't exist
+			// Add map with the specific key-value pair
 			addPatch := map[string]interface{}{
-				"op":    "add",
-				"path":  "/metadata/annotations",
-				"value": map[string]interface{}{},
+				"op":   "add",
+				"path": "/metadata/" + path[1],
+				"value": map[string]interface{}{
+					path[len(path)-1]: value,
+				},
 			}
 
-			// Third patch: set the specific annotation
-			valuePatch := map[string]interface{}{
-				"op":    "add",
-				"path":  "/" + strings.Join(path, "/"),
-				"value": value,
-			}
-
-			patches = append(patches, testPatch)
 			patches = append(patches, addPatch)
-			patches = append(patches, valuePatch)
-
 			return patches
 		}
 	}
@@ -2076,7 +2061,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				name := metadata["name"].(string)
 				namespace := getNamespaceName(metadata)
 
-				logDebug("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
+				fmt.Printf("Applying patch to resource %s/%s in namespace %s\n", nodeKind, name, namespace)
 				logDebug("Patch JSON: %s", string(patchJSON))
 				logDebug("Current resource state: %+v", resource)
 
