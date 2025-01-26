@@ -1036,6 +1036,225 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "partial node patterns",
+			input: "MATCH (p:pod)->(:service)->(x) RETURN x.metadata.name",
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "pod",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "",
+									Kind: "service",
+								},
+								IsAnonymous: true,
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "x",
+									Kind: "",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "p",
+										Kind: "pod",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "",
+										Kind: "service",
+									},
+									IsAnonymous: true,
+								},
+							},
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "",
+										Kind: "service",
+									},
+									IsAnonymous: true,
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "x",
+										Kind: "",
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "x.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "empty node with relationships",
+			input: "MATCH (p:pod)->()->(:service) RETURN p.metadata.name",
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "pod",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "",
+									Kind: "",
+								},
+								IsAnonymous: true,
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "",
+									Kind: "service",
+								},
+								IsAnonymous: true,
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "p",
+										Kind: "pod",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "",
+										Kind: "",
+									},
+									IsAnonymous: true,
+								},
+							},
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "",
+										Kind: "",
+									},
+									IsAnonymous: true,
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "",
+										Kind: "service",
+									},
+									IsAnonymous: true,
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:    "standalone empty node",
+			input:   "MATCH () RETURN",
+			wantErr: true,
+		},
+		{
+			name:    "standalone kind-only node",
+			input:   "MATCH (:pod) RETURN",
+			wantErr: true,
+		},
+		{
+			name:  "variable-only node with relationships",
+			input: "MATCH (p:pod)->(x)->(s:service) RETURN x.kind",
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "pod",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "x",
+									Kind: "",
+								},
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "s",
+									Kind: "service",
+								},
+							},
+						},
+						Relationships: []*Relationship{
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "p",
+										Kind: "pod",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "x",
+										Kind: "",
+									},
+								},
+							},
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "x",
+										Kind: "",
+									},
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "s",
+										Kind: "service",
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "x.kind"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

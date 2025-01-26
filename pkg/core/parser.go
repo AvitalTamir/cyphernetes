@@ -181,6 +181,14 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 		return nil, err
 	}
 
+	// Validate that we don't have standalone anonymous nodes
+	if len(nodeRels.Nodes) == 1 && len(nodeRels.Relationships) == 0 {
+		node := nodeRels.Nodes[0]
+		if node.IsAnonymous || (node.ResourceProperties != nil && node.ResourceProperties.Name == "") {
+			return nil, fmt.Errorf("standalone anonymous nodes are not allowed")
+		}
+	}
+
 	var filters []*KeyValuePair
 	if p.current.Type == WHERE {
 		p.advance()
@@ -277,13 +285,28 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 	}
 	p.advance()
 
-	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
-	}
-	name := p.current.Literal
-	p.advance()
-
+	var name string
 	var resourceProps *ResourceProperties
+
+	// Handle empty node ()
+	if p.current.Type == RPAREN {
+		p.advance()
+		return &NodePattern{
+			ResourceProperties: &ResourceProperties{
+				Name: "",
+				Kind: "",
+			},
+			IsAnonymous: true,
+		}, nil
+	}
+
+	// Handle variable name if present
+	if p.current.Type == IDENT {
+		name = p.current.Literal
+		p.advance()
+	}
+
+	// Handle kind if present
 	if p.current.Type == COLON {
 		p.advance()
 		var err error
@@ -300,7 +323,14 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
 		}
 		p.advance()
-		resourceProps = &ResourceProperties{Name: name}
+	}
+
+	// Initialize resourceProps if it's nil
+	if resourceProps == nil {
+		resourceProps = &ResourceProperties{
+			Name: name,
+			Kind: "", // Empty kind for variable-only nodes
+		}
 	}
 
 	// Check for invalid relationship tokens immediately after closing parenthesis
@@ -310,7 +340,10 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
-	return &NodePattern{ResourceProperties: resourceProps}, nil
+	return &NodePattern{
+		ResourceProperties: resourceProps,
+		IsAnonymous:        name == "",
+	}, nil
 }
 
 // parseResourceProperties parses the properties of a node or relationship

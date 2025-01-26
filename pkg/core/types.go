@@ -68,6 +68,7 @@ type ReturnItem struct {
 // NodePattern represents a node pattern in a query
 type NodePattern struct {
 	ResourceProperties *ResourceProperties
+	IsAnonymous        bool // Indicates if this is an anonymous node (no variable name)
 }
 
 // ResourceProperties represents the properties of a resource
