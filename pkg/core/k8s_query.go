@@ -80,106 +80,120 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	if len(ast.Contexts) > 0 {
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
+
+	// First, check for kindless nodes and rewrite the query if needed
+	rewrittenAst, err := q.rewriteQueryForKindlessNodes(ast)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("error rewriting query: %w", err)
+	}
+	if rewrittenAst != nil {
+		ast = rewrittenAst
+	}
+
 	result, err := q.ExecuteSingleQuery(ast, namespace)
 	if err != nil {
-		// Check if this is a QueryExpandedError
-		if expandedErr, ok := err.(*QueryExpandedError); ok {
-			// Parse and execute the expanded query
-			expandedAst, err := ParseQuery(expandedErr.ExpandedQuery)
-			if err != nil {
-				return QueryResult{}, fmt.Errorf("error parsing expanded query: %w", err)
-			}
-			result, err := q.ExecuteSingleQuery(expandedAst, namespace)
-			if err != nil {
-				return result, err
-			}
-
-			// Merge results with special pattern
-			mergedResults := make(map[string]interface{})
-			expResults := make(map[string][]interface{})
-			mergedGraph := Graph{
-				Nodes: []Node{},
-				Edges: []Edge{},
-			}
-			seenNodes := make(map[string]bool)
-			seenEdges := make(map[string]bool)
-
-			// First pass: collect all expanded results and deduplicate graph nodes/edges
-			for key, value := range result.Data {
-				if strings.Contains(key, "__exp__") {
-					// Extract original variable name (everything before __exp__)
-					origVar := strings.Split(key, "__exp__")[0]
-					if expResults[origVar] == nil {
-						expResults[origVar] = make([]interface{}, 0)
-					}
-					if valueSlice, ok := value.([]interface{}); ok && len(valueSlice) > 0 {
-						expResults[origVar] = append(expResults[origVar], valueSlice...)
-					}
-				} else {
-					mergedResults[key] = value
-				}
-			}
-
-			// Deduplicate and merge graph nodes
-			for _, node := range result.Graph.Nodes {
-				nodeKey := fmt.Sprintf("%s/%s/%s", node.Kind, node.Name, node.Namespace)
-				if !seenNodes[nodeKey] {
-					seenNodes[nodeKey] = true
-					// If this is an expanded node, update its Id to remove the __exp__ suffix
-					if strings.Contains(node.Id, "__exp__") {
-						node.Id = strings.Split(node.Id, "__exp__")[0]
-					}
-					mergedGraph.Nodes = append(mergedGraph.Nodes, node)
-				}
-			}
-
-			// Deduplicate and merge graph edges
-			for _, edge := range result.Graph.Edges {
-				edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
-				if !seenEdges[edgeKey] {
-					seenEdges[edgeKey] = true
-					// Update edge endpoints if they contain __exp__ suffix
-					if strings.Contains(edge.From, "__exp__") {
-						edge.From = strings.Split(edge.From, "__exp__")[0]
-					}
-					if strings.Contains(edge.To, "__exp__") {
-						edge.To = strings.Split(edge.To, "__exp__")[0]
-					}
-					mergedGraph.Edges = append(mergedGraph.Edges, edge)
-				}
-			}
-
-			// Second pass: merge expanded results and deduplicate
-			for origVar, values := range expResults {
-				if len(values) > 0 {
-					// Deduplicate values
-					seen := make(map[string]interface{})
-					deduped := make([]interface{}, 0)
-
-					for _, val := range values {
-						// Convert value to string for comparison
-						valBytes, err := json.Marshal(val)
-						if err != nil {
-							continue
-						}
-						valStr := string(valBytes)
-
-						if _, exists := seen[valStr]; !exists {
-							seen[valStr] = val
-							deduped = append(deduped, val)
-						}
-					}
-
-					mergedResults[origVar] = deduped
-				}
-			}
-
-			result.Data = mergedResults
-			result.Graph = mergedGraph
-			return result, nil
-		}
 		return result, err
 	}
+
+	// If this was a rewritten query, merge and deduplicate the results
+	if rewrittenAst != nil {
+		// Merge results with special pattern
+		mergedResults := make(map[string]interface{})
+		expResults := make(map[string][]interface{})
+		mergedGraph := Graph{
+			Nodes: []Node{},
+			Edges: []Edge{},
+		}
+		seenNodes := make(map[string]bool)
+		seenEdges := make(map[string]bool)
+
+		// First pass: collect all expanded results and deduplicate graph nodes/edges
+		for key, value := range result.Data {
+			if strings.Contains(key, "__exp__") {
+				// Extract original variable name (everything before __exp__)
+				origVar := strings.Split(key, "__exp__")[0]
+				if expResults[origVar] == nil {
+					expResults[origVar] = make([]interface{}, 0)
+				}
+				if valueSlice, ok := value.([]interface{}); ok && len(valueSlice) > 0 {
+					expResults[origVar] = append(expResults[origVar], valueSlice...)
+				}
+			} else {
+				mergedResults[key] = value
+			}
+		}
+
+		// Deduplicate and merge graph nodes
+		for _, node := range result.Graph.Nodes {
+			// First clean up the Id if it has an __exp__ suffix
+			if strings.Contains(node.Id, "__exp__") {
+				node.Id = strings.Split(node.Id, "__exp__")[0]
+			}
+			// Use just Kind+Name as the deduplication key
+			nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+			if !seenNodes[nodeKey] {
+				seenNodes[nodeKey] = true
+				mergedGraph.Nodes = append(mergedGraph.Nodes, node)
+			}
+		}
+
+		// Deduplicate and merge graph edges
+		for _, edge := range result.Graph.Edges {
+			// Clean up edge endpoints if they contain __exp__ suffix
+			if strings.Contains(edge.From, "__exp__") {
+				edge.From = strings.Split(edge.From, "__exp__")[0]
+			}
+			if strings.Contains(edge.To, "__exp__") {
+				edge.To = strings.Split(edge.To, "__exp__")[0]
+			}
+			edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
+			if !seenEdges[edgeKey] {
+				seenEdges[edgeKey] = true
+				mergedGraph.Edges = append(mergedGraph.Edges, edge)
+			}
+		}
+
+		// Second pass: merge expanded results and deduplicate
+		for origVar, values := range expResults {
+			if len(values) > 0 {
+				// Deduplicate values
+				seen := make(map[string]interface{})
+				deduped := make([]interface{}, 0)
+
+				for _, val := range values {
+					// Convert value to string for comparison
+					valBytes, err := json.Marshal(val)
+					if err != nil {
+						continue
+					}
+					valStr := string(valBytes)
+
+					if _, exists := seen[valStr]; !exists {
+						seen[valStr] = val
+						deduped = append(deduped, val)
+					}
+				}
+
+				mergedResults[origVar] = deduped
+			}
+		}
+
+		result.Data = mergedResults
+		result.Graph = mergedGraph
+	}
+
+	// Final deduplication of nodes before returning
+	seenNodes := make(map[string]bool)
+	var dedupedNodes []Node
+	for _, node := range result.Graph.Nodes {
+		nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		if !seenNodes[nodeKey] {
+			seenNodes[nodeKey] = true
+			dedupedNodes = append(dedupedNodes, node)
+		}
+	}
+	result.Graph.Nodes = dedupedNodes
+
 	return result, nil
 }
 
@@ -380,7 +394,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 				} else {
 					// error out
-					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
+					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", node.ResourceProperties.Kind, foreignNode.ResourceProperties.Kind)
 				}
 
 				var resourceTemplate map[string]interface{}
@@ -728,6 +742,141 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	return *results, nil
 }
 
+func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expression, error) {
+	// Find all kindless nodes in MATCH clauses
+	var kindlessNodes []*NodePattern
+	var relationships []*Relationship
+	for _, clause := range ast.Clauses {
+		if matchClause, ok := clause.(*MatchClause); ok {
+			for _, node := range matchClause.Nodes {
+				if node.ResourceProperties.Kind == "" {
+					kindlessNodes = append(kindlessNodes, node)
+				}
+			}
+			relationships = append(relationships, matchClause.Relationships...)
+		}
+	}
+
+	// If no kindless nodes, no rewrite needed
+	if len(kindlessNodes) == 0 {
+		return nil, nil
+	}
+
+	// Find potential kinds for each kindless node
+	potentialKinds := FindPotentialKindsIntersection(relationships)
+	if len(potentialKinds) == 0 {
+		return nil, fmt.Errorf("unable to determine kind for nodes in relationship")
+	}
+
+	// Build expanded query
+	var matchParts []string
+	var returnParts []string
+	var seenNodes = make(map[string]bool)
+
+	// For each potential kind, create a match pattern and return item
+	for i, kind := range potentialKinds {
+		for _, clause := range ast.Clauses {
+			switch c := clause.(type) {
+			case *MatchClause:
+				// Build match pattern
+				var nodeParts []string
+				for _, rel := range c.Relationships {
+					var leftNodeStr, rightNodeStr string
+
+					// Build left node pattern
+					if rel.LeftNode.ResourceProperties.Kind == "" {
+						leftNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.LeftNode.ResourceProperties.Name, i, kind)
+					} else {
+						leftNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.LeftNode.ResourceProperties.Name, i, rel.LeftNode.ResourceProperties.Kind)
+					}
+
+					// Add properties to left node if any
+					if rel.LeftNode.ResourceProperties.Properties != nil {
+						props := make([]string, 0)
+						for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
+							var valueStr string
+							switch v := prop.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+						}
+						leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+					}
+					leftNodeStr += ")"
+
+					// Build right node pattern
+					if rel.RightNode.ResourceProperties.Kind == "" {
+						rightNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.RightNode.ResourceProperties.Name, i, kind)
+					} else {
+						rightNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.RightNode.ResourceProperties.Name, i, rel.RightNode.ResourceProperties.Kind)
+					}
+
+					// Add properties to right node if any
+					if rel.RightNode.ResourceProperties.Properties != nil {
+						props := make([]string, 0)
+						for _, prop := range rel.RightNode.ResourceProperties.Properties.PropertyList {
+							var valueStr string
+							switch v := prop.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+						}
+						rightNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+					}
+					rightNodeStr += ")"
+
+					// Combine into a single pattern with relationship
+					nodeParts = append(nodeParts, fmt.Sprintf("%s->%s", leftNodeStr, rightNodeStr))
+				}
+
+				matchParts = append(matchParts, strings.Join(nodeParts, ", "))
+
+			case *ReturnClause:
+				// Build return items
+				for _, item := range c.Items {
+					if !seenNodes[item.JsonPath] {
+						seenNodes[item.JsonPath] = true
+						// Add a return item for each iteration
+						for j := 0; j < len(potentialKinds); j++ {
+							if strings.Contains(item.JsonPath, ".") {
+								parts := strings.SplitN(item.JsonPath, ".", 2)
+								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
+								returnPath := fmt.Sprintf("%s.%s", varName, parts[1])
+								returnParts = append(returnParts, returnPath)
+							} else {
+								varName := fmt.Sprintf("%s__exp__%d", item.JsonPath, j)
+								returnParts = append(returnParts, varName)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Combine into final query
+	query := fmt.Sprintf("MATCH %s RETURN %s",
+		strings.Join(matchParts, ", "),
+		strings.Join(returnParts, ", "))
+
+	// Log the expanded query for debugging
+	fmt.Printf("Expanded query: %s\n", query)
+
+	// Parse the expanded query into a new AST
+	newAst, err := ParseQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing expanded query: %w", err)
+	}
+
+	return newAst, nil
+}
+
 func expandAndReevaluateQuery(rel *Relationship, potentialKinds []string) string {
 	// Build the expanded query
 	var matchParts []string
@@ -971,6 +1120,15 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 }
 
 func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
+	logDebug(fmt.Sprintf("Processing nodes, current graph nodes: %+v\n", results.Graph.Nodes))
+
+	// Track seen nodes for deduplication
+	seenNodes := make(map[string]bool)
+	for _, existingNode := range results.Graph.Nodes {
+		nodeKey := fmt.Sprintf("%s/%s", existingNode.Kind, existingNode.Name)
+		seenNodes[nodeKey] = true
+	}
+
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
 			// Try to resolve the kind using relationships
@@ -1000,33 +1158,39 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 				if !ok {
 					continue
 				}
-				node := Node{
+				newNode := Node{
 					Id:   node.ResourceProperties.Name,
 					Kind: resource["kind"].(string),
 					Name: metadata["name"].(string),
 				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
+				if newNode.Kind != "Namespace" {
+					newNode.Namespace = getNamespaceName(metadata)
 				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
+
+				// Check if we've seen this node before
+				nodeKey := fmt.Sprintf("%s/%s", newNode.Kind, newNode.Name)
+				if !seenNodes[nodeKey] {
+					seenNodes[nodeKey] = true
+					logDebug(fmt.Sprintf("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey))
+					results.Graph.Nodes = append(results.Graph.Nodes, newNode)
+				} else {
+					logDebug(fmt.Sprintf("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey))
+				}
 			}
 		} else if resultMap[node.ResourceProperties.Name] == nil {
 			// Copy from cache using the original name
 			resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
 		}
 	}
+	logDebug(fmt.Sprintf("After processNodes, graph nodes: %+v\n", results.Graph.Nodes))
 	return nil
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	logDebug(fmt.Sprintln("Building graph"))
-	logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
-	logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
+	logDebug(fmt.Sprintf("Initial nodes: %+v\n", result.Graph.Nodes))
 
-	nodeMap := make(map[string]bool)
-	edgeMap := make(map[string]bool)
-
-	// Process nodes (this part remains the same)
+	// Process nodes from result data
 	for key, resources := range result.Data {
 		resourcesSlice, ok := resources.([]interface{})
 		if !ok || len(resourcesSlice) == 0 {
@@ -1057,28 +1221,44 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 			if node.Kind != "Namespace" {
 				node.Namespace = getNamespaceName(metadata)
 			}
-
-			if !nodeMap[node.Id] {
-				result.Graph.Nodes = append(result.Graph.Nodes, node)
-				nodeMap[node.Id] = true
-			}
+			logDebug(fmt.Sprintf("Adding node from result data: %+v\n", node))
+			result.Graph.Nodes = append(result.Graph.Nodes, node)
 		}
 	}
 
+	logDebug(fmt.Sprintf("Nodes before deduplication: %+v\n", result.Graph.Nodes))
+
+	// Final deduplication step
+	nodeMap := make(map[string]bool)
+	var dedupedNodes []Node
+	for _, node := range result.Graph.Nodes {
+		nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		if !nodeMap[nodeKey] {
+			nodeMap[nodeKey] = true
+			dedupedNodes = append(dedupedNodes, node)
+			logDebug(fmt.Sprintf("Keeping unique node: %+v with key: %s\n", node, nodeKey))
+		} else {
+			logDebug(fmt.Sprintf("Skipping duplicate node: %+v with key: %s\n", node, nodeKey))
+		}
+	}
+	result.Graph.Nodes = dedupedNodes
+
+	logDebug(fmt.Sprintf("Final nodes after deduplication: %+v\n", result.Graph.Nodes))
+
 	// Process edges
-	newEdges := []Edge{}
+	edgeMap := make(map[string]bool)
+	var dedupedEdges []Edge
 	for _, edge := range result.Graph.Edges {
 		edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
 		reverseEdgeKey := fmt.Sprintf("%s-%s-%s", edge.To, edge.From, edge.Type)
 
 		if !edgeMap[edgeKey] && !edgeMap[reverseEdgeKey] {
-			newEdges = append(newEdges, edge)
+			dedupedEdges = append(dedupedEdges, edge)
 			edgeMap[edgeKey] = true
 			edgeMap[reverseEdgeKey] = true
 		}
 	}
-
-	result.Graph.Edges = newEdges
+	result.Graph.Edges = dedupedEdges
 }
 
 func getNamespaceName(metadata map[string]interface{}) string {
