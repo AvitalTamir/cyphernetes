@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -995,15 +996,16 @@ func FindPotentialKinds(sourceKind string) []string {
 
 	for _, rule := range rules {
 		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", rule.KindA, rule.KindB, rule.Relationship)
-		// Check if sourceKind matches KindA (direct relationships)
-		if strings.ToLower(rule.KindA) == sourceKind {
-			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
-			potentialKinds[rule.KindB] = true
-		}
-		// Check if sourceKind matches KindB (reverse relationships)
+
+		// If sourceKind is KindB, we want KindA (what can connect to sourceKind)
 		if strings.ToLower(rule.KindB) == sourceKind {
 			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", rule.KindA)
 			potentialKinds[rule.KindA] = true
+		}
+		// If sourceKind is KindA, we want KindB (what sourceKind can connect to)
+		if strings.ToLower(rule.KindA) == sourceKind {
+			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
+			potentialKinds[rule.KindB] = true
 		}
 	}
 
@@ -1012,7 +1014,103 @@ func FindPotentialKinds(sourceKind string) []string {
 	for kind := range potentialKinds {
 		result = append(result, kind)
 	}
+	sort.Strings(result) // Sort for consistent results
 	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
-
 	return result
+}
+
+// FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
+func FindPotentialKindsIntersection(relationships []*Relationship) []string {
+	if len(relationships) == 0 {
+		debugLog("FindPotentialKindsIntersection: no relationships provided")
+		return []string{}
+	}
+
+	// Initialize result with potential kinds from first relationship
+	var firstKnownKind string
+	var firstUnknownNode *NodePattern
+	if relationships[0].LeftNode.ResourceProperties.Kind == "" {
+		firstUnknownNode = relationships[0].LeftNode
+		firstKnownKind = relationships[0].RightNode.ResourceProperties.Kind
+		debugLog("FindPotentialKindsIntersection: first relationship - unknown node on left, known kind=%s", firstKnownKind)
+	} else if relationships[0].RightNode.ResourceProperties.Kind == "" {
+		firstUnknownNode = relationships[0].RightNode
+		firstKnownKind = relationships[0].LeftNode.ResourceProperties.Kind
+		debugLog("FindPotentialKindsIntersection: first relationship - unknown node on right, known kind=%s", firstKnownKind)
+	} else {
+		debugLog("FindPotentialKindsIntersection: no unknown kinds in first relationship")
+		return []string{} // No unknown kinds
+	}
+
+	debugLog("FindPotentialKindsIntersection: first relationship - unknown node=%s, known kind=%s",
+		firstUnknownNode.ResourceProperties.Name, firstKnownKind)
+
+	// Initialize result with all potential kinds from first relationship
+	result := make(map[string]bool)
+	for _, kind := range FindPotentialKinds(firstKnownKind) {
+		result[kind] = true
+	}
+	debugLog("FindPotentialKindsIntersection: initial potential kinds=%v", result)
+
+	// For each additional relationship, intersect with its potential kinds
+	for i := 1; i < len(relationships); i++ {
+		var knownKind string
+		var unknownNodePosition string
+		if relationships[i].LeftNode.ResourceProperties.Kind == "" {
+			knownKind = relationships[i].RightNode.ResourceProperties.Kind
+			unknownNodePosition = "left"
+		} else if relationships[i].RightNode.ResourceProperties.Kind == "" {
+			knownKind = relationships[i].LeftNode.ResourceProperties.Kind
+			unknownNodePosition = "right"
+		} else {
+			debugLog("FindPotentialKindsIntersection: skipping relationship %d - no unknown kinds", i)
+			continue // Skip if no unknown kinds
+		}
+
+		debugLog("FindPotentialKindsIntersection: processing relationship %d with known kind=%s, unknown node on %s", i, knownKind, unknownNodePosition)
+
+		// Get potential kinds for this relationship
+		potentialKinds := FindPotentialKinds(knownKind)
+		debugLog("FindPotentialKindsIntersection: potential kinds for relationship %d=%v", i, potentialKinds)
+
+		newResult := make(map[string]bool)
+
+		// Keep only kinds that exist in both sets
+		for _, kind := range potentialKinds {
+			if result[kind] {
+				debugLog("FindPotentialKindsIntersection: keeping common kind %s", kind)
+				newResult[kind] = true
+			}
+		}
+
+		result = newResult
+		debugLog("FindPotentialKindsIntersection: intersection after relationship %d=%v", i, result)
+	}
+
+	// Convert map back to slice
+	var kinds []string
+	for kind := range result {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds) // Sort for consistent results
+	debugLog("FindPotentialKindsIntersection: final result=%v", kinds)
+	return kinds
+}
+
+// ValidateAnonymousNode checks if an anonymous node is valid (not standalone)
+func ValidateAnonymousNode(node *NodePattern, relationships []*Relationship) error {
+	if !node.IsAnonymous {
+		return nil // Not an anonymous node, no validation needed
+	}
+
+	// Check if the node appears in any relationship
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Name == node.ResourceProperties.Name ||
+			rel.RightNode.ResourceProperties.Name == node.ResourceProperties.Name {
+			return nil // Node is used in a relationship, valid
+		}
+	}
+
+	// Node is anonymous and not used in any relationship
+	return fmt.Errorf("standalone anonymous node '()' is not allowed")
 }
