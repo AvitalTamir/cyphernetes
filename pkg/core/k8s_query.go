@@ -89,7 +89,58 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			if err != nil {
 				return QueryResult{}, fmt.Errorf("error parsing expanded query: %w", err)
 			}
-			return q.ExecuteSingleQuery(expandedAst, namespace)
+			result, err := q.ExecuteSingleQuery(expandedAst, namespace)
+			if err != nil {
+				return result, err
+			}
+
+			// Merge results with special pattern
+			mergedResults := make(map[string]interface{})
+			expResults := make(map[string][]interface{})
+
+			// First pass: collect all expanded results
+			for key, value := range result.Data {
+				if strings.Contains(key, "__exp__") {
+					// Extract original variable name (everything before __exp__)
+					origVar := strings.Split(key, "__exp__")[0]
+					if expResults[origVar] == nil {
+						expResults[origVar] = make([]interface{}, 0)
+					}
+					if valueSlice, ok := value.([]interface{}); ok && len(valueSlice) > 0 {
+						expResults[origVar] = append(expResults[origVar], valueSlice...)
+					}
+				} else {
+					mergedResults[key] = value
+				}
+			}
+
+			// Second pass: merge expanded results and deduplicate
+			for origVar, values := range expResults {
+				if len(values) > 0 {
+					// Deduplicate values
+					seen := make(map[string]interface{})
+					deduped := make([]interface{}, 0)
+
+					for _, val := range values {
+						// Convert value to string for comparison
+						valBytes, err := json.Marshal(val)
+						if err != nil {
+							continue
+						}
+						valStr := string(valBytes)
+
+						if _, exists := seen[valStr]; !exists {
+							seen[valStr] = val
+							deduped = append(deduped, val)
+						}
+					}
+
+					mergedResults[origVar] = deduped
+				}
+			}
+
+			result.Data = mergedResults
+			return result, nil
 		}
 		return result, err
 	}
@@ -646,40 +697,39 @@ func expandAndReevaluateQuery(rel *Relationship, potentialKinds []string) string
 	var matchParts []string
 	var returnParts []string
 
-	// Get the base node pattern with its properties
-	leftNodeStr := fmt.Sprintf("(%s:%s", rel.LeftNode.ResourceProperties.Name, rel.LeftNode.ResourceProperties.Kind)
-	if rel.LeftNode.ResourceProperties.Properties != nil && len(rel.LeftNode.ResourceProperties.Properties.PropertyList) > 0 {
-		var props []string
-		for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
-			// Handle different value types
-			var valueStr string
-			switch v := prop.Value.(type) {
-			case string:
-				valueStr = fmt.Sprintf("\"%s\"", v)
-			default:
-				valueStr = fmt.Sprintf("%v", v)
-			}
-			props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
-		}
-		leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
-	}
-	leftNodeStr += ")"
-
 	// For each potential kind, create a match pattern and return item
-	for _, kind := range potentialKinds {
-		// Create unique variable name for this kind
-		varName := fmt.Sprintf("%s_%s", rel.RightNode.ResourceProperties.Name, strings.ToLower(kind))
+	for i, kind := range potentialKinds {
+		// Create unique variable names for both left and right nodes
+		leftVarName := fmt.Sprintf("%s__exp__%d", rel.LeftNode.ResourceProperties.Name, i)
+		rightVarName := fmt.Sprintf("%s_%s", rel.RightNode.ResourceProperties.Name, strings.ToLower(kind))
+
+		// Get the base node pattern with its properties
+		leftNodeStr := fmt.Sprintf("(%s:%s", leftVarName, rel.LeftNode.ResourceProperties.Kind)
+		if rel.LeftNode.ResourceProperties.Properties != nil && len(rel.LeftNode.ResourceProperties.Properties.PropertyList) > 0 {
+			var props []string
+			for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
+				// Handle different value types
+				var valueStr string
+				switch v := prop.Value.(type) {
+				case string:
+					valueStr = fmt.Sprintf("\"%s\"", v)
+				default:
+					valueStr = fmt.Sprintf("%v", v)
+				}
+				props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+			}
+			leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+		}
+		leftNodeStr += ")"
 
 		// Create match pattern
-		matchPattern := fmt.Sprintf("%s->(%s:%s)", leftNodeStr, varName, kind)
+		matchPattern := fmt.Sprintf("%s->(%s:%s)", leftNodeStr, rightVarName, kind)
 		matchParts = append(matchParts, matchPattern)
 
-		// Create return item (using the original variable name as a prefix)
-		returnParts = append(returnParts, fmt.Sprintf("%s.kind AS %s_kind", varName, varName))
+		// Create return items without AS clauses
+		returnParts = append(returnParts, fmt.Sprintf("%s.kind", rightVarName))
+		returnParts = append(returnParts, fmt.Sprintf("%s.metadata.name", leftVarName))
 	}
-
-	// Add the original return values for the left node
-	returnParts = append(returnParts, fmt.Sprintf("%s.metadata.name", rel.LeftNode.ResourceProperties.Name))
 
 	// Combine into final query
 	query := fmt.Sprintf("MATCH %s RETURN %s",
