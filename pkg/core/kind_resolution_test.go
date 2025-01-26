@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -167,6 +168,45 @@ func TestValidateAnonymousNode(t *testing.T) {
 			err := ValidateAnonymousNode(tt.node, tt.relationships)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateAnonymousNode() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFindPotentialKindsWithPartialKnownRelationship(t *testing.T) {
+	tests := []struct {
+		name          string
+		relationships []*Relationship
+		want          []string
+	}{
+		{
+			name: "pod to unknown kind",
+			relationships: []*Relationship{
+				{
+					LeftNode: &NodePattern{
+						ResourceProperties: &ResourceProperties{
+							Kind: "pod",
+							Name: "p",
+						},
+					},
+					RightNode: &NodePattern{
+						ResourceProperties: &ResourceProperties{
+							Name: "x",
+						},
+					},
+				},
+			},
+			want: []string{"services", "networkpolicies", "poddisruptionbudgets", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FindPotentialKindsIntersection(tt.relationships)
+			sort.Strings(got)
+			sort.Strings(tt.want)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("FindPotentialKindsIntersection() = %v, want %v", got, tt.want)
 			}
 		})
 	}
