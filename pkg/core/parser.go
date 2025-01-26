@@ -982,3 +982,37 @@ func (p *Parser) nextAnonymousVar() string {
 	p.anonymousCounter++
 	return fmt.Sprintf("_anon%d", p.anonymousCounter)
 }
+
+// FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
+func FindPotentialKinds(sourceKind string) []string {
+	sourceKind = strings.ToLower(sourceKind)
+	potentialKinds := make(map[string]bool)
+	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
+
+	// Look through all relationship rules
+	rules := GetRelationshipRules()
+	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
+
+	for _, rule := range rules {
+		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", rule.KindA, rule.KindB, rule.Relationship)
+		// Check if sourceKind matches KindA (direct relationships)
+		if strings.ToLower(rule.KindA) == sourceKind {
+			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
+			potentialKinds[rule.KindB] = true
+		}
+		// Check if sourceKind matches KindB (reverse relationships)
+		if strings.ToLower(rule.KindB) == sourceKind {
+			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", rule.KindA)
+			potentialKinds[rule.KindA] = true
+		}
+	}
+
+	// Convert map to slice
+	var result []string
+	for kind := range potentialKinds {
+		result = append(result, kind)
+	}
+	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
+
+	return result
+}
