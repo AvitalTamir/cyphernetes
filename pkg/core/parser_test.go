@@ -1037,7 +1037,7 @@ func TestRecursiveParser(t *testing.T) {
 			},
 		},
 		{
-			name:  "partial node patterns",
+			name:  "partial node patterns with anonymous vars",
 			input: "MATCH (p:pod)->(:service)->(x) RETURN x.metadata.name",
 			want: &Expression{
 				Clauses: []Clause{
@@ -1051,7 +1051,7 @@ func TestRecursiveParser(t *testing.T) {
 							},
 							{
 								ResourceProperties: &ResourceProperties{
-									Name: "",
+									Name: "_anon1",
 									Kind: "service",
 								},
 								IsAnonymous: true,
@@ -1074,7 +1074,7 @@ func TestRecursiveParser(t *testing.T) {
 								},
 								RightNode: &NodePattern{
 									ResourceProperties: &ResourceProperties{
-										Name: "",
+										Name: "_anon1",
 										Kind: "service",
 									},
 									IsAnonymous: true,
@@ -1084,7 +1084,7 @@ func TestRecursiveParser(t *testing.T) {
 								Direction: Right,
 								LeftNode: &NodePattern{
 									ResourceProperties: &ResourceProperties{
-										Name: "",
+										Name: "_anon1",
 										Kind: "service",
 									},
 									IsAnonymous: true,
@@ -1107,8 +1107,8 @@ func TestRecursiveParser(t *testing.T) {
 			},
 		},
 		{
-			name:  "empty node with relationships",
-			input: "MATCH (p:pod)->()->(:service) RETURN p.metadata.name",
+			name:  "multiple anonymous nodes",
+			input: "MATCH (p:pod)->()->()->(:service) RETURN p.metadata.name",
 			want: &Expression{
 				Clauses: []Clause{
 					&MatchClause{
@@ -1121,14 +1121,21 @@ func TestRecursiveParser(t *testing.T) {
 							},
 							{
 								ResourceProperties: &ResourceProperties{
-									Name: "",
+									Name: "_anon1",
 									Kind: "",
 								},
 								IsAnonymous: true,
 							},
 							{
 								ResourceProperties: &ResourceProperties{
-									Name: "",
+									Name: "_anon2",
+									Kind: "",
+								},
+								IsAnonymous: true,
+							},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "_anon3",
 									Kind: "service",
 								},
 								IsAnonymous: true,
@@ -1145,7 +1152,7 @@ func TestRecursiveParser(t *testing.T) {
 								},
 								RightNode: &NodePattern{
 									ResourceProperties: &ResourceProperties{
-										Name: "",
+										Name: "_anon1",
 										Kind: "",
 									},
 									IsAnonymous: true,
@@ -1155,14 +1162,31 @@ func TestRecursiveParser(t *testing.T) {
 								Direction: Right,
 								LeftNode: &NodePattern{
 									ResourceProperties: &ResourceProperties{
-										Name: "",
+										Name: "_anon1",
 										Kind: "",
 									},
 									IsAnonymous: true,
 								},
 								RightNode: &NodePattern{
 									ResourceProperties: &ResourceProperties{
-										Name: "",
+										Name: "_anon2",
+										Kind: "",
+									},
+									IsAnonymous: true,
+								},
+							},
+							{
+								Direction: Right,
+								LeftNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "_anon2",
+										Kind: "",
+									},
+									IsAnonymous: true,
+								},
+								RightNode: &NodePattern{
+									ResourceProperties: &ResourceProperties{
+										Name: "_anon3",
 										Kind: "service",
 									},
 									IsAnonymous: true,

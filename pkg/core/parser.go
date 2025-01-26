@@ -8,16 +8,18 @@ import (
 )
 
 type Parser struct {
-	lexer    *Lexer
-	current  Token
-	pos      int
-	inCreate bool
+	lexer            *Lexer
+	current          Token
+	pos              int
+	inCreate         bool
+	anonymousCounter int
 }
 
 func NewRecursiveParser(input string) *Parser {
 	lexer := NewLexer(input)
 	return &Parser{
-		lexer: lexer,
+		lexer:            lexer,
+		anonymousCounter: 0,
 	}
 }
 
@@ -287,16 +289,19 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 
 	var name string
 	var resourceProps *ResourceProperties
+	isAnonymous := false
 
 	// Handle empty node ()
 	if p.current.Type == RPAREN {
 		p.advance()
+		name = p.nextAnonymousVar()
+		isAnonymous = true
 		return &NodePattern{
 			ResourceProperties: &ResourceProperties{
-				Name: "",
+				Name: name,
 				Kind: "",
 			},
-			IsAnonymous: true,
+			IsAnonymous: isAnonymous,
 		}, nil
 	}
 
@@ -304,6 +309,9 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 	if p.current.Type == IDENT {
 		name = p.current.Literal
 		p.advance()
+	} else {
+		name = p.nextAnonymousVar()
+		isAnonymous = true
 	}
 
 	// Handle kind if present
@@ -342,7 +350,7 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 
 	return &NodePattern{
 		ResourceProperties: resourceProps,
-		IsAnonymous:        name == "",
+		IsAnonymous:        isAnonymous,
 	}, nil
 }
 
@@ -967,4 +975,10 @@ func debugLog(format string, args ...interface{}) {
 	if LogLevel == "debug" {
 		log.Printf(format, args...)
 	}
+}
+
+// Add helper method to generate anonymous variable names
+func (p *Parser) nextAnonymousVar() string {
+	p.anonymousCounter++
+	return fmt.Sprintf("_anon%d", p.anonymousCounter)
 }
