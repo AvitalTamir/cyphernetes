@@ -80,7 +80,20 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	if len(ast.Contexts) > 0 {
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
-	return q.ExecuteSingleQuery(ast, namespace)
+	result, err := q.ExecuteSingleQuery(ast, namespace)
+	if err != nil {
+		// Check if this is a QueryExpandedError
+		if expandedErr, ok := err.(*QueryExpandedError); ok {
+			// Parse and execute the expanded query
+			expandedAst, err := ParseQuery(expandedErr.ExpandedQuery)
+			if err != nil {
+				return QueryResult{}, fmt.Errorf("error parsing expanded query: %w", err)
+			}
+			return q.ExecuteSingleQuery(expandedAst, namespace)
+		}
+		return result, err
+	}
+	return result, nil
 }
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
@@ -628,6 +641,63 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	return *results, nil
 }
 
+func expandAndReevaluateQuery(rel *Relationship, potentialKinds []string) string {
+	// Build the expanded query
+	var matchParts []string
+	var returnParts []string
+
+	// Get the base node pattern with its properties
+	leftNodeStr := fmt.Sprintf("(%s:%s", rel.LeftNode.ResourceProperties.Name, rel.LeftNode.ResourceProperties.Kind)
+	if rel.LeftNode.ResourceProperties.Properties != nil && len(rel.LeftNode.ResourceProperties.Properties.PropertyList) > 0 {
+		var props []string
+		for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
+			// Handle different value types
+			var valueStr string
+			switch v := prop.Value.(type) {
+			case string:
+				valueStr = fmt.Sprintf("\"%s\"", v)
+			default:
+				valueStr = fmt.Sprintf("%v", v)
+			}
+			props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+		}
+		leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+	}
+	leftNodeStr += ")"
+
+	// For each potential kind, create a match pattern and return item
+	for _, kind := range potentialKinds {
+		// Create unique variable name for this kind
+		varName := fmt.Sprintf("%s_%s", rel.RightNode.ResourceProperties.Name, strings.ToLower(kind))
+
+		// Create match pattern
+		matchPattern := fmt.Sprintf("%s->(%s:%s)", leftNodeStr, varName, kind)
+		matchParts = append(matchParts, matchPattern)
+
+		// Create return item (using the original variable name as a prefix)
+		returnParts = append(returnParts, fmt.Sprintf("%s.kind AS %s_kind", varName, varName))
+	}
+
+	// Add the original return values for the left node
+	returnParts = append(returnParts, fmt.Sprintf("%s.metadata.name", rel.LeftNode.ResourceProperties.Name))
+
+	// Combine into final query
+	query := fmt.Sprintf("MATCH %s RETURN %s",
+		strings.Join(matchParts, ", "),
+		strings.Join(returnParts, ", "))
+
+	return query
+}
+
+// QueryExpandedError is a special error type that indicates the query was expanded
+type QueryExpandedError struct {
+	ExpandedQuery string
+}
+
+func (e *QueryExpandedError) Error() string {
+	return fmt.Sprintf("query expanded to: %s", e.ExpandedQuery)
+}
+
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
@@ -642,7 +712,10 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
 		}
 		if len(potentialKinds) > 1 {
-			return false, fmt.Errorf("ambiguous kinds for nodes in relationship - possible kinds: %v", potentialKinds)
+			// Instead of returning an error, expand the query
+			expandedQuery := expandAndReevaluateQuery(rel, potentialKinds)
+			fmt.Printf("Query rewritten - going to execute: %s\n", expandedQuery)
+			return false, &QueryExpandedError{ExpandedQuery: expandedQuery}
 		}
 		if rel.LeftNode.ResourceProperties.Kind == "" {
 			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
