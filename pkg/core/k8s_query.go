@@ -187,7 +187,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 			// Iterate over the relationships in the create clause.
 			// Process Relationships
-			for idx, rel := range c.Relationships {
+			for _, rel := range c.Relationships {
 				// Determine which (if any) of the nodes in the relationship have already been fetched in a match clause, and which are new creations
 				var node *NodePattern
 				var foreignNode *NodePattern
@@ -219,7 +219,6 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				targetGVR, err := q.findGVR(node.ResourceProperties.Kind)
 				if err != nil {
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
-
 				}
 				// Find the matching node from stored match nodes to get the kind
 				var foreignNodeKind string
@@ -298,7 +297,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				// loop over the resources array in the resultMap for the foreign node and create the resource
 				for _, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
 					var name string
-					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[idx]
+					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
 
 					fields := append([]string{criteriaField}, defaultPropFields...)
 					foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
@@ -328,7 +327,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									part = strings.TrimSuffix(part, "[]")
 									// create the first element in an array
 									currentForeignPart[part] = []interface{}{}
-									currentForeignPart = currentForeignPart[part].([]interface{})[idx].(map[string]interface{})
+									currentForeignPart = currentForeignPart[part].([]interface{})[0].(map[string]interface{})
 								}
 							}
 						} else {
@@ -356,7 +355,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 											part = strings.TrimSuffix(part, "[]")
 											currentPart[part] = []interface{}{}
 											currentPart[part] = append(currentPart[part].([]interface{}), make(map[string]interface{}))
-											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+											currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
 										} else {
 											currentPart[part] = make(map[string]interface{})
 											currentPart = currentPart[part].(map[string]interface{})
@@ -365,7 +364,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 										if strings.HasSuffix(part, "[]") {
 											part = strings.TrimSuffix(part, "[]")
 											// if the part is an array, recurse into the first element
-											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+											currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
 										} else {
 											currentPart = currentPart[part].(map[string]interface{})
 										}
@@ -634,10 +633,25 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
+
+	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-		// error out
-		return false, fmt.Errorf("must specify kind for all nodes in match clause")
+		// Try to resolve the kind using relationships
+		potentialKinds := FindPotentialKindsIntersection(c.Relationships)
+		if len(potentialKinds) == 0 {
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
+		}
+		if len(potentialKinds) > 1 {
+			return false, fmt.Errorf("ambiguous kinds for nodes in relationship - possible kinds: %v", potentialKinds)
+		}
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
+		}
 	}
+
 	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
 		return false, fmt.Errorf("error finding API resource >> %s", err)
@@ -725,61 +739,6 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	}
 	resultMapMutex.Unlock()
 
-	// Add nodes and edges based on the matched resources
-	rightResources := matchedResources["right"].([]map[string]interface{})
-	leftResources := matchedResources["left"].([]map[string]interface{})
-
-	// Add nodes
-	for _, rightResource := range rightResources {
-		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.RightNode.ResourceProperties.Name,
-					Kind: rightResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
-		}
-	}
-
-	for _, leftResource := range leftResources {
-		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.LeftNode.ResourceProperties.Name,
-					Kind: leftResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
-		}
-	}
-
-	// Process edges
-	for _, rightResource := range rightResources {
-		for _, leftResource := range leftResources {
-			// Check if these resources actually match according to the criteria
-			for _, criterion := range rule.MatchCriteria {
-				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
-					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
-					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
-					results.Graph.Edges = append(results.Graph.Edges, Edge{
-						From: rightNodeId,
-						To:   leftNodeId,
-						Type: string(relType),
-					})
-				}
-			}
-		}
-	}
-
 	return filteredA || filteredB, nil
 }
 
@@ -800,7 +759,15 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
-			return fmt.Errorf("must specify kind for all nodes in match clause")
+			// Try to resolve the kind using relationships
+			potentialKinds := FindPotentialKindsIntersection(c.Relationships)
+			if len(potentialKinds) == 0 {
+				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
+			}
+			if len(potentialKinds) > 1 {
+				return fmt.Errorf("ambiguous kind for node '%s' - possible kinds: %v", node.ResourceProperties.Name, potentialKinds)
+			}
+			node.ResourceProperties.Kind = potentialKinds[0]
 		}
 
 		// check if the node has already been fetched
@@ -1975,55 +1942,66 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	return modified
 }
 
-func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
-	parts := strings.Split(path, "[*]")
-	return evaluateWildcardPathRecursive(resource, parts, 0, filterValue, operator)
-}
-
-func evaluateWildcardPathRecursive(data interface{}, parts []string, depth int, filterValue interface{}, operator string) bool {
-	if depth == len(parts)-1 {
-		// Last part - evaluate the value
-		lastPath := strings.TrimPrefix(parts[depth], ".")
-		if !strings.HasPrefix(lastPath, "$.") {
-			lastPath = "$." + lastPath
-		}
-		value, err := jsonpath.JsonPathLookup(data, lastPath)
-		if err != nil {
-			return false
-		}
-		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
-		if err != nil {
-			return false
-		}
-		return compareValues(resourceValue, filterValue, operator)
+func evaluateWildcardPath(resource map[string]interface{}, path string, filterValue interface{}, operator string) bool {
+	// Get the base path (everything before [*])
+	basePath := path[:strings.Index(path, "[*]")]
+	if !strings.HasPrefix(basePath, "$.") {
+		basePath = "$." + basePath
 	}
 
-	// Get the array at current level
-	currentPath := parts[depth]
-	if !strings.HasPrefix(currentPath, "$.") {
-		currentPath = "$." + currentPath
-	}
-	// Remove trailing dot if exists
-	currentPath = strings.TrimSuffix(currentPath, ".")
-
-	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	// Get the array using the base path
+	array, err := jsonpath.JsonPathLookup(resource, basePath)
 	if err != nil {
 		return false
 	}
 
-	// Handle different array types
-	switch arr := array.(type) {
-	case []interface{}:
-		for _, item := range arr {
-			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+	// Convert to array of interfaces
+	items, ok := array.([]interface{})
+	if !ok {
+		return false
+	}
+
+	// Get the remaining path after [*]
+	remainingPath := path[strings.Index(path, "[*]")+3:]
+	if remainingPath != "" && !strings.HasPrefix(remainingPath, ".") {
+		remainingPath = "." + remainingPath
+	}
+
+	// Check each item in the array
+	for _, item := range items {
+		// For primitive array items
+		if remainingPath == "" {
+			itemValue, filterValue, err := convertToComparableTypes(item, filterValue)
+			if err != nil {
+				continue
+			}
+			if compareValues(itemValue, filterValue, operator) {
 				return true
 			}
+			continue
 		}
-	case []map[string]interface{}:
-		for _, item := range arr {
-			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
-				return true
-			}
+
+		// For object array items
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Create a new path for this item
+		itemPath := "$" + remainingPath
+
+		value, err := jsonpath.JsonPathLookup(itemMap, itemPath)
+		if err != nil {
+			continue
+		}
+
+		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
+		if err != nil {
+			continue
+		}
+
+		if compareValues(resourceValue, filterValue, operator) {
+			return true
 		}
 	}
 
