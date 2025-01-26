@@ -97,8 +97,14 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			// Merge results with special pattern
 			mergedResults := make(map[string]interface{})
 			expResults := make(map[string][]interface{})
+			mergedGraph := Graph{
+				Nodes: []Node{},
+				Edges: []Edge{},
+			}
+			seenNodes := make(map[string]bool)
+			seenEdges := make(map[string]bool)
 
-			// First pass: collect all expanded results
+			// First pass: collect all expanded results and deduplicate graph nodes/edges
 			for key, value := range result.Data {
 				if strings.Contains(key, "__exp__") {
 					// Extract original variable name (everything before __exp__)
@@ -111,6 +117,35 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 					}
 				} else {
 					mergedResults[key] = value
+				}
+			}
+
+			// Deduplicate and merge graph nodes
+			for _, node := range result.Graph.Nodes {
+				nodeKey := fmt.Sprintf("%s/%s/%s", node.Kind, node.Name, node.Namespace)
+				if !seenNodes[nodeKey] {
+					seenNodes[nodeKey] = true
+					// If this is an expanded node, update its Id to remove the __exp__ suffix
+					if strings.Contains(node.Id, "__exp__") {
+						node.Id = strings.Split(node.Id, "__exp__")[0]
+					}
+					mergedGraph.Nodes = append(mergedGraph.Nodes, node)
+				}
+			}
+
+			// Deduplicate and merge graph edges
+			for _, edge := range result.Graph.Edges {
+				edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
+				if !seenEdges[edgeKey] {
+					seenEdges[edgeKey] = true
+					// Update edge endpoints if they contain __exp__ suffix
+					if strings.Contains(edge.From, "__exp__") {
+						edge.From = strings.Split(edge.From, "__exp__")[0]
+					}
+					if strings.Contains(edge.To, "__exp__") {
+						edge.To = strings.Split(edge.To, "__exp__")[0]
+					}
+					mergedGraph.Edges = append(mergedGraph.Edges, edge)
 				}
 			}
 
@@ -140,6 +175,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			}
 
 			result.Data = mergedResults
+			result.Graph = mergedGraph
 			return result, nil
 		}
 		return result, err
@@ -838,6 +874,61 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	resultMapMutex.RUnlock()
 
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
+
+	// Add nodes and edges based on the matched resources
+	rightResources := matchedResources["right"].([]map[string]interface{})
+	leftResources := matchedResources["left"].([]map[string]interface{})
+
+	// Add nodes
+	for _, rightResource := range rightResources {
+		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.RightNode.ResourceProperties.Name,
+					Kind: rightResource["kind"].(string),
+					Name: name,
+				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
+			}
+		}
+	}
+
+	for _, leftResource := range leftResources {
+		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.LeftNode.ResourceProperties.Name,
+					Kind: leftResource["kind"].(string),
+					Name: name,
+				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
+			}
+		}
+	}
+
+	// Process edges
+	for _, rightResource := range rightResources {
+		for _, leftResource := range leftResources {
+			// Check if these resources actually match according to the criteria
+			for _, criterion := range rule.MatchCriteria {
+				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
+					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
+					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
+					results.Graph.Edges = append(results.Graph.Edges, Edge{
+						From: rightNodeId,
+						To:   leftNodeId,
+						Type: string(relType),
+					})
+				}
+			}
+		}
+	}
 
 	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
 	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
@@ -2065,7 +2156,7 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 	return modified
 }
 
-func evaluateWildcardPath(resource map[string]interface{}, path string, filterValue interface{}, operator string) bool {
+func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
 	// Get the base path (everything before [*])
 	basePath := path[:strings.Index(path, "[*]")]
 	if !strings.HasPrefix(basePath, "$.") {
@@ -2207,7 +2298,7 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 	if !strings.HasSuffix(currentPath, ".") {
 		currentPath += "."
 	}
-	array, err := jsonpath.JsonPathLookup(data, currentPath[:len(currentPath)-1])
+	array, err := jsonpath.JsonPathLookup(data, currentPath)
 	if err != nil {
 		return err
 	}
