@@ -427,26 +427,11 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 		case *ReturnClause:
 			nodeIds := []string{}
-			expandedNodeIds := make(map[string][]string) // Map original nodeId to its expanded versions
-
-			// First pass: collect all nodeIds and their expanded versions
 			for _, item := range c.Items {
 				// generate a unique list of nodeIds
 				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if !slices.Contains(nodeIds, nodeId) {
 					nodeIds = append(nodeIds, nodeId)
-
-					// Check if this is an expanded node by looking for all keys in resultMap
-					// that start with this nodeId followed by underscore
-					var expandedIds []string
-					for key := range resultMap {
-						if strings.HasPrefix(key, nodeId+"_") {
-							expandedIds = append(expandedIds, key)
-						}
-					}
-					if len(expandedIds) > 0 {
-						expandedNodeIds[nodeId] = expandedIds
-					}
 				}
 			}
 
@@ -458,354 +443,175 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
+				if resultMap[nodeId] == nil {
+					return *results, fmt.Errorf("node identifier %s not found in return clause", nodeId)
+				}
 
-				// Check if this nodeId has expanded versions
-				if expandedIds, hasExpanded := expandedNodeIds[nodeId]; hasExpanded {
-					// Process each expanded version
-					for _, expandedId := range expandedIds {
-						if resultMap[expandedId] == nil {
-							continue
-						}
+				pathParts := strings.Split(item.JsonPath, ".")[1:]
+				pathStr := "$." + strings.Join(pathParts, ".")
 
-						// Create the expanded path by replacing the original nodeId with the expanded one
-						expandedPath := strings.Replace(item.JsonPath, nodeId, expandedId, 1)
-						pathParts := strings.Split(expandedPath, ".")[1:]
-						pathStr := "$." + strings.Join(pathParts, ".")
+				if pathStr == "$." {
+					pathStr = "$"
+				}
 
-						if pathStr == "$." {
-							pathStr = "$"
-						}
+				if results.Data[nodeId] == nil {
+					results.Data[nodeId] = []interface{}{}
+				}
+				var aggregateResult interface{}
 
-						if results.Data[expandedId] == nil {
-							results.Data[expandedId] = []interface{}{}
-						}
-						var aggregateResult interface{}
-
-						for idx, resource := range resultMap[expandedId].([]map[string]interface{}) {
-							// Ensure that the results.Data[expandedId] slice has enough elements
-							if len(results.Data[expandedId].([]interface{})) <= idx {
-								results.Data[expandedId] = append(results.Data[expandedId].([]interface{}), make(map[string]interface{}))
-							}
-							currentMap := results.Data[expandedId].([]interface{})[idx].(map[string]interface{})
-
-							result, err := jsonpath.JsonPathLookup(resource, pathStr)
-							if err != nil {
-								logDebug("Path not found:", expandedPath)
-								result = nil
-							}
-
-							switch strings.ToUpper(item.Aggregate) {
-							case "COUNT":
-								if aggregateResult == nil {
-									aggregateResult = 0
-								}
-								aggregateResult = aggregateResult.(int) + 1
-							case "SUM":
-								if result != nil {
-									if aggregateResult == nil {
-										aggregateResult = reflect.ValueOf(result).Interface()
-									} else {
-										v1 := reflect.ValueOf(aggregateResult)
-										v2 := reflect.ValueOf(result)
-										v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
-										if v1.Kind() == reflect.Ptr {
-											v1 = v1.Elem()
-										}
-										if v2.Kind() == reflect.Ptr {
-											v2 = v2.Elem()
-										}
-
-										isCPUResource := strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu")
-										isMemoryResource := strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory")
-
-										switch v1.Kind() {
-										case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-											aggregateResult = v1.Int() + v2.Int()
-										case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-											aggregateResult = v1.Uint() + v2.Uint()
-										case reflect.Float32, reflect.Float64:
-											aggregateResult = v1.Float() + v2.Float()
-										case reflect.String:
-											if isCPUResource {
-												v1Cpu, err := convertToMilliCPU(v1.String())
-												if err != nil {
-													return *results, fmt.Errorf("error processing cpu resources value: %v", err)
-												}
-												v2Cpu, err := convertToMilliCPU(v2.String())
-												if err != nil {
-													return *results, fmt.Errorf("error processing cpu resources value: %v", err)
-												}
-
-												aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
-											} else if isMemoryResource {
-												v1Mem, err := convertMemoryToBytes(v1.String())
-												if err != nil {
-													return *results, fmt.Errorf("error processing memory resources value: %v", err)
-												}
-												v2Mem, err := convertMemoryToBytes(v2.String())
-												if err != nil {
-													return *results, fmt.Errorf("error processing memory resources value: %v", err)
-												}
-
-												aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
-											}
-										case reflect.Slice:
-											v1Strs, err := convertToStringSlice(v1)
-											if err != nil {
-												return *results, fmt.Errorf("error converting v1 to string slice: %v", err)
-											}
-
-											v2Strs, err := convertToStringSlice(v2)
-											if err != nil {
-												return *results, fmt.Errorf("error converting v2 to string slice: %v", err)
-											}
-
-											if isCPUResource {
-												v1CpuSum, err := sumMilliCPU(v1Strs)
-												if err != nil {
-													return *results, fmt.Errorf("error processing v1 cpu value: %v", err)
-												}
-
-												v2CpuSum, err := sumMilliCPU(v2Strs)
-												if err != nil {
-													return *results, fmt.Errorf("error processing v2 cpu value: %v", err)
-												}
-
-												aggregateResult = []string{convertMilliCPUToStandard(v1CpuSum + v2CpuSum)}
-											} else if isMemoryResource {
-												v1MemSum, err := sumMemoryBytes(v1Strs)
-												if err != nil {
-													return *results, fmt.Errorf("error processing v1 memory value: %v", err)
-												}
-
-												v2MemSum, err := sumMemoryBytes(v2Strs)
-												if err != nil {
-													return *results, fmt.Errorf("error processing v2 memory value: %v", err)
-												}
-
-												aggregateResult = []string{convertBytesToMemory(v1MemSum + v2MemSum)}
-											}
-										default:
-											// Handle unsupported types or error out
-											return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
-										}
-									}
-								}
-							}
-
-							if item.Aggregate == "" {
-								key := item.Alias
-								if key == "" {
-									if len(pathParts) == 1 {
-										key = pathParts[0]
-									} else if len(pathParts) > 1 {
-										nestedMap := currentMap
-										for i := 0; i < len(pathParts)-1; i++ {
-											if _, exists := nestedMap[pathParts[i]]; !exists {
-												nestedMap[pathParts[i]] = make(map[string]interface{})
-											}
-											nestedMap = nestedMap[pathParts[i]].(map[string]interface{})
-										}
-										nestedMap[pathParts[len(pathParts)-1]] = result
-										continue
-									} else {
-										key = "$"
-									}
-								}
-								currentMap[key] = result
-							}
-						}
-
-						if item.Aggregate != "" {
-							if results.Data["aggregate"] == nil {
-								results.Data["aggregate"] = make(map[string]interface{})
-							}
-							aggregateMap := results.Data["aggregate"].(map[string]interface{})
-
-							key := item.Alias
-							if key == "" {
-								key = strings.ToLower(item.Aggregate) + ":" + expandedId + "." + strings.Replace(pathStr, "$.", "", 1)
-							}
-
-							if slice, ok := aggregateResult.([]interface{}); ok && len(slice) == 0 {
-								aggregateResult = nil
-							} else if strSlice, ok := aggregateResult.([]string); ok && len(strSlice) == 1 {
-								aggregateResult = strSlice[0]
-							}
-							aggregateMap[key] = aggregateResult
-						}
+				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
+					// Ensure that the results.Data[nodeId] slice has enough elements to store the current resource.
+					// If the current index (idx) is beyond the current length of the slice,
+					// append a new empty map to the slice to accommodate the new data.
+					if len(results.Data[nodeId].([]interface{})) <= idx {
+						results.Data[nodeId] = append(results.Data[nodeId].([]interface{}), make(map[string]interface{}))
 					}
-				} else {
-					// Original logic for non-expanded nodes
-					if resultMap[nodeId] == nil {
-						return *results, fmt.Errorf("node identifier %s not found in return clause", nodeId)
+					currentMap := results.Data[nodeId].([]interface{})[idx].(map[string]interface{})
+
+					result, err := jsonpath.JsonPathLookup(resource, pathStr)
+					if err != nil {
+						logDebug("Path not found:", item.JsonPath)
+						result = nil
 					}
 
-					pathParts := strings.Split(item.JsonPath, ".")[1:]
-					pathStr := "$." + strings.Join(pathParts, ".")
-
-					if pathStr == "$." {
-						pathStr = "$"
-					}
-
-					if results.Data[nodeId] == nil {
-						results.Data[nodeId] = []interface{}{}
-					}
-					var aggregateResult interface{}
-
-					for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
-						// Ensure that the results.Data[nodeId] slice has enough elements
-						if len(results.Data[nodeId].([]interface{})) <= idx {
-							results.Data[nodeId] = append(results.Data[nodeId].([]interface{}), make(map[string]interface{}))
+					switch strings.ToUpper(item.Aggregate) {
+					case "COUNT":
+						if aggregateResult == nil {
+							aggregateResult = 0
 						}
-						currentMap := results.Data[nodeId].([]interface{})[idx].(map[string]interface{})
-
-						result, err := jsonpath.JsonPathLookup(resource, pathStr)
-						if err != nil {
-							logDebug("Path not found:", pathStr)
-							result = nil
-						}
-
-						switch strings.ToUpper(item.Aggregate) {
-						case "COUNT":
+						aggregateResult = aggregateResult.(int) + 1
+					case "SUM":
+						if result != nil {
 							if aggregateResult == nil {
-								aggregateResult = 0
-							}
-							aggregateResult = aggregateResult.(int) + 1
-						case "SUM":
-							if result != nil {
-								if aggregateResult == nil {
-									aggregateResult = reflect.ValueOf(result).Interface()
-								} else {
-									v1 := reflect.ValueOf(aggregateResult)
-									v2 := reflect.ValueOf(result)
-									v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
-									if v1.Kind() == reflect.Ptr {
-										v1 = v1.Elem()
-									}
-									if v2.Kind() == reflect.Ptr {
-										v2 = v2.Elem()
-									}
+								aggregateResult = reflect.ValueOf(result).Interface()
+							} else {
+								v1 := reflect.ValueOf(aggregateResult)
+								v2 := reflect.ValueOf(result)
+								v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
+								if v1.Kind() == reflect.Ptr {
+									v1 = v1.Elem()
+								}
+								if v2.Kind() == reflect.Ptr {
+									v2 = v2.Elem()
+								}
 
-									isCPUResource := strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu")
-									isMemoryResource := strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory")
+								isCPUResource := strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu")
+								isMemoryResource := strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory")
 
-									switch v1.Kind() {
-									case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-										aggregateResult = v1.Int() + v2.Int()
-									case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-										aggregateResult = v1.Uint() + v2.Uint()
-									case reflect.Float32, reflect.Float64:
-										aggregateResult = v1.Float() + v2.Float()
-									case reflect.String:
-										if isCPUResource {
-											v1Cpu, err := convertToMilliCPU(v1.String())
-											if err != nil {
-												return *results, fmt.Errorf("error processing cpu resources value: %v", err)
-											}
-											v2Cpu, err := convertToMilliCPU(v2.String())
-											if err != nil {
-												return *results, fmt.Errorf("error processing cpu resources value: %v", err)
-											}
-
-											aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
-										} else if isMemoryResource {
-											v1Mem, err := convertMemoryToBytes(v1.String())
-											if err != nil {
-												return *results, fmt.Errorf("error processing memory resources value: %v", err)
-											}
-											v2Mem, err := convertMemoryToBytes(v2.String())
-											if err != nil {
-												return *results, fmt.Errorf("error processing memory resources value: %v", err)
-											}
-
-											aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
-										}
-									case reflect.Slice:
-										v1Strs, err := convertToStringSlice(v1)
+								switch v1.Kind() {
+								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+									aggregateResult = v1.Int() + v2.Int()
+								case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+									aggregateResult = v1.Uint() + v2.Uint()
+								case reflect.Float32, reflect.Float64:
+									aggregateResult = v1.Float() + v2.Float()
+								case reflect.String:
+									if isCPUResource {
+										v1Cpu, err := convertToMilliCPU(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("error converting v1 to string slice: %v", err)
+											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
 										}
-
-										v2Strs, err := convertToStringSlice(v2)
+										v2Cpu, err := convertToMilliCPU(v2.String())
 										if err != nil {
-											return *results, fmt.Errorf("error converting v2 to string slice: %v", err)
+											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
 										}
 
-										if isCPUResource {
-											v1CpuSum, err := sumMilliCPU(v1Strs)
-											if err != nil {
-												return *results, fmt.Errorf("error processing v1 cpu value: %v", err)
-											}
-
-											v2CpuSum, err := sumMilliCPU(v2Strs)
-											if err != nil {
-												return *results, fmt.Errorf("error processing v2 cpu value: %v", err)
-											}
-
-											aggregateResult = []string{convertMilliCPUToStandard(v1CpuSum + v2CpuSum)}
-										} else if isMemoryResource {
-											v1MemSum, err := sumMemoryBytes(v1Strs)
-											if err != nil {
-												return *results, fmt.Errorf("error processing v1 memory value: %v", err)
-											}
-
-											v2MemSum, err := sumMemoryBytes(v2Strs)
-											if err != nil {
-												return *results, fmt.Errorf("error processing v2 memory value: %v", err)
-											}
-
-											aggregateResult = []string{convertBytesToMemory(v1MemSum + v2MemSum)}
+										aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
+									} else if isMemoryResource {
+										v1Mem, err := convertMemoryToBytes(v1.String())
+										if err != nil {
+											return *results, fmt.Errorf("error processing memory resources value: %v", err)
 										}
-									default:
-										// Handle unsupported types or error out
-										return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+										v2Mem, err := convertMemoryToBytes(v2.String())
+										if err != nil {
+											return *results, fmt.Errorf("error processing memory resources value: %v", err)
+										}
+
+										aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
 									}
+								case reflect.Slice:
+									v1Strs, err := convertToStringSlice(v1)
+									if err != nil {
+										return *results, fmt.Errorf("error converting v1 to string slice: %v", err)
+									}
+
+									v2Strs, err := convertToStringSlice(v2)
+									if err != nil {
+										return *results, fmt.Errorf("error converting v2 to string slice: %v", err)
+									}
+
+									if isCPUResource {
+										v1CpuSum, err := sumMilliCPU(v1Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v1 cpu value: %v", err)
+										}
+
+										v2CpuSum, err := sumMilliCPU(v2Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v2 cpu value: %v", err)
+										}
+
+										aggregateResult = []string{convertMilliCPUToStandard(v1CpuSum + v2CpuSum)}
+									} else if isMemoryResource {
+										v1MemSum, err := sumMemoryBytes(v1Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v1 memory value: %v", err)
+										}
+
+										v2MemSum, err := sumMemoryBytes(v2Strs)
+										if err != nil {
+											return *results, fmt.Errorf("error processing v2 memory value: %v", err)
+										}
+
+										aggregateResult = []string{convertBytesToMemory(v1MemSum + v2MemSum)}
+									}
+								default:
+									// Handle unsupported types or error out
+									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
 								}
 							}
-						}
-
-						if item.Aggregate == "" {
-							key := item.Alias
-							if key == "" {
-								if len(pathParts) == 1 {
-									key = pathParts[0]
-								} else if len(pathParts) > 1 {
-									nestedMap := currentMap
-									for i := 0; i < len(pathParts)-1; i++ {
-										if _, exists := nestedMap[pathParts[i]]; !exists {
-											nestedMap[pathParts[i]] = make(map[string]interface{})
-										}
-										nestedMap = nestedMap[pathParts[i]].(map[string]interface{})
-									}
-									nestedMap[pathParts[len(pathParts)-1]] = result
-									continue
-								} else {
-									key = "$"
-								}
-							}
-							currentMap[key] = result
 						}
 					}
 
-					if item.Aggregate != "" {
-						if results.Data["aggregate"] == nil {
-							results.Data["aggregate"] = make(map[string]interface{})
-						}
-						aggregateMap := results.Data["aggregate"].(map[string]interface{})
-
+					if item.Aggregate == "" {
 						key := item.Alias
 						if key == "" {
-							key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
+							if len(pathParts) == 1 {
+								key = pathParts[0]
+							} else if len(pathParts) > 1 {
+								nestedMap := currentMap
+								for i := 0; i < len(pathParts)-1; i++ {
+									if _, exists := nestedMap[pathParts[i]]; !exists {
+										nestedMap[pathParts[i]] = make(map[string]interface{})
+									}
+									nestedMap = nestedMap[pathParts[i]].(map[string]interface{})
+								}
+								nestedMap[pathParts[len(pathParts)-1]] = result
+								continue
+							} else {
+								key = "$"
+							}
 						}
-
-						if slice, ok := aggregateResult.([]interface{}); ok && len(slice) == 0 {
-							aggregateResult = nil
-						} else if strSlice, ok := aggregateResult.([]string); ok && len(strSlice) == 1 {
-							aggregateResult = strSlice[0]
-						}
-						aggregateMap[key] = aggregateResult
+						currentMap[key] = result
 					}
+				}
+				if item.Aggregate != "" {
+					if results.Data["aggregate"] == nil {
+						results.Data["aggregate"] = make(map[string]interface{})
+					}
+					aggregateMap := results.Data["aggregate"].(map[string]interface{})
+
+					key := item.Alias
+					if key == "" {
+						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
+					}
+
+					if slice, ok := aggregateResult.([]interface{}); ok && len(slice) == 0 {
+						aggregateResult = nil
+					} else if strSlice, ok := aggregateResult.([]string); ok && len(strSlice) == 1 {
+						aggregateResult = strSlice[0]
+					}
+					aggregateMap[key] = aggregateResult
 				}
 			}
 
@@ -825,6 +631,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
+	// Determine relationship type and fetch related resources
+	var relType RelationshipType
+
 	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
 		// Try to resolve the kind using relationships
@@ -832,84 +641,16 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		if len(potentialKinds) == 0 {
 			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
 		}
-
-		// Create a map to store results for each kind
-		allResults := make(map[string][]map[string]interface{})
-		var processedAny bool
-
-		// Store the original node names for filtering
-		var originalLeftName, originalRightName string
+		if len(potentialKinds) > 1 {
+			return false, fmt.Errorf("ambiguous kinds for nodes in relationship - possible kinds: %v", potentialKinds)
+		}
 		if rel.LeftNode.ResourceProperties.Kind == "" {
-			originalLeftName = rel.LeftNode.ResourceProperties.Name
+			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
 		}
 		if rel.RightNode.ResourceProperties.Kind == "" {
-			originalRightName = rel.RightNode.ResourceProperties.Name
+			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
 		}
-
-		// Process each potential kind
-		for _, kind := range potentialKinds {
-			// Create a copy of the relationship with this specific kind
-			relCopy := *rel
-			if rel.LeftNode.ResourceProperties.Kind == "" {
-				relCopy.LeftNode = &NodePattern{
-					ResourceProperties: &ResourceProperties{
-						Name: fmt.Sprintf("%s_%s", rel.LeftNode.ResourceProperties.Name, strings.ToLower(kind)),
-						Kind: kind,
-					},
-					IsAnonymous: rel.LeftNode.IsAnonymous,
-				}
-			}
-			if rel.RightNode.ResourceProperties.Kind == "" {
-				relCopy.RightNode = &NodePattern{
-					ResourceProperties: &ResourceProperties{
-						Name: fmt.Sprintf("%s_%s", rel.RightNode.ResourceProperties.Name, strings.ToLower(kind)),
-						Kind: kind,
-					},
-					IsAnonymous: rel.RightNode.IsAnonymous,
-				}
-			}
-
-			// Process this specific relationship
-			success, err := q.processSingleKindRelationship(&relCopy, c, results, filteredResults)
-			if err == nil && success {
-				processedAny = true
-				// Store the results for this kind
-				if relCopy.LeftNode.ResourceProperties.Kind == kind {
-					allResults[relCopy.LeftNode.ResourceProperties.Name] = filteredResults[relCopy.LeftNode.ResourceProperties.Name]
-				}
-				if relCopy.RightNode.ResourceProperties.Kind == kind {
-					allResults[relCopy.RightNode.ResourceProperties.Name] = filteredResults[relCopy.RightNode.ResourceProperties.Name]
-				}
-
-				// Also store the results for the non-expanded nodes
-				if originalLeftName != "" && filteredResults[relCopy.LeftNode.ResourceProperties.Name] != nil {
-					if resultMap[originalLeftName] == nil {
-						resultMap[originalLeftName] = filteredResults[relCopy.LeftNode.ResourceProperties.Name]
-					}
-				}
-				if originalRightName != "" && filteredResults[relCopy.RightNode.ResourceProperties.Name] != nil {
-					if resultMap[originalRightName] == nil {
-						resultMap[originalRightName] = filteredResults[relCopy.RightNode.ResourceProperties.Name]
-					}
-				}
-			}
-		}
-
-		// Update the results map with all collected results
-		for name, resources := range allResults {
-			filteredResults[name] = resources
-			resultMap[name] = resources
-		}
-
-		return processedAny, nil
 	}
-
-	return q.processSingleKindRelationship(rel, c, results, filteredResults)
-}
-
-// processSingleKindRelationship handles a relationship where both kinds are known
-func (q *QueryExecutor) processSingleKindRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
-	var relType RelationshipType
 
 	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
@@ -935,7 +676,7 @@ func (q *QueryExecutor) processSingleKindRelationship(rel *Relationship, c *Matc
 
 	if relType == "" {
 		// no relationship type found, error out
-		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind.Resource, rightKind.Resource)
+		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
 	}
 
 	rule, err := findRuleByRelationshipType(relType)
@@ -1023,80 +764,41 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 			if len(potentialKinds) == 0 {
 				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
 			}
-
-			// Process each potential kind
-			for _, kind := range potentialKinds {
-				// Create a new node with this specific kind
-				nodeCopy := &NodePattern{
-					ResourceProperties: &ResourceProperties{
-						Name: fmt.Sprintf("%s_%s", node.ResourceProperties.Name, strings.ToLower(kind)),
-						Kind: kind,
-					},
-					IsAnonymous: node.IsAnonymous,
-				}
-
-				// Check if the node has already been fetched
-				cacheKey, err := q.resourcePropertyName(nodeCopy)
-				if err != nil {
-					return fmt.Errorf("error getting resource property name: %v", err)
-				}
-				if resultCache[cacheKey] == nil {
-					err := getNodeResources(nodeCopy, q, c.ExtraFilters)
-					if err != nil {
-						continue // Skip this kind if there's an error
-					}
-					resources := resultMap[nodeCopy.ResourceProperties.Name].([]map[string]interface{})
-					for _, resource := range resources {
-						metadata, ok := resource["metadata"].(map[string]interface{})
-						if !ok {
-							continue
-						}
-						graphNode := Node{
-							Id:   nodeCopy.ResourceProperties.Name,
-							Kind: resource["kind"].(string),
-							Name: metadata["name"].(string),
-						}
-						if graphNode.Kind != "Namespace" {
-							graphNode.Namespace = getNamespaceName(metadata)
-						}
-						results.Graph.Nodes = append(results.Graph.Nodes, graphNode)
-					}
-				} else if resultMap[nodeCopy.ResourceProperties.Name] == nil {
-					// Copy from cache using the original name
-					resultMap[nodeCopy.ResourceProperties.Name] = resultCache[cacheKey]
-				}
+			if len(potentialKinds) > 1 {
+				return fmt.Errorf("ambiguous kind for node '%s' - possible kinds: %v", node.ResourceProperties.Name, potentialKinds)
 			}
-		} else {
-			// Handle nodes with known kinds
-			cacheKey, err := q.resourcePropertyName(node)
+			node.ResourceProperties.Kind = potentialKinds[0]
+		}
+
+		// check if the node has already been fetched
+		cacheKey, err := q.resourcePropertyName(node)
+		if err != nil {
+			return fmt.Errorf("error getting resource property name: %v", err)
+		}
+		if resultCache[cacheKey] == nil {
+			err := getNodeResources(node, q, c.ExtraFilters)
 			if err != nil {
-				return fmt.Errorf("error getting resource property name: %v", err)
+				return fmt.Errorf("error getting node resources >> %s", err)
 			}
-			if resultCache[cacheKey] == nil {
-				err := getNodeResources(node, q, c.ExtraFilters)
-				if err != nil {
-					return fmt.Errorf("error getting node resources >> %s", err)
+			resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
+			for _, resource := range resources {
+				metadata, ok := resource["metadata"].(map[string]interface{})
+				if !ok {
+					continue
 				}
-				resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
-				for _, resource := range resources {
-					metadata, ok := resource["metadata"].(map[string]interface{})
-					if !ok {
-						continue
-					}
-					graphNode := Node{
-						Id:   node.ResourceProperties.Name,
-						Kind: resource["kind"].(string),
-						Name: metadata["name"].(string),
-					}
-					if graphNode.Kind != "Namespace" {
-						graphNode.Namespace = getNamespaceName(metadata)
-					}
-					results.Graph.Nodes = append(results.Graph.Nodes, graphNode)
+				node := Node{
+					Id:   node.ResourceProperties.Name,
+					Kind: resource["kind"].(string),
+					Name: metadata["name"].(string),
 				}
-			} else if resultMap[node.ResourceProperties.Name] == nil {
-				// Copy from cache using the original name
-				resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
 			}
+		} else if resultMap[node.ResourceProperties.Name] == nil {
+			// Copy from cache using the original name
+			resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
 		}
 	}
 	return nil
