@@ -104,10 +104,9 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			Nodes: []Node{},
 			Edges: []Edge{},
 		}
-		seenNodes := make(map[string]bool)
 		seenEdges := make(map[string]bool)
 
-		// First pass: collect all expanded results and deduplicate graph nodes/edges
+		// First pass: collect all expanded results
 		for key, value := range result.Data {
 			if strings.Contains(key, "__exp__") {
 				// Extract original variable name (everything before __exp__)
@@ -123,23 +122,16 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			}
 		}
 
-		// Deduplicate and merge graph nodes
+		// Clean up node IDs and add to merged graph
 		for _, node := range result.Graph.Nodes {
-			// First clean up the Id if it has an __exp__ suffix
 			if strings.Contains(node.Id, "__exp__") {
 				node.Id = strings.Split(node.Id, "__exp__")[0]
 			}
-			// Use just Kind+Name as the deduplication key
-			nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
-			if !seenNodes[nodeKey] {
-				seenNodes[nodeKey] = true
-				mergedGraph.Nodes = append(mergedGraph.Nodes, node)
-			}
+			mergedGraph.Nodes = append(mergedGraph.Nodes, node)
 		}
 
-		// Deduplicate and merge graph edges
+		// Clean up and deduplicate edges
 		for _, edge := range result.Graph.Edges {
-			// Clean up edge endpoints if they contain __exp__ suffix
 			if strings.Contains(edge.From, "__exp__") {
 				edge.From = strings.Split(edge.From, "__exp__")[0]
 			}
@@ -181,18 +173,6 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		result.Data = mergedResults
 		result.Graph = mergedGraph
 	}
-
-	// Final deduplication of nodes before returning
-	seenNodes := make(map[string]bool)
-	var dedupedNodes []Node
-	for _, node := range result.Graph.Nodes {
-		nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
-		if !seenNodes[nodeKey] {
-			seenNodes[nodeKey] = true
-			dedupedNodes = append(dedupedNodes, node)
-		}
-	}
-	result.Graph.Nodes = dedupedNodes
 
 	return result, nil
 }
@@ -1226,39 +1206,20 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 		}
 	}
 
-	logDebug(fmt.Sprintf("Nodes before deduplication: %+v\n", result.Graph.Nodes))
-
-	// Final deduplication step
-	nodeMap := make(map[string]bool)
-	var dedupedNodes []Node
-	for _, node := range result.Graph.Nodes {
-		nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
-		if !nodeMap[nodeKey] {
-			nodeMap[nodeKey] = true
-			dedupedNodes = append(dedupedNodes, node)
-			logDebug(fmt.Sprintf("Keeping unique node: %+v with key: %s\n", node, nodeKey))
-		} else {
-			logDebug(fmt.Sprintf("Skipping duplicate node: %+v with key: %s\n", node, nodeKey))
-		}
-	}
-	result.Graph.Nodes = dedupedNodes
-
-	logDebug(fmt.Sprintf("Final nodes after deduplication: %+v\n", result.Graph.Nodes))
-
 	// Process edges
+	var edges []Edge
 	edgeMap := make(map[string]bool)
-	var dedupedEdges []Edge
 	for _, edge := range result.Graph.Edges {
 		edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
 		reverseEdgeKey := fmt.Sprintf("%s-%s-%s", edge.To, edge.From, edge.Type)
 
 		if !edgeMap[edgeKey] && !edgeMap[reverseEdgeKey] {
-			dedupedEdges = append(dedupedEdges, edge)
+			edges = append(edges, edge)
 			edgeMap[edgeKey] = true
 			edgeMap[reverseEdgeKey] = true
 		}
 	}
-	result.Graph.Edges = dedupedEdges
+	result.Graph.Edges = edges
 }
 
 func getNamespaceName(metadata map[string]interface{}) string {
