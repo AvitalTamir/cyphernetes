@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -323,24 +322,32 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 		if err != nil {
 			return nil, err
 		}
-		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
-		}
-		p.advance()
 	} else {
-		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
-		}
-		p.advance()
-	}
-
-	// Initialize resourceProps if it's nil
-	if resourceProps == nil {
+		// Initialize resourceProps for kindless node
 		resourceProps = &ResourceProperties{
 			Name: name,
 			Kind: "", // Empty kind for variable-only nodes
 		}
+
+		// Check for properties
+		if p.current.Type == LBRACE {
+			p.advance()
+			props, err := p.parseProperties()
+			if err != nil {
+				return nil, err
+			}
+			resourceProps.Properties = props
+			if p.current.Type != RBRACE {
+				return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
+			}
+			p.advance()
+		}
 	}
+
+	if p.current.Type != RPAREN {
+		return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
+	}
+	p.advance()
 
 	// Check for invalid relationship tokens immediately after closing parenthesis
 	debugLog("After node pattern, checking next token: \"%v\"", p.current.Literal)
@@ -982,124 +989,6 @@ func debugLog(format string, args ...interface{}) {
 func (p *Parser) nextAnonymousVar() string {
 	p.anonymousCounter++
 	return fmt.Sprintf("_anon%d", p.anonymousCounter)
-}
-
-// FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
-func FindPotentialKinds(sourceKind string) []string {
-	sourceKind = strings.ToLower(sourceKind)
-	potentialKinds := make(map[string]bool)
-	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
-
-	// Look through all relationship rules
-	rules := GetRelationshipRules()
-	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
-
-	for _, rule := range rules {
-		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", rule.KindA, rule.KindB, rule.Relationship)
-
-		// If sourceKind is KindB, we want KindA (what can connect to sourceKind)
-		if strings.ToLower(rule.KindB) == sourceKind || strings.ToLower(rule.KindB) == sourceKind+"s" {
-			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", rule.KindA)
-			potentialKinds[rule.KindA] = true
-		}
-		// If sourceKind is KindA, we want KindB (what sourceKind can connect to)
-		if strings.ToLower(rule.KindA) == sourceKind || strings.ToLower(rule.KindA) == sourceKind+"s" {
-			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
-			potentialKinds[rule.KindB] = true
-		}
-	}
-
-	// Convert map to slice
-	var result []string
-	for kind := range potentialKinds {
-		result = append(result, kind)
-	}
-	sort.Strings(result) // Sort for consistent results
-	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
-	return result
-}
-
-// FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
-func FindPotentialKindsIntersection(relationships []*Relationship) []string {
-	if len(relationships) == 0 {
-		debugLog("FindPotentialKindsIntersection: no relationships provided")
-		return []string{}
-	}
-
-	// Check if there are any unknown kinds that need resolution
-	hasUnknownKind := false
-	for _, rel := range relationships {
-		if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-			hasUnknownKind = true
-			break
-		}
-	}
-
-	// If all kinds are known, return empty slice
-	if !hasUnknownKind {
-		debugLog("FindPotentialKindsIntersection: all kinds are known")
-		return []string{}
-	}
-
-	// Find all known kinds in the relationships
-	knownKinds := make(map[string]bool)
-	for _, rel := range relationships {
-		if rel.LeftNode.ResourceProperties.Kind != "" {
-			knownKinds[strings.ToLower(rel.LeftNode.ResourceProperties.Kind)] = true
-		}
-		if rel.RightNode.ResourceProperties.Kind != "" {
-			knownKinds[strings.ToLower(rel.RightNode.ResourceProperties.Kind)] = true
-		}
-	}
-	debugLog("FindPotentialKindsIntersection: found known kinds=%v", knownKinds)
-
-	// If no known kinds, return empty
-	if len(knownKinds) == 0 {
-		debugLog("FindPotentialKindsIntersection: no known kinds found")
-		return []string{}
-	}
-
-	// Initialize result with potential kinds from first known kind
-	var firstKnownKind string
-	for kind := range knownKinds {
-		firstKnownKind = kind
-		break
-	}
-
-	result := make(map[string]bool)
-	for _, kind := range FindPotentialKinds(firstKnownKind) {
-		result[kind] = true
-	}
-	debugLog("FindPotentialKindsIntersection: initial potential kinds from %s=%v", firstKnownKind, result)
-
-	// For each additional known kind, intersect with its potential kinds
-	for kind := range knownKinds {
-		if kind == firstKnownKind {
-			continue
-		}
-
-		potentialKinds := FindPotentialKinds(kind)
-		debugLog("FindPotentialKindsIntersection: potential kinds for %s=%v", kind, potentialKinds)
-
-		newResult := make(map[string]bool)
-		// Keep only kinds that exist in both sets
-		for _, potentialKind := range potentialKinds {
-			if result[potentialKind] {
-				debugLog("FindPotentialKindsIntersection: keeping common kind %s", potentialKind)
-				newResult[potentialKind] = true
-			}
-		}
-		result = newResult
-	}
-
-	// Convert map back to slice
-	var kinds []string
-	for kind := range result {
-		kinds = append(kinds, kind)
-	}
-	sort.Strings(kinds) // Sort for consistent results
-	debugLog("FindPotentialKindsIntersection: final result=%v", kinds)
-	return kinds
 }
 
 // ValidateAnonymousNode checks if an anonymous node is valid (not standalone)

@@ -56,6 +56,8 @@ var (
 	AllNamespaces bool
 	CleanOutput   bool
 	NoColor       bool
+	// For testing
+	mockFindPotentialKinds func([]*Relationship) []string
 )
 
 // Add the apiRequest type definition
@@ -743,7 +745,15 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	}
 
 	// Find potential kinds for each kindless node
-	potentialKinds := FindPotentialKindsIntersection(relationships)
+	var potentialKinds []string
+	if mockFindPotentialKinds != nil {
+		// Use mock function in tests
+		potentialKinds = mockFindPotentialKinds(relationships)
+	} else {
+		// Use real function in production
+		potentialKinds = FindPotentialKindsIntersection(relationships)
+	}
+
 	if len(potentialKinds) == 0 {
 		return nil, fmt.Errorf("unable to determine kind for nodes in relationship")
 	}

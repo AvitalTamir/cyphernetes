@@ -4,10 +4,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/AvitalTamir/jsonpath"
+	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+// MockProvider implements the Provider interface for testing
+type MockProvider struct{}
+
+func (m *MockProvider) GetK8sResources(kind string, fieldSelector string, labelSelector string, namespace string) (interface{}, error) {
+	return []map[string]interface{}{}, nil
+}
+
+func (m *MockProvider) DeleteK8sResources(kind string, name string, namespace string) error {
+	return nil
+}
+
+func (m *MockProvider) CreateK8sResource(kind string, name string, namespace string, spec interface{}) error {
+	return nil
+}
+
+func (m *MockProvider) PatchK8sResource(kind string, name string, namespace string, patchJSON []byte) error {
+	return nil
+}
+
+func (m *MockProvider) FindGVR(kind string) (schema.GroupVersionResource, error) {
+	return schema.GroupVersionResource{}, nil
+}
+
+func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
+func (m *MockProvider) CreateProviderForContext(context string) (provider.Provider, error) {
+	return &MockProvider{}, nil
+}
 
 func TestJsonPath(t *testing.T) {
 	jsonString := `{
@@ -477,6 +511,162 @@ func TestSumMemoryBytes(t *testing.T) {
 			}
 			if got != tt.expected {
 				t.Errorf("sumMemoryBytes() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// MockRelationshipResolver is used for testing
+type MockRelationshipResolver struct {
+	potentialKinds []string
+}
+
+func (m *MockRelationshipResolver) FindPotentialKindsIntersection(relationships []*Relationship) []string {
+	return m.potentialKinds
+}
+
+func TestRewriteQueryForKindlessNodes(t *testing.T) {
+	mockProvider := &MockProvider{}
+	tests := []struct {
+		name          string
+		query         string
+		mockKinds     []string
+		expectedQuery string
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name:          "No kindless nodes",
+			query:         "MATCH (d:Deployment)->(p:Pod) RETURN d, p",
+			mockKinds:     []string{"Pod"},
+			expectedQuery: "",
+			expectedError: false,
+		},
+		{
+			name:          "Single kindless node with one potential kind",
+			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
+			mockKinds:     []string{"Pod"},
+			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod) RETURN d__exp__0, x__exp__0",
+			expectedError: false,
+		},
+		{
+			name:          "Single kindless node with multiple potential kinds",
+			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
+			mockKinds:     []string{"Pod", "ReplicaSet"},
+			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) RETURN d__exp__0, x__exp__0, d__exp__1, x__exp__1",
+			expectedError: false,
+		},
+		{
+			name:          "Multiple kindless nodes with same potential kind",
+			query:         "MATCH (d:Deployment)->(x), (s:Service)->(x) RETURN d, s, x",
+			mockKinds:     []string{"Pod"},
+			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (s__exp__0:Service)->(x__exp__0:Pod) RETURN d__exp__0, s__exp__0, x__exp__0",
+			expectedError: false,
+		},
+		{
+			name:          "Kindless node with properties",
+			query:         `MATCH (d:Deployment)->(x {name: "test"}) RETURN d, x`,
+			mockKinds:     []string{"Pod"},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod {name: "test"}) RETURN d__exp__0, x__exp__0`,
+			expectedError: false,
+		},
+		{
+			name:          "No potential kinds found",
+			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
+			mockKinds:     []string{},
+			expectedError: true,
+			errorContains: "unable to determine kind for nodes in relationship",
+		},
+		{
+			name:          "No relationships for kindless node",
+			query:         "MATCH (x) RETURN x",
+			mockKinds:     []string{},
+			expectedError: true,
+			errorContains: "unable to determine kind for nodes in relationship",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up mock
+			mockFindPotentialKinds = func(relationships []*Relationship) []string {
+				return tt.mockKinds
+			}
+
+			// Parse the original query
+			ast, err := ParseQuery(tt.query)
+			if err != nil {
+				t.Fatalf("Failed to parse query: %v", err)
+			}
+
+			// Create a query executor with mock provider
+			executor, err := NewQueryExecutor(mockProvider)
+			if err != nil {
+				t.Fatalf("Failed to create query executor: %v", err)
+			}
+
+			// Call rewriteQueryForKindlessNodes
+			rewrittenAst, err := executor.rewriteQueryForKindlessNodes(ast)
+
+			// Check error expectations
+			if tt.expectedError {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', but got no error", tt.errorContains)
+				} else if !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing '%s', but got '%s'", tt.errorContains, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			// For queries that don't need rewriting
+			if tt.expectedQuery == "" {
+				if rewrittenAst != nil {
+					t.Error("Expected no rewrite, but got a rewritten AST")
+				}
+				return
+			}
+
+			// Parse the expected query for comparison
+			expectedAst, err := ParseQuery(tt.expectedQuery)
+			if err != nil {
+				t.Fatalf("Failed to parse expected query: %v", err)
+			}
+
+			// Debug output
+			t.Logf("\nTest case: %s\nExpected AST: %+v\nGot AST: %+v", tt.name, expectedAst, rewrittenAst)
+
+			// Compare the ASTs
+			if !reflect.DeepEqual(rewrittenAst, expectedAst) {
+				// Print more detailed comparison
+				if len(rewrittenAst.Clauses) != len(expectedAst.Clauses) {
+					t.Errorf("Number of clauses don't match. Expected %d, got %d", len(expectedAst.Clauses), len(rewrittenAst.Clauses))
+				}
+
+				for i, clause := range expectedAst.Clauses {
+					if i >= len(rewrittenAst.Clauses) {
+						t.Errorf("Missing clause at index %d", i)
+						continue
+					}
+
+					switch c := clause.(type) {
+					case *MatchClause:
+						if mc, ok := rewrittenAst.Clauses[i].(*MatchClause); ok {
+							t.Logf("Match clause comparison:\nExpected: %+v\nGot: %+v", c, mc)
+						} else {
+							t.Errorf("Expected MatchClause at index %d, got %T", i, rewrittenAst.Clauses[i])
+						}
+					case *ReturnClause:
+						if rc, ok := rewrittenAst.Clauses[i].(*ReturnClause); ok {
+							t.Logf("Return clause comparison:\nExpected: %+v\nGot: %+v", c, rc)
+						} else {
+							t.Errorf("Expected ReturnClause at index %d, got %T", i, rewrittenAst.Clauses[i])
+						}
+					}
+				}
 			}
 		})
 	}
