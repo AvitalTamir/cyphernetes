@@ -767,6 +767,8 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	var matchParts []string
 	var returnParts []string
 	var setParts []string
+	var deleteParts []string
+	var whereParts []string
 	var seenNodes = make(map[string]bool)
 
 	// For each potential kind, create a match pattern and return item
@@ -834,6 +836,41 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 					matchParts = append(matchParts, strings.Join(nodeParts, ", "))
 				}
 
+				// Handle WHERE conditions from ExtraFilters
+				for _, filter := range c.ExtraFilters {
+					parts := strings.Split(filter.Key, ".")
+					if len(parts) > 0 {
+						nodeName := parts[0]
+						propertyPath := strings.Join(parts[1:], ".")
+
+						// If the node is kindless, we need to create a where clause for each potential kind
+						if isKindless(nodeName, kindlessNodes) {
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
+								var valueStr string
+								switch v := filter.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s.%s = %s", varName, propertyPath, valueStr))
+							}
+						} else {
+							// If the node is not kindless, just use it as is
+							varName := fmt.Sprintf("%s__exp__0", nodeName)
+							var valueStr string
+							switch v := filter.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s.%s = %s", varName, propertyPath, valueStr))
+						}
+					}
+				}
+
 			case *ReturnClause:
 				// Build return items
 				for _, item := range c.Items {
@@ -887,6 +924,21 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 						}
 					}
 				}
+			case *DeleteClause:
+				// Build delete items
+				for _, nodeId := range c.NodeIds {
+					// If the node being deleted is kindless, we need to create a delete clause for each potential kind
+					if isKindless(nodeId, kindlessNodes) {
+						for j := 0; j < len(potentialKinds); j++ {
+							varName := fmt.Sprintf("%s__exp__%d", nodeId, j)
+							deleteParts = append(deleteParts, varName)
+						}
+					} else {
+						// If the node is not kindless, just use it as is
+						varName := fmt.Sprintf("%s__exp__0", nodeId)
+						deleteParts = append(deleteParts, varName)
+					}
+				}
 			}
 		}
 	}
@@ -896,8 +948,14 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	if len(matchParts) > 0 {
 		queryParts = append(queryParts, fmt.Sprintf("MATCH %s", strings.Join(matchParts, ", ")))
 	}
+	if len(whereParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("WHERE %s", strings.Join(whereParts, ", ")))
+	}
 	if len(setParts) > 0 {
 		queryParts = append(queryParts, fmt.Sprintf("SET %s", strings.Join(setParts, ", ")))
+	}
+	if len(deleteParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("DELETE %s", strings.Join(deleteParts, ", ")))
 	}
 	if len(returnParts) > 0 {
 		queryParts = append(queryParts, fmt.Sprintf("RETURN %s", strings.Join(returnParts, ", ")))

@@ -652,6 +652,20 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "Match/Where/Return with node properties and multiple potential kinds",
+			query:         `MATCH (d:Deployment)->(x {name: "test"}) WHERE x.metadata.labels.foo = "bar" RETURN d, x`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod {name: "test"}), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet {name: "test"}) WHERE x__exp__0.metadata.labels.foo = "bar", x__exp__1.metadata.labels.foo = "bar" RETURN d__exp__0, x__exp__0, d__exp__1, x__exp__1`,
+			expectedError: false,
+		},
+		{
+			name:          "Match/Delete with node properties and multiple potential kinds",
+			query:         `MATCH (d:Deployment)->(x {name: "test"}) DELETE x`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod {name: "test"}), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet {name: "test"}) DELETE x__exp__0, x__exp__1`,
+			expectedError: false,
+		},
+		{
 			name:          "No potential kinds found",
 			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
 			mockKinds:     map[string][]string{},
