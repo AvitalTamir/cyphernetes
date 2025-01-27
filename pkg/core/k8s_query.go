@@ -47,6 +47,7 @@ type QueryExecutor struct {
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
 	matchNodes     []*NodePattern
+	currentAst     *Expression
 }
 
 var (
@@ -83,6 +84,9 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
 
+	// Store the current AST
+	q.currentAst = ast
+
 	// First, check for kindless nodes and rewrite the query if needed
 	rewrittenAst, err := q.rewriteQueryForKindlessNodes(ast)
 	if err != nil {
@@ -90,6 +94,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	}
 	if rewrittenAst != nil {
 		ast = rewrittenAst
+		q.currentAst = rewrittenAst
 	}
 
 	result, err := q.ExecuteSingleQuery(ast, namespace)
@@ -761,6 +766,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	// Build expanded query
 	var matchParts []string
 	var returnParts []string
+	var setParts []string
 	var seenNodes = make(map[string]bool)
 
 	// For each potential kind, create a match pattern and return item
@@ -821,11 +827,12 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 					}
 					rightNodeStr += ")"
 
-					// Combine into a single pattern with relationship
+					// Add relationship pattern
 					nodeParts = append(nodeParts, fmt.Sprintf("%s->%s", leftNodeStr, rightNodeStr))
 				}
-
-				matchParts = append(matchParts, strings.Join(nodeParts, ", "))
+				if len(nodeParts) > 0 {
+					matchParts = append(matchParts, strings.Join(nodeParts, ", "))
+				}
 
 			case *ReturnClause:
 				// Build return items
@@ -846,14 +853,57 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 						}
 					}
 				}
+			case *SetClause:
+				// Build set items
+				for _, kvp := range c.KeyValuePairs {
+					if strings.Contains(kvp.Key, ".") {
+						parts := strings.SplitN(kvp.Key, ".", 2)
+						// If the node being set is kindless, we need to create a set clause for each potential kind
+						if isKindless(parts[0], kindlessNodes) {
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
+								setPath := fmt.Sprintf("%s.%s", varName, parts[1])
+								var valueStr string
+								switch v := kvp.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
+							}
+						} else {
+							// If the node is not kindless, just use it as is
+							varName := fmt.Sprintf("%s__exp__0", parts[0])
+							setPath := fmt.Sprintf("%s.%s", varName, parts[1])
+							var valueStr string
+							switch v := kvp.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("'%s'", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
+						}
+					}
+				}
 			}
 		}
 	}
 
 	// Combine into final query
-	query := fmt.Sprintf("MATCH %s RETURN %s",
-		strings.Join(matchParts, ", "),
-		strings.Join(returnParts, ", "))
+	var queryParts []string
+	if len(matchParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("MATCH %s", strings.Join(matchParts, ", ")))
+	}
+	if len(setParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("SET %s", strings.Join(setParts, ", ")))
+	}
+	if len(returnParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("RETURN %s", strings.Join(returnParts, ", ")))
+	}
+
+	query := strings.Join(queryParts, " ")
 
 	// Log the expanded query for debugging
 	fmt.Printf("Expanded query: %s\n", query)
@@ -865,53 +915,6 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	}
 
 	return newAst, nil
-}
-
-func expandAndReevaluateQuery(rel *Relationship, potentialKinds []string) string {
-	// Build the expanded query
-	var matchParts []string
-	var returnParts []string
-
-	// For each potential kind, create a match pattern and return item
-	for i, kind := range potentialKinds {
-		// Create unique variable names for both left and right nodes
-		leftVarName := fmt.Sprintf("%s__exp__%d", rel.LeftNode.ResourceProperties.Name, i)
-		rightVarName := fmt.Sprintf("%s_%s", rel.RightNode.ResourceProperties.Name, strings.ToLower(kind))
-
-		// Get the base node pattern with its properties
-		leftNodeStr := fmt.Sprintf("(%s:%s", leftVarName, rel.LeftNode.ResourceProperties.Kind)
-		if rel.LeftNode.ResourceProperties.Properties != nil && len(rel.LeftNode.ResourceProperties.Properties.PropertyList) > 0 {
-			var props []string
-			for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
-				// Handle different value types
-				var valueStr string
-				switch v := prop.Value.(type) {
-				case string:
-					valueStr = fmt.Sprintf("\"%s\"", v)
-				default:
-					valueStr = fmt.Sprintf("%v", v)
-				}
-				props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
-			}
-			leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
-		}
-		leftNodeStr += ")"
-
-		// Create match pattern
-		matchPattern := fmt.Sprintf("%s->(%s:%s)", leftNodeStr, rightVarName, kind)
-		matchParts = append(matchParts, matchPattern)
-
-		// Create return items without AS clauses
-		returnParts = append(returnParts, fmt.Sprintf("%s.kind", rightVarName))
-		returnParts = append(returnParts, fmt.Sprintf("%s.metadata.name", leftVarName))
-	}
-
-	// Combine into final query
-	query := fmt.Sprintf("MATCH %s RETURN %s",
-		strings.Join(matchParts, ", "),
-		strings.Join(returnParts, ", "))
-
-	return query
 }
 
 // QueryExpandedError is a special error type that indicates the query was expanded
@@ -937,10 +940,8 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
 		}
 		if len(potentialKinds) > 1 {
-			// Instead of returning an error, expand the query
-			expandedQuery := expandAndReevaluateQuery(rel, potentialKinds)
-			fmt.Printf("Query rewritten - going to execute: %s\n", expandedQuery)
-			return false, &QueryExpandedError{ExpandedQuery: expandedQuery}
+			// Instead of expanding the query here, we'll let rewriteQueryForKindlessNodes handle it
+			return false, &QueryExpandedError{ExpandedQuery: "needs_rewrite"}
 		}
 		if rel.LeftNode.ResourceProperties.Kind == "" {
 			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
@@ -2471,4 +2472,14 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 	}
 
 	return nil
+}
+
+// Helper function to check if a node name corresponds to a kindless node
+func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
+	for _, node := range kindlessNodes {
+		if node.ResourceProperties.Name == nodeName {
+			return true
+		}
+	}
+	return false
 }

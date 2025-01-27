@@ -518,11 +518,71 @@ func TestSumMemoryBytes(t *testing.T) {
 
 // MockRelationshipResolver is used for testing
 type MockRelationshipResolver struct {
-	potentialKinds []string
+	potentialKindsByNode map[string][]string
 }
 
 func (m *MockRelationshipResolver) FindPotentialKindsIntersection(relationships []*Relationship) []string {
-	return m.potentialKinds
+	// If no mapping is provided, return empty slice
+	if len(m.potentialKindsByNode) == 0 {
+		return []string{}
+	}
+
+	// Find the first kindless node and get its potential kinds
+	var result []string
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			if kinds, ok := m.potentialKindsByNode[rel.LeftNode.ResourceProperties.Name]; ok {
+				result = kinds
+				break
+			}
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			if kinds, ok := m.potentialKindsByNode[rel.RightNode.ResourceProperties.Name]; ok {
+				result = kinds
+				break
+			}
+		}
+	}
+
+	// For each additional kindless node, intersect its potential kinds with the result
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			if kinds, ok := m.potentialKindsByNode[rel.LeftNode.ResourceProperties.Name]; ok {
+				if result == nil {
+					result = kinds
+				} else {
+					result = intersectKinds(result, kinds)
+				}
+			}
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			if kinds, ok := m.potentialKindsByNode[rel.RightNode.ResourceProperties.Name]; ok {
+				if result == nil {
+					result = kinds
+				} else {
+					result = intersectKinds(result, kinds)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// Helper function to find intersection of two string slices
+func intersectKinds(a, b []string) []string {
+	set := make(map[string]bool)
+	for _, k := range a {
+		set[k] = true
+	}
+
+	var result []string
+	for _, k := range b {
+		if set[k] {
+			result = append(result, k)
+		}
+	}
+	return result
 }
 
 func TestRewriteQueryForKindlessNodes(t *testing.T) {
@@ -530,7 +590,7 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 	tests := []struct {
 		name          string
 		query         string
-		mockKinds     []string
+		mockKinds     map[string][]string
 		expectedQuery string
 		expectedError bool
 		errorContains string
@@ -538,49 +598,70 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 		{
 			name:          "No kindless nodes",
 			query:         "MATCH (d:Deployment)->(p:Pod) RETURN d, p",
-			mockKinds:     []string{"Pod"},
+			mockKinds:     map[string][]string{},
 			expectedQuery: "",
 			expectedError: false,
 		},
 		{
 			name:          "Single kindless node with one potential kind",
 			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
-			mockKinds:     []string{"Pod"},
+			mockKinds:     map[string][]string{"x": {"Pod"}},
 			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod) RETURN d__exp__0, x__exp__0",
 			expectedError: false,
 		},
 		{
 			name:          "Single kindless node with multiple potential kinds",
 			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
-			mockKinds:     []string{"Pod", "ReplicaSet"},
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
 			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) RETURN d__exp__0, x__exp__0, d__exp__1, x__exp__1",
 			expectedError: false,
 		},
 		{
 			name:          "Multiple kindless nodes with same potential kind",
 			query:         "MATCH (d:Deployment)->(x), (s:Service)->(x) RETURN d, s, x",
-			mockKinds:     []string{"Pod"},
+			mockKinds:     map[string][]string{"x": {"Pod"}},
 			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (s__exp__0:Service)->(x__exp__0:Pod) RETURN d__exp__0, s__exp__0, x__exp__0",
+			expectedError: false,
+		},
+		{
+			name:          "Multiple kindless nodes with different potential kinds",
+			query:         "MATCH (d:Deployment)->(x), (s:Service)->(y) RETURN d, s, x, y",
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}, "y": {"Pod", "Endpoints"}},
+			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (s__exp__0:Service)->(y__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet), (s__exp__1:Service)->(y__exp__1:Endpoints) RETURN d__exp__0, s__exp__0, x__exp__0, y__exp__0, d__exp__1, s__exp__1, x__exp__1, y__exp__1",
+			expectedError: false,
+		},
+		{
+			name:          "Multiple kindless nodes with intersecting potential kinds",
+			query:         "MATCH (d:Deployment)->(x), (s:Service)->(x) RETURN d, s, x",
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: "MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (s__exp__0:Service)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet), (s__exp__1:Service)->(x__exp__1:ReplicaSet) RETURN d__exp__0, s__exp__0, x__exp__0, d__exp__1, s__exp__1, x__exp__1",
 			expectedError: false,
 		},
 		{
 			name:          "Kindless node with properties",
 			query:         `MATCH (d:Deployment)->(x {name: "test"}) RETURN d, x`,
-			mockKinds:     []string{"Pod"},
+			mockKinds:     map[string][]string{"x": {"Pod"}},
 			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod {name: "test"}) RETURN d__exp__0, x__exp__0`,
+			expectedError: false,
+		},
+		{
+			name:          "Match/Set/Return with multiple potential kinds",
+			query:         `MATCH (d:Deployment)->(x) SET x.metadata.labels.foo = "bar" RETURN d, x`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) SET x__exp__0.metadata.labels.foo = "test", x__exp__1.metadata.labels.foo = "test" RETURN d__exp__0, x__exp__0, d__exp__1, x__exp__1`,
 			expectedError: false,
 		},
 		{
 			name:          "No potential kinds found",
 			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
-			mockKinds:     []string{},
+			mockKinds:     map[string][]string{},
 			expectedError: true,
 			errorContains: "unable to determine kind for nodes in relationship",
 		},
 		{
 			name:          "No relationships for kindless node",
 			query:         "MATCH (x) RETURN x",
-			mockKinds:     []string{},
+			mockKinds:     map[string][]string{},
 			expectedError: true,
 			errorContains: "unable to determine kind for nodes in relationship",
 		},
@@ -590,7 +671,8 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up mock
 			mockFindPotentialKinds = func(relationships []*Relationship) []string {
-				return tt.mockKinds
+				resolver := &MockRelationshipResolver{potentialKindsByNode: tt.mockKinds}
+				return resolver.FindPotentialKindsIntersection(relationships)
 			}
 
 			// Parse the original query
