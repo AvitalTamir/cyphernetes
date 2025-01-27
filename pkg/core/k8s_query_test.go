@@ -666,6 +666,20 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "Match/Return with aggregation",
+			query:         `MATCH (d:Deployment)->(x) RETURN COUNT {d}, SUM {x}`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) RETURN COUNT {d__exp__0}, SUM {x__exp__0}, COUNT {d__exp__1}, SUM {x__exp__1}`,
+			expectedError: false,
+		},
+		{
+			name:          "Multiple kindless nodes with different potential kinds returning a mixture of aggregation and non-aggregation with properties",
+			query:         `MATCH (d:Deployment {name: "test"})->(x), (s:Service)->(y) RETURN d, COUNT {s}, x, SUM {y.spec.replicas}`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}, "y": {"Pod", "Endpoints"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (s__exp__0:Service)->(y__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet), (s__exp__1:Service)->(y__exp__1:Endpoints) RETURN d__exp__0, COUNT {s__exp__0}, x__exp__0, SUM {y__exp__0.spec.replicas}, d__exp__1, COUNT {s__exp__1}, x__exp__1, SUM {y__exp__1.spec.replicas}`,
+			expectedError: false,
+		},
+		{
 			name:          "No potential kinds found",
 			query:         "MATCH (d:Deployment)->(x) RETURN d, x",
 			mockKinds:     map[string][]string{},

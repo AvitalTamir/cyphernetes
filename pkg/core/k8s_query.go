@@ -878,15 +878,25 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 						seenNodes[item.JsonPath] = true
 						// Add a return item for each iteration
 						for j := 0; j < len(potentialKinds); j++ {
+							var returnItem string
 							if strings.Contains(item.JsonPath, ".") {
 								parts := strings.SplitN(item.JsonPath, ".", 2)
 								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
 								returnPath := fmt.Sprintf("%s.%s", varName, parts[1])
-								returnParts = append(returnParts, returnPath)
+								if item.Aggregate != "" {
+									returnItem = fmt.Sprintf("%s {%s}", item.Aggregate, returnPath)
+								} else {
+									returnItem = returnPath
+								}
 							} else {
 								varName := fmt.Sprintf("%s__exp__%d", item.JsonPath, j)
-								returnParts = append(returnParts, varName)
+								if item.Aggregate != "" {
+									returnItem = fmt.Sprintf("%s {%s}", item.Aggregate, varName)
+								} else {
+									returnItem = varName
+								}
 							}
+							returnParts = append(returnParts, returnItem)
 						}
 					}
 				}
