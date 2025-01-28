@@ -15,8 +15,10 @@ import (
 )
 
 var (
-	relationshipsMutex sync.RWMutex
-	relationships      = make(map[string][]string)
+	relationshipsMutex  sync.RWMutex
+	relationships       = make(map[string][]string)
+	potentialKindsCache = make(map[string][]string) // kind -> potential kinds
+	potentialKindsMutex sync.RWMutex
 )
 
 func AddRelationshipRule(rule RelationshipRule) {
@@ -108,9 +110,17 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	processed := 0
 	lastProgress := 0
 
+	// Initialize potential kinds cache
+	potentialKindsMutex.Lock()
+	potentialKindsCache = make(map[string][]string)
+	potentialKindsMutex.Unlock()
+
 	// Regular expression to match fields ending with 'Name', or 'Ref'
 	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
 	refFieldRegex := regexp.MustCompile(`(\w+)(Ref)`)
+
+	// Map to collect potential kinds before sorting
+	tempPotentialKinds := make(map[string]map[string]bool)
 
 	for kindA, fields := range resourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
@@ -172,6 +182,16 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			kindA := strings.ToLower(gvrA.Resource)
 			kindB := strings.ToLower(gvr.Resource)
 
+			// Update potential kinds cache for both directions
+			if tempPotentialKinds[kindA] == nil {
+				tempPotentialKinds[kindA] = make(map[string]bool)
+			}
+			if tempPotentialKinds[kindB] == nil {
+				tempPotentialKinds[kindB] = make(map[string]bool)
+			}
+			tempPotentialKinds[kindA][kindB] = true
+			tempPotentialKinds[kindB][kindA] = true
+
 			// Keep the array notation in the JsonPath
 			fieldA := "$." + fullFieldPath
 			fieldB := "$.metadata.name"
@@ -214,6 +234,40 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 		processed++
 	}
+
+	// Convert temporary map to sorted slices and update cache
+	potentialKindsMutex.Lock()
+	for kind, potentialMap := range tempPotentialKinds {
+		var sortedKinds []string
+		for potentialKind := range potentialMap {
+			sortedKinds = append(sortedKinds, potentialKind)
+		}
+		sort.Strings(sortedKinds)
+		potentialKindsCache[kind] = sortedKinds
+	}
+
+	// Add hardcoded relationship rules to cache
+	for _, rule := range relationshipRules {
+		if potentialKindsCache[rule.KindA] == nil {
+			potentialKindsCache[rule.KindA] = []string{}
+		}
+		if potentialKindsCache[rule.KindB] == nil {
+			potentialKindsCache[rule.KindB] = []string{}
+		}
+
+		// Add B to A's potential kinds if not already present
+		if !contains(potentialKindsCache[rule.KindA], rule.KindB) {
+			potentialKindsCache[rule.KindA] = append(potentialKindsCache[rule.KindA], rule.KindB)
+			sort.Strings(potentialKindsCache[rule.KindA])
+		}
+
+		// Add A to B's potential kinds if not already present
+		if !contains(potentialKindsCache[rule.KindB], rule.KindA) {
+			potentialKindsCache[rule.KindB] = append(potentialKindsCache[rule.KindB], rule.KindA)
+			sort.Strings(potentialKindsCache[rule.KindB])
+		}
+	}
+	potentialKindsMutex.Unlock()
 
 	customRelationshipsCount, err := loadCustomRelationships()
 	if err != nil {
@@ -328,34 +382,55 @@ func GetRelationships() map[string][]string {
 // FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
 func FindPotentialKinds(sourceKind string) []string {
 	sourceKind = strings.ToLower(sourceKind)
-	potentialKinds := make(map[string]bool)
 	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
 
-	// Look through all relationship rules
+	// Check cache first
+	potentialKindsMutex.RLock()
+	if kinds, exists := potentialKindsCache[sourceKind]; exists {
+		potentialKindsMutex.RUnlock()
+		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
+		return kinds
+	}
+	potentialKindsMutex.RUnlock()
+
+	// Check for plural form in cache
+	potentialKindsMutex.RLock()
+	if kinds, exists := potentialKindsCache[sourceKind+"s"]; exists {
+		potentialKindsMutex.RUnlock()
+		debugLog("FindPotentialKinds: found in cache (plural) for %s = %v", sourceKind, kinds)
+		return kinds
+	}
+	potentialKindsMutex.RUnlock()
+
+	// If not in cache, fall back to scanning rules (this should be rare)
+	debugLog("FindPotentialKinds: cache miss for %s, falling back to rule scan", sourceKind)
+	potentialKinds := make(map[string]bool)
 	rules := GetRelationshipRules()
 	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
 
 	for _, rule := range rules {
 		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", rule.KindA, rule.KindB, rule.Relationship)
-
-		// If sourceKind is KindB, we want KindA (what can connect to sourceKind)
 		if strings.ToLower(rule.KindB) == sourceKind || strings.ToLower(rule.KindB) == sourceKind+"s" {
 			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", rule.KindA)
 			potentialKinds[rule.KindA] = true
 		}
-		// If sourceKind is KindA, we want KindB (what sourceKind can connect to)
 		if strings.ToLower(rule.KindA) == sourceKind || strings.ToLower(rule.KindA) == sourceKind+"s" {
 			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
 			potentialKinds[rule.KindB] = true
 		}
 	}
 
-	// Convert map to slice
 	var result []string
 	for kind := range potentialKinds {
 		result = append(result, kind)
 	}
-	sort.Strings(result) // Sort for consistent results
+	sort.Strings(result)
+
+	// Update cache with results
+	potentialKindsMutex.Lock()
+	potentialKindsCache[sourceKind] = result
+	potentialKindsMutex.Unlock()
+
 	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
 	return result
 }
@@ -441,4 +516,14 @@ func FindPotentialKindsIntersection(relationships []*Relationship) []string {
 	sort.Strings(kinds) // Sort for consistent results
 	debugLog("FindPotentialKindsIntersection: final result=%v", kinds)
 	return kinds
+}
+
+// Helper function to check if a string slice contains a string
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

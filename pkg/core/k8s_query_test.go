@@ -723,7 +723,7 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 				t.Fatalf("Failed to parse query: %v", err)
 			}
 
-			// Create a query executor with mock provider
+			// Create a query executor with mock providermake
 			executor, err := NewQueryExecutor(mockProvider)
 			if err != nil {
 				t.Fatalf("Failed to create query executor: %v", err)
