@@ -107,6 +107,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		// Merge results with special pattern
 		mergedResults := make(map[string]interface{})
 		expResults := make(map[string][]interface{})
+		aggregateResults := make(map[string]interface{})
 		mergedGraph := Graph{
 			Nodes: []Node{},
 			Edges: []Edge{},
@@ -115,7 +116,62 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 
 		// First pass: collect all expanded results
 		for key, value := range result.Data {
-			if strings.Contains(key, "__exp__") {
+			if key == "aggregate" {
+				// Handle aggregate results separately
+				if aggMap, ok := value.(map[string]interface{}); ok {
+					for aggKey, aggValue := range aggMap {
+						// Check if this is an expanded aggregate result
+						if strings.HasPrefix(aggKey, "__exp__") {
+							// Parse the expanded aggregate key: __exp__<type>__<name>__<index>
+							parts := strings.Split(aggKey, "__")
+							if len(parts) >= 5 {
+								aggType := parts[2] // sum, count, etc.
+								aggName := parts[3] // original name or alias
+
+								// Initialize if not exists
+								if _, exists := aggregateResults[aggName]; !exists {
+									if aggType == "sum" {
+										aggregateResults[aggName] = float64(0)
+									} else if aggType == "count" {
+										aggregateResults[aggName] = 0
+									} else {
+										aggregateResults[aggName] = make([]interface{}, 0)
+									}
+								}
+
+								// Merge based on aggregate type
+								switch aggType {
+								case "sum":
+									if aggValue != nil {
+										currentSum := aggregateResults[aggName].(float64)
+										switch v := aggValue.(type) {
+										case float64:
+											aggregateResults[aggName] = currentSum + v
+										case int:
+											aggregateResults[aggName] = currentSum + float64(v)
+										case int64:
+											aggregateResults[aggName] = currentSum + float64(v)
+										}
+									}
+								case "count":
+									if aggValue != nil {
+										currentCount := aggregateResults[aggName].(int)
+										if count, ok := aggValue.(int); ok {
+											aggregateResults[aggName] = currentCount + count
+										}
+									}
+								default:
+									// For other aggregates, collect all non-nil values
+									if aggValue != nil {
+										arr := aggregateResults[aggName].([]interface{})
+										aggregateResults[aggName] = append(arr, aggValue)
+									}
+								}
+							}
+						}
+					}
+				}
+			} else if strings.Contains(key, "__exp__") {
 				// Extract original variable name (everything before __exp__)
 				origVar := strings.Split(key, "__exp__")[0]
 				if expResults[origVar] == nil {
@@ -127,6 +183,11 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 			} else {
 				mergedResults[key] = value
 			}
+		}
+
+		// Add aggregated results back to merged results
+		if len(aggregateResults) > 0 {
+			mergedResults["aggregate"] = aggregateResults
 		}
 
 		// Clean up node IDs and add to merged graph
@@ -895,6 +956,22 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 								} else {
 									returnItem = varName
 								}
+							}
+							// Add AS alias with expansion pattern
+							if item.Aggregate != "" {
+								aggType := strings.ToLower(item.Aggregate)
+								if item.Alias != "" {
+									returnItem = fmt.Sprintf("%s AS __exp__%s__%s__%d", returnItem, aggType, item.Alias, j)
+								} else {
+									// For non-aliased aggregations, use the format <aggregate_type>_<node>_<path>
+									aliasPath := item.JsonPath
+									if strings.Contains(aliasPath, ".") {
+										aliasPath = strings.Replace(aliasPath, ".", "_", -1)
+									}
+									returnItem = fmt.Sprintf("%s AS __exp__%s__%s_%s__%d", returnItem, aggType, aggType, aliasPath, j)
+								}
+							} else if item.Alias != "" {
+								returnItem = fmt.Sprintf("%s AS %s", returnItem, item.Alias)
 							}
 							returnParts = append(returnParts, returnItem)
 						}

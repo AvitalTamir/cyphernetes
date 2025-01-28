@@ -693,6 +693,20 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 			expectedError: true,
 			errorContains: "unable to determine kind for nodes in relationship",
 		},
+		{
+			name:          "Match/Return with AS aliases",
+			query:         `MATCH (d:Deployment)->(x) RETURN d.metadata.name AS deployment_name, x.spec.replicas AS replica_count`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) RETURN d__exp__0.metadata.name AS deployment_name, x__exp__0.spec.replicas AS replica_count, d__exp__1.metadata.name AS deployment_name, x__exp__1.spec.replicas AS replica_count`,
+			expectedError: false,
+		},
+		{
+			name:          "Match/Return with mixed AS aliases and aggregations",
+			query:         `MATCH (d:Deployment)->(x) RETURN d.metadata.name AS deployment_name, COUNT {x} AS pod_count`,
+			mockKinds:     map[string][]string{"x": {"Pod", "ReplicaSet"}},
+			expectedQuery: `MATCH (d__exp__0:Deployment)->(x__exp__0:Pod), (d__exp__1:Deployment)->(x__exp__1:ReplicaSet) RETURN d__exp__0.metadata.name AS deployment_name, COUNT {x__exp__0} AS pod_count, d__exp__1.metadata.name AS deployment_name, COUNT {x__exp__1} AS pod_count`,
+			expectedError: false,
+		},
 	}
 
 	for _, tt := range tests {
