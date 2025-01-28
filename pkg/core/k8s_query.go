@@ -915,7 +915,29 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 								default:
 									valueStr = fmt.Sprintf("%v", v)
 								}
-								whereParts = append(whereParts, fmt.Sprintf("%s.%s = %s", varName, propertyPath, valueStr))
+								// Map operator names to symbols
+								operator := filter.Operator
+								switch operator {
+								case "EQUALS":
+									operator = "="
+								case "NOT_EQUALS":
+									operator = "!="
+								case "GREATER_THAN":
+									operator = ">"
+								case "LESS_THAN":
+									operator = "<"
+								case "GREATER_THAN_EQUALS":
+									operator = ">="
+								case "LESS_THAN_EQUALS":
+									operator = "<="
+								case "REGEX_COMPARE":
+									operator = "=~"
+								case "CONTAINS":
+									operator = "CONTAINS"
+								case "":
+									operator = "="
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
 							}
 						} else {
 							// If the node is not kindless, just use it as is
@@ -927,7 +949,29 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 							default:
 								valueStr = fmt.Sprintf("%v", v)
 							}
-							whereParts = append(whereParts, fmt.Sprintf("%s.%s = %s", varName, propertyPath, valueStr))
+							// Map operator names to symbols
+							operator := filter.Operator
+							switch operator {
+							case "EQUALS":
+								operator = "="
+							case "NOT_EQUALS":
+								operator = "!="
+							case "GREATER_THAN":
+								operator = ">"
+							case "LESS_THAN":
+								operator = "<"
+							case "GREATER_THAN_EQUALS":
+								operator = ">="
+							case "LESS_THAN_EQUALS":
+								operator = "<="
+							case "REGEX_COMPARE":
+								operator = "=~"
+							case "CONTAINS":
+								operator = "CONTAINS"
+							case "":
+								operator = "="
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
