@@ -1009,9 +1009,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 								} else {
 									// For non-aliased aggregations, use the format <aggregate_type>_<node>_<path>
 									aliasPath := item.JsonPath
-									if strings.Contains(aliasPath, ".") {
-										aliasPath = strings.Replace(aliasPath, ".", "_", -1)
-									}
+									aliasPath = strings.Replace(aliasPath, ".", "_", -1)
 									returnItem = fmt.Sprintf("%s AS __exp__%s__%s_%s__%d", returnItem, aggType, aggType, aliasPath, j)
 								}
 							} else if item.Alias != "" {
@@ -1095,7 +1093,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 	query := strings.Join(queryParts, " ")
 
 	// Log the expanded query for debugging
-	fmt.Printf("Expanded query: %s\n", query)
+	debugLog("Expanded query: %s\n", query)
 
 	// Parse the expanded query into a new AST
 	newAst, err := ParseQuery(query)
