@@ -1123,11 +1123,6 @@ func (e *QueryExpandedError) Error() string {
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
-	// Check for kindless-to-kindless chain first
-	if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
-		return false, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
-	}
-
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
 
@@ -2687,12 +2682,6 @@ func (q *QueryExecutor) validateRelationship(rel *Relationship, c *MatchClause) 
 	logDebug(fmt.Sprintf("validateRelationship: Starting validation for left node kind=%s, right node kind=%s",
 		rel.LeftNode.ResourceProperties.Kind,
 		rel.RightNode.ResourceProperties.Kind))
-
-	// Check if we have a kindless-to-kindless chain
-	if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
-		logDebug("validateRelationship: Detected kindless-to-kindless chain")
-		return false, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
-	}
 
 	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
