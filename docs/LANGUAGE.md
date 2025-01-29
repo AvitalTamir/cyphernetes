@@ -154,8 +154,8 @@ Cyphernetes supports querying multiple clusters using the `IN` keyword.
 
 ```graphql
 IN staging, production
-MATCH (d:Deployment {namespace: "kube-system"})
-RETURN d.metadata.name
+MATCH (d:Deployment {name: "coredns", namespace: "kube-system"})
+RETURN d.spec.replicas
 ```
 
 Cyphernetes will run the query for each context in the `IN` clause, and return the results in a single payload.
@@ -165,18 +165,18 @@ The results will be prefixed with the context name, followed by an underscore:
 {
   "staging_d": [
     {
-      "metadata": {
-        "name": "coredns"
-      },
-      "name": "coredns"
+      "name": "coredns",
+      "spec": {
+        "replicas": 2
+      }
     }
   ],
   "production_d": [
     {
-      "metadata": {
-        "name": "coredns"
-      },
-      "name": "coredns"
+      "name": "coredns",
+      "spec": {
+        "replicas": 2
+      }
     }
   ]
 }
