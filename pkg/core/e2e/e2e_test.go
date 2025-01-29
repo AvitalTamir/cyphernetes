@@ -2037,6 +2037,73 @@ var _ = Describe("Cyphernetes E2E", func() {
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
+
+	It("Should handle kindless-to-kindless chains appropriately", func() {
+		By("Creating test resources")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-kindless-deployment",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-kindless",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-kindless",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-kindless",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		By("Waiting for deployment to be created")
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-kindless-deployment",
+			}, &appsv1.Deployment{})
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing query with kindless-to-kindless chain")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Query with two unknown nodes in a chain
+		ast, err := core.ParseQuery(`
+			MATCH (x)->(y)->(d:Deployment)
+			WHERE d.metadata.name = "test-kindless-deployment"
+			RETURN x.kind AS x_kind, y.kind AS y_kind
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("chaining two unknown nodes (kindless-to-kindless) is not supported"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
 })
 
 var _ = Describe("Ambiguous Resource Kinds", func() {

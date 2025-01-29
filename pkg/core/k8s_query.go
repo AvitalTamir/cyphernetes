@@ -802,6 +802,13 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 				}
 			}
 			relationships = append(relationships, matchClause.Relationships...)
+
+			// Check for kindless-to-kindless chains in relationships
+			for _, rel := range matchClause.Relationships {
+				if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
+					return nil, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
+				}
+			}
 		}
 	}
 
@@ -1115,6 +1122,11 @@ func (e *QueryExpandedError) Error() string {
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
+
+	// Check for kindless-to-kindless chain first
+	if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
+		return false, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
+	}
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
@@ -2669,4 +2681,91 @@ func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
 		}
 	}
 	return false
+}
+
+func (q *QueryExecutor) validateRelationship(rel *Relationship, c *MatchClause) (bool, error) {
+	logDebug(fmt.Sprintf("validateRelationship: Starting validation for left node kind=%s, right node kind=%s",
+		rel.LeftNode.ResourceProperties.Kind,
+		rel.RightNode.ResourceProperties.Kind))
+
+	// Check if we have a kindless-to-kindless chain
+	if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
+		logDebug("validateRelationship: Detected kindless-to-kindless chain")
+		return false, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
+	}
+
+	// Resolve kinds if needed
+	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
+		logDebug("validateRelationship: Attempting to resolve unknown kinds")
+		// Try to resolve the kind using relationships
+		potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
+		logDebug(fmt.Sprintf("validateRelationship: Found potential kinds: %v", potentialKinds))
+
+		if len(potentialKinds) == 0 {
+			logDebug("validateRelationship: No potential kinds found")
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
+		}
+		if len(potentialKinds) > 1 {
+			logDebug(fmt.Sprintf("validateRelationship: Multiple potential kinds found: %v", potentialKinds))
+			// Instead of expanding the query here, we'll let rewriteQueryForKindlessNodes handle it
+			return false, &QueryExpandedError{ExpandedQuery: "needs_rewrite"}
+		}
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			logDebug(fmt.Sprintf("validateRelationship: Setting left node kind to %s", potentialKinds[0]))
+			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			logDebug(fmt.Sprintf("validateRelationship: Setting right node kind to %s", potentialKinds[0]))
+			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+	}
+
+	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
+	if err != nil {
+		logDebug(fmt.Sprintf("validateRelationship: Error finding GVR for left kind: %v", err))
+		return false, fmt.Errorf("error finding API resource >> %s", err)
+	}
+	rightKind, err := q.findGVR(rel.RightNode.ResourceProperties.Kind)
+	if err != nil {
+		logDebug(fmt.Sprintf("validateRelationship: Error finding GVR for right kind: %v", err))
+		return false, fmt.Errorf("error finding API resource >> %s", err)
+	}
+
+	logDebug(fmt.Sprintf("validateRelationship: Resolved GVRs - left: %v, right: %v", leftKind, rightKind))
+
+	var relType RelationshipType
+
+	if rightKind.Resource == "namespaces" || leftKind.Resource == "namespaces" {
+		relType = NamespaceHasResource
+		logDebug("validateRelationship: Set relationship type to NamespaceHasResource")
+	}
+
+	if relType == "" {
+		logDebug("validateRelationship: Searching for relationship type in rules")
+		for _, resourceRelationship := range relationshipRules {
+			logDebug(fmt.Sprintf("validateRelationship: Checking rule - KindA: %s, KindB: %s",
+				resourceRelationship.KindA, resourceRelationship.KindB))
+			if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
+				(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
+				relType = resourceRelationship.Relationship
+				logDebug(fmt.Sprintf("validateRelationship: Found matching relationship type: %s", relType))
+				break
+			}
+		}
+	}
+
+	if relType == "" {
+		logDebug(fmt.Sprintf("validateRelationship: No relationship type found between %s and %s", leftKind, rightKind))
+		// no relationship type found, error out
+		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
+	}
+
+	_, err = findRuleByRelationshipType(relType)
+	if err != nil {
+		logDebug(fmt.Sprintf("validateRelationship: Error finding rule for relationship type: %v", err))
+		return false, fmt.Errorf("error determining relationship type >> %s", err)
+	}
+
+	logDebug("validateRelationship: Successfully validated relationship")
+	return true, nil
 }

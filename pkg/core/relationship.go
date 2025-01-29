@@ -454,6 +454,7 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) []string 
 
 // FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
 func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) []string {
+	logDebug("FindPotentialKindsIntersection: Starting with relationships:", relationships)
 	if len(relationships) == 0 {
 		debugLog("FindPotentialKindsIntersection: no relationships provided")
 		return []string{}
@@ -479,16 +480,18 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	for _, rel := range relationships {
 		if rel.LeftNode.ResourceProperties.Kind != "" {
 			knownKinds[strings.ToLower(rel.LeftNode.ResourceProperties.Kind)] = true
+			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (left): %s", rel.LeftNode.ResourceProperties.Kind))
 		}
 		if rel.RightNode.ResourceProperties.Kind != "" {
 			knownKinds[strings.ToLower(rel.RightNode.ResourceProperties.Kind)] = true
+			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (right): %s", rel.RightNode.ResourceProperties.Kind))
 		}
 	}
-	debugLog("FindPotentialKindsIntersection: found known kinds=%v", knownKinds)
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: All known kinds: %v", knownKinds))
 
 	// If no known kinds, return empty
 	if len(knownKinds) == 0 {
-		debugLog("FindPotentialKindsIntersection: no known kinds found")
+		logDebug("FindPotentialKindsIntersection: no known kinds found")
 		return []string{}
 	}
 
@@ -500,10 +503,11 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	}
 
 	result := make(map[string]bool)
-	for _, kind := range FindPotentialKinds(firstKnownKind, provider) {
+	initialPotentialKinds := FindPotentialKinds(firstKnownKind, provider)
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Initial potential kinds from %s: %v", firstKnownKind, initialPotentialKinds))
+	for _, kind := range initialPotentialKinds {
 		result[kind] = true
 	}
-	debugLog("FindPotentialKindsIntersection: initial potential kinds from %s=%v", firstKnownKind, result)
 
 	// For each additional known kind, intersect with its potential kinds
 	for kind := range knownKinds {
@@ -512,13 +516,13 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 		}
 
 		potentialKinds := FindPotentialKinds(kind, provider)
-		debugLog("FindPotentialKindsIntersection: potential kinds for %s=%v", kind, potentialKinds)
+		logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Potential kinds for %s: %v", kind, potentialKinds))
 
 		newResult := make(map[string]bool)
 		// Keep only kinds that exist in both sets
 		for _, potentialKind := range potentialKinds {
 			if result[potentialKind] {
-				debugLog("FindPotentialKindsIntersection: keeping common kind %s", potentialKind)
+				logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Keeping common kind %s", potentialKind))
 				newResult[potentialKind] = true
 			}
 		}
@@ -531,7 +535,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 		kinds = append(kinds, kind)
 	}
 	sort.Strings(kinds) // Sort for consistent results
-	debugLog("FindPotentialKindsIntersection: final result=%v", kinds)
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Final result=%v", kinds))
 	return kinds
 }
 
