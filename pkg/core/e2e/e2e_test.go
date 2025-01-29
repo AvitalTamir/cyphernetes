@@ -2276,6 +2276,171 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(k8sClient.Delete(ctx, deployment1)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, deployment2)).Should(Succeed())
 	})
+
+	It("Should delete multiple kindless nodes of different types", func() {
+		By("Creating test deployment and service")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-delete-kindless",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-delete-kindless",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-delete-kindless",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-delete-kindless",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		testService := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-delete-kindless-svc",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-delete-kindless",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "test-delete-kindless",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port:       80,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testService)).Should(Succeed())
+
+		By("Waiting for resources to be created")
+		var rsName string
+		var rsUID string
+		// Wait for deployment and capture first ReplicaSet name and UID
+		Eventually(func() error {
+			// Check deployment
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-delete-kindless",
+			}, &appsv1.Deployment{})
+			if err != nil {
+				return err
+			}
+
+			// Get and store the first ReplicaSet name and UID
+			var rsList appsv1.ReplicaSetList
+			err = k8sClient.List(ctx, &rsList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-delete-kindless"})
+			if err != nil || len(rsList.Items) == 0 {
+				return fmt.Errorf("replicaset not found")
+			}
+			rsName = rsList.Items[0].Name
+			rsUID = string(rsList.Items[0].UID)
+
+			// Check service exists
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-delete-kindless-svc",
+			}, &corev1.Service{})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}, timeout, interval).Should(Succeed())
+
+		// Store the ReplicaSet name and UID for verification
+		Expect(rsName).NotTo(BeEmpty(), "Should have captured a ReplicaSet name")
+		Expect(rsUID).NotTo(BeEmpty(), "Should have captured a ReplicaSet UID")
+
+		By("Executing delete query with multiple kindless nodes")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Enable debug logging to see the expanded query
+		core.LogLevel = "debug"
+
+		// Simpler query that will match both ReplicaSet and Service
+		ast, err := core.ParseQuery(`
+				MATCH (d:Deployment)->(x)
+				WHERE d.metadata.name = "test-delete-kindless"
+				DELETE x
+			`)
+		Expect(err).NotTo(HaveOccurred())
+
+		// First, let's verify what we're about to delete
+		verifyAst, err := core.ParseQuery(`
+				MATCH (d:Deployment)->(x)
+				WHERE d.metadata.name = "test-delete-kindless"
+				RETURN x.kind as kind, x.metadata.name as name
+			`)
+		Expect(err).NotTo(HaveOccurred())
+
+		verifyResult, err := executor.Execute(verifyAst, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		fmt.Printf("Resources to be deleted: %+v\n", verifyResult.Data)
+
+		// Now execute the delete
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Reset log level
+		core.LogLevel = ""
+
+		By("Verifying resources were deleted")
+		// Verify the specific ReplicaSet we saw deleted is gone or a different one exists with the same name
+		Eventually(func() bool {
+			var rs appsv1.ReplicaSet
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      rsName,
+			}, &rs)
+			if err != nil {
+				fmt.Printf("Error getting ReplicaSet: %v\n", err)
+				return apierrors.IsNotFound(err)
+			}
+			// If we found a ReplicaSet with the same name, check if it's a different one (different UID)
+			fmt.Printf("Found ReplicaSet: %s, UID: %s (original UID: %s)\n", rs.Name, rs.UID, rsUID)
+			return string(rs.UID) != rsUID
+		}, timeout, interval).Should(BeTrue(), fmt.Sprintf("Original ReplicaSet %s with UID %s should be deleted", rsName, rsUID))
+
+		// Verify Service is deleted
+		Eventually(func() error {
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-delete-kindless-svc",
+			}, &corev1.Service{})
+			return err
+		}, timeout, interval).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "Service should be deleted")
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
 })
 
 var _ = Describe("Ambiguous Resource Kinds", func() {
