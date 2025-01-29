@@ -2441,6 +2441,154 @@ var _ = Describe("Cyphernetes E2E", func() {
 		By("Cleaning up")
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
+
+	It("Should patch multiple kindless nodes", func() {
+		By("Creating test deployment and service")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-patch-kindless",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-patch-kindless",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-patch-kindless",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-patch-kindless",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		testService := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-patch-kindless-svc",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-patch-kindless",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "test-patch-kindless",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port:       80,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testService)).Should(Succeed())
+
+		By("Waiting for resources to be created")
+		var rsName string
+		// Wait for deployment and capture first ReplicaSet name
+		Eventually(func() error {
+			// Check deployment
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-patch-kindless",
+			}, &appsv1.Deployment{})
+			if err != nil {
+				return err
+			}
+
+			// Get and store the first ReplicaSet name
+			var rsList appsv1.ReplicaSetList
+			err = k8sClient.List(ctx, &rsList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-patch-kindless"})
+			if err != nil || len(rsList.Items) == 0 {
+				return fmt.Errorf("replicaset not found")
+			}
+			rsName = rsList.Items[0].Name
+
+			// Check service exists
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-patch-kindless-svc",
+			}, &corev1.Service{})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing patch query with multiple kindless nodes")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Enable debug logging to see the expanded query
+		core.LogLevel = "debug"
+
+		// Query to patch both ReplicaSet and Service
+		ast, err := core.ParseQuery(`
+				MATCH (d:Deployment)->(x)
+				WHERE d.metadata.name = "test-patch-kindless"
+				SET x.metadata.labels.patched = "true"
+			`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Reset log level
+		core.LogLevel = ""
+
+		By("Verifying resources were patched")
+		// Verify ReplicaSet was patched
+		Eventually(func() string {
+			var rs appsv1.ReplicaSet
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      rsName,
+			}, &rs)
+			if err != nil {
+				return ""
+			}
+			return rs.Labels["patched"]
+		}, timeout, interval).Should(Equal("true"), "ReplicaSet should have the patched label")
+
+		// Verify Service was patched
+		Eventually(func() string {
+			var svc corev1.Service
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-patch-kindless-svc",
+			}, &svc)
+			if err != nil {
+				return ""
+			}
+			return svc.Labels["patched"]
+		}, timeout, interval).Should(Equal("true"), "Service should have the patched label")
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, testService)).Should(Succeed())
+	})
 })
 
 var _ = Describe("Ambiguous Resource Kinds", func() {
