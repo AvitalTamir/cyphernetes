@@ -817,7 +817,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 		potentialKinds = mockFindPotentialKinds(relationships)
 	} else {
 		// Use real function in production
-		potentialKinds = FindPotentialKindsIntersection(relationships)
+		potentialKinds = FindPotentialKindsIntersection(relationships, q.provider)
 	}
 
 	if len(potentialKinds) == 0 {
@@ -1122,7 +1122,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
 		// Try to resolve the kind using relationships
-		potentialKinds := FindPotentialKindsIntersection(c.Relationships)
+		potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
 		if len(potentialKinds) == 0 {
 			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
 		}
@@ -1310,7 +1310,7 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
 			// Try to resolve the kind using relationships
-			potentialKinds := FindPotentialKindsIntersection(c.Relationships)
+			potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
 			if len(potentialKinds) == 0 {
 				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
 			}

@@ -248,23 +248,26 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 	// Add hardcoded relationship rules to cache
 	for _, rule := range relationshipRules {
-		if potentialKindsCache[rule.KindA] == nil {
-			potentialKindsCache[rule.KindA] = []string{}
+		kindA := strings.ToLower(rule.KindA)
+		kindB := strings.ToLower(rule.KindB)
+
+		if potentialKindsCache[kindA] == nil {
+			potentialKindsCache[kindA] = []string{}
 		}
-		if potentialKindsCache[rule.KindB] == nil {
-			potentialKindsCache[rule.KindB] = []string{}
+		if potentialKindsCache[kindB] == nil {
+			potentialKindsCache[kindB] = []string{}
 		}
 
 		// Add B to A's potential kinds if not already present
-		if !contains(potentialKindsCache[rule.KindA], rule.KindB) {
-			potentialKindsCache[rule.KindA] = append(potentialKindsCache[rule.KindA], rule.KindB)
-			sort.Strings(potentialKindsCache[rule.KindA])
+		if !contains(potentialKindsCache[kindA], kindB) {
+			potentialKindsCache[kindA] = append(potentialKindsCache[kindA], kindB)
+			sort.Strings(potentialKindsCache[kindA])
 		}
 
 		// Add A to B's potential kinds if not already present
-		if !contains(potentialKindsCache[rule.KindB], rule.KindA) {
-			potentialKindsCache[rule.KindB] = append(potentialKindsCache[rule.KindB], rule.KindA)
-			sort.Strings(potentialKindsCache[rule.KindB])
+		if !contains(potentialKindsCache[kindB], kindA) {
+			potentialKindsCache[kindB] = append(potentialKindsCache[kindB], kindA)
+			sort.Strings(potentialKindsCache[kindB])
 		}
 	}
 	potentialKindsMutex.Unlock()
@@ -380,24 +383,23 @@ func GetRelationships() map[string][]string {
 }
 
 // FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
-func FindPotentialKinds(sourceKind string) []string {
+func FindPotentialKinds(sourceKind string, provider provider.Provider) []string {
 	sourceKind = strings.ToLower(sourceKind)
 	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
 
-	// Check cache first
+	// Get the plural form using FindGVR
+	gvr, err := provider.FindGVR(sourceKind)
+	if err != nil {
+		debugLog("FindPotentialKinds: error getting GVR for %s: %v", sourceKind, err)
+		return []string{} // Return empty if we can't get proper plural form
+	}
+	sourceKind = strings.ToLower(gvr.Resource)
+
+	// Check cache with plural form
 	potentialKindsMutex.RLock()
 	if kinds, exists := potentialKindsCache[sourceKind]; exists {
 		potentialKindsMutex.RUnlock()
 		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
-		return kinds
-	}
-	potentialKindsMutex.RUnlock()
-
-	// Check for plural form in cache
-	potentialKindsMutex.RLock()
-	if kinds, exists := potentialKindsCache[sourceKind+"s"]; exists {
-		potentialKindsMutex.RUnlock()
-		debugLog("FindPotentialKinds: found in cache (plural) for %s = %v", sourceKind, kinds)
 		return kinds
 	}
 	potentialKindsMutex.RUnlock()
@@ -409,14 +411,29 @@ func FindPotentialKinds(sourceKind string) []string {
 	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
 
 	for _, rule := range rules {
-		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", rule.KindA, rule.KindB, rule.Relationship)
-		if strings.ToLower(rule.KindB) == sourceKind || strings.ToLower(rule.KindB) == sourceKind+"s" {
-			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", rule.KindA)
-			potentialKinds[rule.KindA] = true
+		// Get proper plural forms using FindGVR
+		gvrA, err := provider.FindGVR(rule.KindA)
+		if err != nil {
+			debugLog("Error getting GVR for %s: %v", rule.KindA, err)
+			continue
 		}
-		if strings.ToLower(rule.KindA) == sourceKind || strings.ToLower(rule.KindA) == sourceKind+"s" {
-			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", rule.KindB)
-			potentialKinds[rule.KindB] = true
+		gvrB, err := provider.FindGVR(rule.KindB)
+		if err != nil {
+			debugLog("Error getting GVR for %s: %v", rule.KindB, err)
+			continue
+		}
+
+		ruleKindA := strings.ToLower(gvrA.Resource)
+		ruleKindB := strings.ToLower(gvrB.Resource)
+
+		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", ruleKindA, ruleKindB, rule.Relationship)
+		if ruleKindB == sourceKind {
+			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", ruleKindA)
+			potentialKinds[ruleKindA] = true
+		}
+		if ruleKindA == sourceKind {
+			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", ruleKindB)
+			potentialKinds[ruleKindB] = true
 		}
 	}
 
@@ -436,7 +453,7 @@ func FindPotentialKinds(sourceKind string) []string {
 }
 
 // FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
-func FindPotentialKindsIntersection(relationships []*Relationship) []string {
+func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) []string {
 	if len(relationships) == 0 {
 		debugLog("FindPotentialKindsIntersection: no relationships provided")
 		return []string{}
@@ -483,7 +500,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship) []string {
 	}
 
 	result := make(map[string]bool)
-	for _, kind := range FindPotentialKinds(firstKnownKind) {
+	for _, kind := range FindPotentialKinds(firstKnownKind, provider) {
 		result[kind] = true
 	}
 	debugLog("FindPotentialKindsIntersection: initial potential kinds from %s=%v", firstKnownKind, result)
@@ -494,7 +511,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship) []string {
 			continue
 		}
 
-		potentialKinds := FindPotentialKinds(kind)
+		potentialKinds := FindPotentialKinds(kind, provider)
 		debugLog("FindPotentialKindsIntersection: potential kinds for %s=%v", kind, potentialKinds)
 
 		newResult := make(map[string]bool)

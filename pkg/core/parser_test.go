@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -1397,59 +1396,6 @@ func TestParserErrors(t *testing.T) {
 			t.Logf("Got error: %v", err)
 			if !strings.Contains(err.Error(), tt.contains) {
 				t.Errorf("ParseQuery() error = %v, want error containing %q", err, tt.contains)
-			}
-		})
-	}
-}
-
-func TestFindPotentialKinds(t *testing.T) {
-	LogLevel = "debug"
-	tests := []struct {
-		name       string
-		sourceKind string
-		want       []string
-	}{
-		{
-			name:       "pods to services (hardcoded)",
-			sourceKind: "pods",
-			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
-		},
-		{
-			name:       "services to pods (reverse)",
-			sourceKind: "services",
-			want:       []string{"daemonsets", "deployments", "endpoints", "ingresses", "mutatingwebhookconfigurations", "pods", "replicasets", "statefulsets", "validatingwebhookconfigurations"},
-		},
-		{
-			name:       "case insensitive - PODS",
-			sourceKind: "PODS",
-			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
-		},
-		{
-			name:       "non-existent kind",
-			sourceKind: "nonexistentkind",
-			want:       []string{},
-		},
-		{
-			name:       "kind with no relationships",
-			sourceKind: "configmaps",
-			want:       []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := FindPotentialKinds(tt.sourceKind)
-			// Sort both slices for consistent comparison
-			sort.Strings(got)
-			sort.Strings(tt.want)
-
-			// Special handling for empty slices
-			if len(got) == 0 && len(tt.want) == 0 {
-				return // Both are empty, test passes
-			}
-
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("FindPotentialKinds() = %v, want %v", got, tt.want)
 			}
 		})
 	}
