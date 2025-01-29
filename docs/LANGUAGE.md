@@ -452,10 +452,10 @@ RETURN x.kind
 
 This query will find and return all resources that have a relationship with the "nginx" deployment, such as ReplicaSets and Services. Cyphernetes will automatically expand this query to try all possible kinds that can have a relationship with a Deployment.
 
-Some things to consider when using kindless nodes:
-* While kindless nodes are a powerful feature, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
-* Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
-* Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
+> Some things to consider when using kindless nodes:
+> * While kindless nodes are a powerful feature, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
+> * Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
+> * Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
 
 ### Anonymous Nodes
 
