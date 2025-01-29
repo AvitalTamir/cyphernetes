@@ -26,13 +26,13 @@ Imagine a flow diagram, where each node represents a Kubernetes resource, and th
 
 This is Cyphernetes in a nutshell. You draw a diagram of the resources you want to work with, and Cyphernetes will translate it into the appropriate Kubernetes API calls.
 
-Nodes are almost never empty. They tend to look more like this:
+Nodes are usually not empty. They tend to look more like this:
 
 ```graphql
-(k:Kind)
+(p:Pod)
 ```
 
-This node contains a _variable_ (in this example it's called `k`), followed by a colon, followed by a _label_ (in our case, it's `Kind`).
+This node contains a _variable_ (in this example it's called `p`), followed by a colon, followed by a _label_ (in our case, it's `Pod`).
 
 We assign variable names to nodes so we can refer to them later in the query. Labels are used to specify the node's Kubernetes resource kind.
 
@@ -74,7 +74,6 @@ This query will match all Deployments in the current context, and return their n
   ]
 }
 ```
-
 Let's do one more:
 
 ```graphql
@@ -85,6 +84,7 @@ RETURN d.metadata.name,
 ```
 
 This query will match all Deployments in the current context, and return a custom payload containing the fields we asked for:
+
 
 ```json
 {
