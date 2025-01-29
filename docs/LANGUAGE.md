@@ -439,6 +439,37 @@ RETURN i.metadata.name, i.spec.rules,
 
 > Here we match a Deployment, the Service that exposes it, and through the Service also the Ingress that routes to it. We also match the Istio VirtualService that belongs to the same application. Cyphernetes doesn't yet understand Istio, so we fallback to using the app label.
 
+### Kindless Nodes
+
+Sometimes you might want to match or operate on resources connected to another resource without knowing their kind in advance. Cyphernetes supports this through "kindless nodes" - nodes where you omit the kind label:
+
+```graphql
+# Find all resources related to a deployment
+MATCH (d:Deployment)->(x)
+WHERE d.metadata.name = "nginx"
+RETURN x.kind
+```
+
+This query will find and return all resources that have a relationship with the "nginx" deployment, such as ReplicaSets and Services. Cyphernetes will automatically expand this query to try all possible kinds that can have a relationship with a Deployment.
+
+### Anonymous Nodes
+
+For even more flexibility, you can use "anonymous nodes" - nodes without both a variable name and kind:
+
+```graphql
+# Find all pods that are two relationships away from a deployment
+MATCH (d:Deployment)->()->(:Pod)
+WHERE d.metadata.name = "nginx"
+RETURN p.metadata.name
+```
+
+Anonymous nodes are useful when you want to express a relationship path but don't care about the intermediate resources.
+
+Things to note:
+* While both kindless and anonymous nodes are powerful features, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
+* Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
+* Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
+
 ## Mutating the Graph
 
 Cyphernetes supports creating, updating and deleting resources in the graph using the `CREATE`, `SET` and `DELETE` keywords.
