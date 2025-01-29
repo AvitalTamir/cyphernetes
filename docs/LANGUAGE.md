@@ -445,30 +445,36 @@ Sometimes you might want to match or operate on resources connected to another r
 
 ```graphql
 # Find all resources related to a deployment
-MATCH (d:Deployment)->(x)
-WHERE d.metadata.name = "nginx"
+MATCH (d:Deployment {name: "nginx"})->(x)
 RETURN x.kind
 ```
 
 This query will find and return all resources that have a relationship with the "nginx" deployment, such as ReplicaSets and Services. Cyphernetes will automatically expand this query to try all possible kinds that can have a relationship with a Deployment.
 
+Some things to consider when using kindless nodes:
+* While kindless nodes are a powerful feature, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
+* Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
+* Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
+
 ### Anonymous Nodes
 
-For even more flexibility, you can use "anonymous nodes" - nodes without both a variable name and kind:
+Anonymous nodes are nodes without a variable name. They are useful when you want to express a relationship path but don't want to use the intermediate resources in a subsequent `RETURN`, `SET` or `DELETE` clause.
 
 ```graphql
 # Find all pods that are two relationships away from a deployment
-MATCH (d:Deployment)->()->(:Pod)
-WHERE d.metadata.name = "nginx"
+MATCH (cm:ConfigMap)->(:Pod)
+RETURN cm.data
+```
+
+For even more flexibility, you can use nodes that are both kindless and anonymous - nodes without both a variable name and kind:
+
+```graphql
+# Find all pods that are two relationships away from a deployment
+MATCH (d:Deployment {name: "nginx"})->()->(p:Pod)
 RETURN p.metadata.name
 ```
 
-Anonymous nodes are useful when you want to express a relationship path but don't care about the intermediate resources.
-
-Things to note:
-* While both kindless and anonymous nodes are powerful features, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
-* Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
-* Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
+Kindless anonymous nodes are useful when you want to express a relationship path but don't care about the intermediate resources.
 
 ## Mutating the Graph
 
