@@ -2369,3 +2369,259 @@ var _ = Describe("Input Validation", func() {
 		})
 	})
 })
+
+var _ = Describe("Relationship Operations", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("Should resolve unknown nodes in relationships correctly", func() {
+		By("Creating test resources")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-rel-deployment",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-rel",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-rel",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-rel",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		testService := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-rel-service",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-rel",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "test-rel",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Port:       80,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testService)).Should(Succeed())
+
+		By("Waiting for resources to be created")
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-rel-deployment",
+			}, &appsv1.Deployment{})
+		}, timeout, interval).Should(Succeed())
+
+		// Wait for service to be created
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-rel-service",
+			}, &corev1.Service{})
+		}, timeout, interval).Should(Succeed())
+
+		By("Executing query with unknown node")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Query with unknown node that should resolve to Deployment
+		ast, err := core.ParseQuery(`
+			MATCH (x:Deployment)->(s:Service)
+			WHERE s.metadata.name = "test-rel-service"
+			RETURN x.metadata.name AS name, x.kind AS kind
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the unknown node resolution")
+		Expect(result.Data).To(HaveKey("x"))
+		nodes, ok := result.Data["x"].([]interface{})
+		Expect(ok).To(BeTrue(), "Expected result.Data['x'] to be a slice")
+		Expect(nodes).To(HaveLen(1))
+
+		node := nodes[0].(map[string]interface{})
+		Expect(node["name"]).To(Equal("test-rel-deployment"))
+		Expect(node["kind"]).To(Equal("Deployment"))
+
+		By("Testing case insensitivity")
+		ast, err = core.ParseQuery(`
+			MATCH (x)->(S:service)
+			WHERE S.metadata.name = "test-rel-service"
+			RETURN x.metadata.name AS name
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Data).To(HaveKey("x"))
+
+		By("Testing plural form resolution")
+		ast, err = core.ParseQuery(`
+			MATCH (d:deployment)->(s:services)
+			WHERE s.metadata.name = "test-rel-service"
+			RETURN d.metadata.name AS name
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Data).To(HaveKey("d"))
+
+		By("Testing multiple unknown nodes")
+		ast, err = core.ParseQuery(`
+			MATCH (x)->(y:Service)
+			WHERE y.metadata.name = "test-rel-service"
+			RETURN x.metadata.name AS name, x.kind AS kind
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err = executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Data).To(HaveKey("x"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, testService)).Should(Succeed())
+	})
+
+	It("Should handle complex relationship chains with unknown nodes", func() {
+		By("Creating test resources")
+		testDeployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-chain-deployment",
+				Namespace: testNamespace,
+				Labels: map[string]string{
+					"app": "test-chain",
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: ptr.To(int32(2)),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "test-chain",
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "test-chain",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.19",
+							},
+						},
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+		By("Waiting for deployment and its resources to be created")
+		Eventually(func() error {
+			// Check deployment
+			err := k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNamespace,
+				Name:      "test-chain-deployment",
+			}, &appsv1.Deployment{})
+			if err != nil {
+				return err
+			}
+
+			// Check replicaset
+			var rsList appsv1.ReplicaSetList
+			err = k8sClient.List(ctx, &rsList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain"})
+			if err != nil || len(rsList.Items) == 0 {
+				return fmt.Errorf("replicaset not found")
+			}
+
+			// Check pods
+			var podList corev1.PodList
+			err = k8sClient.List(ctx, &podList, client.InNamespace(testNamespace),
+				client.MatchingLabels{"app": "test-chain"})
+			if err != nil || len(podList.Items) == 0 {
+				return fmt.Errorf("pods not found")
+			}
+
+			// Wait for pods to be ready
+			for _, pod := range podList.Items {
+				if pod.Status.Phase != corev1.PodRunning {
+					return fmt.Errorf("pod %s not ready", pod.Name)
+				}
+			}
+
+			return nil
+		}, timeout*2, interval).Should(Succeed())
+
+		By("Executing complex chain query")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		ast, err := core.ParseQuery(`
+			MATCH (p:Pod)->(x)->(d:Deployment)
+			WHERE d.metadata.name = "test-chain-deployment"
+			RETURN p.metadata.name AS pod_name,
+				   x.metadata.name AS rs_name,
+				   x.kind AS rs_kind
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the chain resolution")
+		Expect(result.Data).To(HaveKey("x"))
+		nodes, ok := result.Data["x"].([]interface{})
+		Expect(ok).To(BeTrue(), "Expected result.Data['x'] to be a slice")
+		Expect(nodes).NotTo(BeEmpty())
+
+		node := nodes[0].(map[string]interface{})
+		Expect(node["rs_kind"]).To(Equal("ReplicaSet"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+	})
+})
