@@ -2120,6 +2120,26 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
 
+	It("Should not allow standalone kindless nodes", func() {
+		By("Executing query with standalone kindless node")
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Query with standalone kindless node
+		ast, err := core.ParseQuery(`
+			MATCH (x)
+			RETURN x
+		`)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = executor.Execute(ast, testNamespace)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("kindless nodes may only be used in a relationship"))
+	})
+
 	It("Should handle aggregations with kindless nodes correctly", func() {
 		By("Creating test deployments with different replica counts")
 		// Create first deployment with 4 replicas

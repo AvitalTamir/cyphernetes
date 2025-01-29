@@ -794,18 +794,37 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	return *results, nil
 }
 
-func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expression, error) {
-	// Find all kindless nodes in MATCH clauses
+func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Expression, error) {
+	// Find all kindless nodes and their relationships
 	var kindlessNodes []*NodePattern
 	var relationships []*Relationship
-	for _, clause := range ast.Clauses {
-		if matchClause, ok := clause.(*MatchClause); ok {
+
+	for _, c := range expr.Clauses {
+		if matchClause, ok := c.(*MatchClause); ok {
+			// Find kindless nodes
 			for _, node := range matchClause.Nodes {
 				if node.ResourceProperties.Kind == "" {
 					kindlessNodes = append(kindlessNodes, node)
 				}
 			}
+
+			// Collect relationships
 			relationships = append(relationships, matchClause.Relationships...)
+
+			// Check for standalone kindless nodes
+			for _, node := range kindlessNodes {
+				isInRelationship := false
+				for _, rel := range matchClause.Relationships {
+					if rel.LeftNode.ResourceProperties.Name == node.ResourceProperties.Name ||
+						rel.RightNode.ResourceProperties.Name == node.ResourceProperties.Name {
+						isInRelationship = true
+						break
+					}
+				}
+				if !isInRelationship {
+					return nil, fmt.Errorf("kindless nodes may only be used in a relationship")
+				}
+			}
 
 			// Check for kindless-to-kindless chains in relationships
 			for _, rel := range matchClause.Relationships {
@@ -845,7 +864,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(ast *Expression) (*Expressi
 
 	// For each potential kind, create a match pattern and return item
 	for i, kind := range potentialKinds {
-		for _, clause := range ast.Clauses {
+		for _, clause := range expr.Clauses {
 			switch c := clause.(type) {
 			case *MatchClause:
 				// Build match pattern

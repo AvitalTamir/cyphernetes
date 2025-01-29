@@ -691,7 +691,14 @@ func TestRewriteQueryForKindlessNodes(t *testing.T) {
 			query:         "MATCH (x) RETURN x",
 			mockKinds:     map[string][]string{},
 			expectedError: true,
-			errorContains: "unable to determine kind for nodes in relationship",
+			errorContains: "kindless nodes may only be used in a relationship",
+		},
+		{
+			name:          "Kindless-to-kindless relationship",
+			query:         "MATCH (x)->(y) RETURN x, y",
+			mockKinds:     map[string][]string{},
+			expectedError: true,
+			errorContains: "chaining two unknown nodes (kindless-to-kindless) is not supported",
 		},
 		{
 			name:          "Match/Return with AS aliases",
