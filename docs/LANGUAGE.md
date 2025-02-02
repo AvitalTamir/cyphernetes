@@ -26,13 +26,13 @@ Imagine a flow diagram, where each node represents a Kubernetes resource, and th
 
 This is Cyphernetes in a nutshell. You draw a diagram of the resources you want to work with, and Cyphernetes will translate it into the appropriate Kubernetes API calls.
 
-Nodes are almost never empty. They tend to look more like this:
+Nodes are usually not empty. They tend to look more like this:
 
 ```graphql
-(k:Kind)
+(p:Pod)
 ```
 
-This node contains a _variable_ (in this example it's called `k`), followed by a colon, followed by a _label_ (in our case, it's `Kind`).
+This node contains a _variable_ (in this example it's called `p`), followed by a colon, followed by a _label_ (in our case, it's `Pod`).
 
 We assign variable names to nodes so we can refer to them later in the query. Labels are used to specify the node's Kubernetes resource kind.
 
@@ -48,12 +48,16 @@ Unlike labels, variable names are case-sensitive, so `(d:Deployment)` and `(D:De
 
 To query the Kubernetes resource graph, we use `MATCH`/`RETURN` expressions.
 `MATCH` is used to "draw" a pattern of resources, and will select all instances that match the pattern.
-For example, `MATCH (d:Deployment)->(s:Service)` will ONLY return Deployments and Services that are connected by a Service - i.e. exposed Deployments. It will not return any other Deployments that don't have a Service exposing them.
 
-`RETURN` is used to get the results. It takes a list of comma-separated JSONPaths, and returns the results in a JSON object.
+For example, `MATCH (d:Deployment)->(s:Service)` will ONLY select Deployments that are connected to a Service - i.e. exposed Deployments. It will not select any other Deployments that don't have a Service exposing them, or any Services that have selectors that don't match any Deployment.
+
+This is a key feature of Cypher (and Cyphernetes) that is important to understand: **We act on patterns** - and only select resources that exactly match the pattern we draw.
+
+`RETURN` is then used to organize the results. It takes a list of comma-separated JSONPaths, and returns the results in a JSON object, allowing us to easily craft a custom payload that only contains the fields we need.
+Note that the names of resources are always returned in the `name` field, even when not specified in the `RETURN` clause.
 
 ```graphql
-MATCH (d:Deployment) RETURN d.metadata.name
+MATCH (d:Deployment) RETURN d.spec.replicas
 ```
 
 This query will match all Deployments in the current context, and return their names:
@@ -62,29 +66,30 @@ This query will match all Deployments in the current context, and return their n
 {
   "d": [
     {
-      "metadata": {
-        "name": "nginx"
+      "name": "nginx",
+      "spec": {
+        "replicas": 4
       },
     },
     {
-      "metadata": {
-        "name": "nginx-internal"
+      "name": "nginx-internal",
+      "spec": {
+        "replicas": 2
       },
     }
   ]
 }
 ```
-
 Let's do one more:
 
 ```graphql
 MATCH (d:Deployment)
-RETURN d.metadata.name,
-       d.metadata.labels,
+RETURN d.metadata.labels,
        d.spec.replicas
 ```
 
 This query will match all Deployments in the current context, and return a custom payload containing the fields we asked for:
+
 
 ```json
 {
@@ -94,8 +99,8 @@ This query will match all Deployments in the current context, and return a custo
         "labels": {
           "app": "nginx",
         },
-        "name": "nginx"
       },
+      "name": "nginx",
       "spec": {
         "replicas": 4
       }
@@ -105,8 +110,8 @@ This query will match all Deployments in the current context, and return a custo
         "labels": {
           "app": "nginx",
         },
-        "name": "nginx-internal"
       },
+      "name": "nginx-internal",
       "spec": {
         "replicas": 2
       }
@@ -149,8 +154,8 @@ Cyphernetes supports querying multiple clusters using the `IN` keyword.
 
 ```graphql
 IN staging, production
-MATCH (d:Deployment {namespace: "kube-system"})
-RETURN d.metadata.name
+MATCH (d:Deployment {name: "coredns", namespace: "kube-system"})
+RETURN d.spec.replicas
 ```
 
 Cyphernetes will run the query for each context in the `IN` clause, and return the results in a single payload.
@@ -160,15 +165,17 @@ The results will be prefixed with the context name, followed by an underscore:
 {
   "staging_d": [
     {
-      "metadata": {
-        "name": "coredns"
+      "name": "coredns",
+      "spec": {
+        "replicas": 2
       }
     }
   ],
   "production_d": [
     {
-      "metadata": {
-        "name": "coredns"
+      "name": "coredns",
+      "spec": {
+        "replicas": 2
       }
     }
   ]
@@ -183,8 +190,7 @@ A node may contain an optional set of properties. Node properties let us query t
 
 ```graphql
 MATCH (d:Deployment {name: "nginx-internal"})
-RETURN d.metadata.name,
-       d.metadata.labels,
+RETURN d.metadata.labels,
        d.spec.template.spec.containers[0].image
 ```
 
@@ -198,8 +204,8 @@ RETURN d.metadata.name,
         "labels": {
           "app": "nginx",
         },
-        "name": "nginx-internal"
       },
+      "name": "nginx-internal",
       "spec": {
         "template": {
           "spec": {
@@ -219,10 +225,9 @@ RETURN d.metadata.name,
 Using the `WHERE` clause, we can filter our results by any field in the Kubernetes resource:
 
 ```graphql
-MATCH (d:Deployment {app: "nginx"})
-WHERE d.spec.replicas=4, d.metadata.namespace="default"
-RETURN d.metadata.name,
-       d.spec.replicas
+MATCH (d:Deployment {app: "nginx", namespace: "default"})
+WHERE d.spec.replicas=4
+RETURN d.spec.replicas
 ```
 
 (output)
@@ -231,9 +236,7 @@ RETURN d.metadata.name,
 {
   "d": [
     {
-      "metadata": {
-        "name": "nginx"
-      },
+      "name": "nginx",
       "spec": {
         "replicas": 4
       }
@@ -287,7 +290,7 @@ Use commas to match two or more nodes:
 
 ```graphql
 MATCH (d:Deployment), (s:Service)
-RETURN d.metadata.name, s.metadata.name
+RETURN d.spec.replicas, s.spec.clusterIP
 ```
 
 (output)
@@ -296,25 +299,29 @@ RETURN d.metadata.name, s.metadata.name
 {
   "d": [
     {
-      "metadata": {
-        "name": "nginx"
+      "name": "nginx",
+      "spec": {
+        "replicas": 4
       }
     },
     {
-      "metadata": {
-        "name": "nginx-internal"
+      "name": "nginx-internal",
+      "spec": {
+        "replicas": 2
       }
     }
   ],
   "s": [
     {
-      "metadata": {
-        "name": "nginx"
+      "name": "nginx",
+      "spec": {
+        "clusterIP": "10.96.0.1"
       }
     },
     {
-      "metadata": {
-        "name": "nginx-internal"
+      "name": "nginx-internal",
+      "spec": {
+        "clusterIP": "10.96.0.2"
       }
     }
   ]
@@ -344,7 +351,7 @@ Cyphernetes understands the relationships between Kubernetes resources:
 
 ```graphql
 MATCH (d:Deployment {name: "nginx"})->(s:Service)
-RETURN s.metadata.name, s.spec.ports
+RETURN s.spec.ports
 ```
 
 (output)
@@ -353,9 +360,7 @@ RETURN s.metadata.name, s.spec.ports
 {
   "s": [
     {
-      "metadata": {
-        "name": "nginx"
-      },
+      "name": "nginx",
       "spec": {
         "ports": [
           {
@@ -381,8 +386,8 @@ We can match multiple nodes and relationships in a single MATCH clause. This is 
 MATCH (vs:VirtualService),
       (d:Deployment {name: "my-app"})->(s:Service)->(i:Ingress)
 WHERE vs.metadata.labels.app="my-app"
-RETURN i.metadata.name, i.spec.rules,
-       vs.metadata.name, vs.spec.http.paths
+RETURN i.spec.rules,
+       vs.spec.http.paths
 ```
 
 (output)
@@ -391,9 +396,7 @@ RETURN i.metadata.name, i.spec.rules,
 {
   "i": [
     {
-      "metadata": {
-        "name": "my-app"
-      },
+      "name": "my-app",
       "spec": {
         "rules": [
           {
@@ -416,9 +419,7 @@ RETURN i.metadata.name, i.spec.rules,
   ]
   "vs": [
     {
-      "metadata": {
-        "name": "my-app"
-      },
+      "name": "my-app",
       "spec": {
         "http": {
           "paths": [
@@ -438,6 +439,43 @@ RETURN i.metadata.name, i.spec.rules,
 ```
 
 > Here we match a Deployment, the Service that exposes it, and through the Service also the Ingress that routes to it. We also match the Istio VirtualService that belongs to the same application. Cyphernetes doesn't yet understand Istio, so we fallback to using the app label.
+
+### Kindless Nodes
+
+Sometimes you might want to match or operate on resources connected to another resource without knowing their kind in advance. Cyphernetes supports this through "kindless nodes" - nodes where you omit the kind label:
+
+```graphql
+# Find all resources related to a deployment
+MATCH (d:Deployment {name: "nginx"})->(x)
+RETURN x.kind
+```
+
+This query will find and return all resources that have a relationship with the "nginx" deployment, such as ReplicaSets and Services. Cyphernetes will automatically expand this query to try all possible kinds that can have a relationship with a Deployment.
+
+> Some things to consider when using kindless nodes:
+> * While kindless nodes are a powerful feature, they should be used judiciously. Being explicit about the kinds of resources you're operating on makes queries more predictable and easier to understand.
+> * Chaining two kindless nodes (e.g., `MATCH (x)->(y)`) is not supported as it would be ambiguous and potentially expensive to resolve. At least one node in a relationship must have a known kind.
+> * Standalone kindless nodes (e.g., `MATCH (x)`) are not supported. Kindless nodes must be part of a relationship.
+
+### Anonymous Nodes
+
+Anonymous nodes are nodes without a variable name. They are useful when you want to express a relationship path but don't want to use the intermediate resources in a subsequent `RETURN`, `SET` or `DELETE` clause.
+
+```graphql
+# Find all pods that are two relationships away from a deployment
+MATCH (cm:ConfigMap)->(:Pod)
+RETURN cm.data
+```
+
+For even more flexibility, you can use nodes that are both kindless and anonymous - nodes without both a variable name and kind:
+
+```graphql
+# Find all pods that are two relationships away from a deployment
+MATCH (d:Deployment {name: "nginx"})->()->(p:Pod)
+RETURN p.metadata.name
+```
+
+Kindless anonymous nodes are useful when you want to express a relationship path but don't care about the intermediate resources.
 
 ## Mutating the Graph
 
@@ -515,7 +553,7 @@ CREATE (d:Deployment {
       }
     }
   }
-}) RETURN d.metadata.name
+}) RETURN d
 ```
 
 ### Creating Resources by Relationship
@@ -548,7 +586,7 @@ The `SET` clause is similar to the `CREATE` clause, but instead of creating a ne
 ```graphql
 MATCH (d:Deployment {name: "nginx"})
 SET d.spec.replicas=4
-RETURN d.metadata.name, d.spec.replicas
+RETURN d.spec.replicas
 ```
 
 ### Patch by Relationship

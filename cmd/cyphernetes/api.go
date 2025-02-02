@@ -78,34 +78,35 @@ func handleQuery(c *gin.Context) {
 		return
 	}
 
-	// Marshal the result data to JSON string
-	resultData, err := json.Marshal(result.Data)
+	// Deduplicate nodes before serialization
+	seenNodes := make(map[string]bool)
+	var dedupedNodes []core.Node
+	for _, node := range result.Graph.Nodes {
+		nodeKey := fmt.Sprintf("%s/%s", node.Kind, node.Name)
+		if !seenNodes[nodeKey] {
+			seenNodes[nodeKey] = true
+			dedupedNodes = append(dedupedNodes, node)
+		}
+	}
+	result.Graph.Nodes = dedupedNodes
+
+	// Convert to JSON
+	resultJson, err := json.Marshal(result.Data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling results: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshaling result: %v", err)})
 		return
 	}
 
-	// Sanitize the graph data
-	sanitizedGraph, err := sanitizeGraph(result.Graph, string(resultData))
+	graphJson, err := json.Marshal(result.Graph)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error sanitizing graph: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshaling graph: %v", err)})
 		return
 	}
 
-	// Marshal the sanitized graph to JSON string
-	graphData, err := json.Marshal(sanitizedGraph)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshalling graph: %v", err)})
-		return
-	}
-
-	// Return the response with both result and graph as strings
-	response := QueryResponse{
-		Result: string(resultData),
-		Graph:  string(graphData),
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, QueryResponse{
+		Result: string(resultJson),
+		Graph:  string(graphJson),
+	})
 }
 
 func handleAutocomplete(c *gin.Context) {

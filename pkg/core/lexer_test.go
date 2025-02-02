@@ -194,6 +194,42 @@ func TestLexer(t *testing.T) {
 				{Type: EOF, Literal: ""},
 			},
 		},
+		{
+			name:  "partial nodes",
+			input: "() (p) (:pod)",
+			expected: []Token{
+				{Type: LPAREN, Literal: "("},
+				{Type: RPAREN, Literal: ")"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "p"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: LPAREN, Literal: "("},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "pod"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "partial nodes in relationships",
+			input: "(p:pod)->()->(:service)",
+			expected: []Token{
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "p"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "pod"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: REL_NOPROPS_RIGHT, Literal: "->"},
+				{Type: LPAREN, Literal: "("},
+				{Type: RPAREN, Literal: ")"},
+				{Type: REL_NOPROPS_RIGHT, Literal: "->"},
+				{Type: LPAREN, Literal: "("},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "service"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {

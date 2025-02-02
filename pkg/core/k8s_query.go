@@ -47,6 +47,7 @@ type QueryExecutor struct {
 	requestChannel chan *apiRequest
 	semaphore      chan struct{}
 	matchNodes     []*NodePattern
+	currentAst     *Expression
 }
 
 var (
@@ -56,6 +57,8 @@ var (
 	AllNamespaces bool
 	CleanOutput   bool
 	NoColor       bool
+	// For testing
+	mockFindPotentialKinds func([]*Relationship) []string
 )
 
 // Add the apiRequest type definition
@@ -80,7 +83,166 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	if len(ast.Contexts) > 0 {
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
-	return q.ExecuteSingleQuery(ast, namespace)
+
+	// Store the current AST
+	q.currentAst = ast
+
+	// First, check for kindless nodes and rewrite the query if needed
+	rewrittenAst, err := q.rewriteQueryForKindlessNodes(ast)
+	if err != nil {
+		return QueryResult{}, fmt.Errorf("error rewriting query: %w", err)
+	}
+	if rewrittenAst != nil {
+		ast = rewrittenAst
+		q.currentAst = rewrittenAst
+	}
+
+	result, err := q.ExecuteSingleQuery(ast, namespace)
+	if err != nil {
+		return result, err
+	}
+
+	// If this was a rewritten query, merge and deduplicate the results
+	if rewrittenAst != nil {
+		// Merge results with special pattern
+		mergedResults := make(map[string]interface{})
+		expResults := make(map[string][]interface{})
+		aggregateResults := make(map[string]interface{})
+		mergedGraph := Graph{
+			Nodes: []Node{},
+			Edges: []Edge{},
+		}
+		seenEdges := make(map[string]bool)
+
+		// First pass: collect all expanded results
+		for key, value := range result.Data {
+			if key == "aggregate" {
+				// Handle aggregate results separately
+				if aggMap, ok := value.(map[string]interface{}); ok {
+					for aggKey, aggValue := range aggMap {
+						// Check if this is an expanded aggregate result
+						if strings.HasPrefix(aggKey, "__exp__") {
+							// Parse the expanded aggregate key: __exp__<type>__<name>__<index>
+							parts := strings.Split(aggKey, "__")
+							if len(parts) >= 5 {
+								aggType := parts[2] // sum, count, etc.
+								aggName := parts[3] // original name or alias
+
+								// Initialize if not exists
+								if _, exists := aggregateResults[aggName]; !exists {
+									if aggType == "sum" {
+										aggregateResults[aggName] = float64(0)
+									} else if aggType == "count" {
+										aggregateResults[aggName] = 0
+									} else {
+										aggregateResults[aggName] = make([]interface{}, 0)
+									}
+								}
+
+								// Merge based on aggregate type
+								switch aggType {
+								case "sum":
+									if aggValue != nil {
+										currentSum := aggregateResults[aggName].(float64)
+										switch v := aggValue.(type) {
+										case float64:
+											aggregateResults[aggName] = currentSum + v
+										case int:
+											aggregateResults[aggName] = currentSum + float64(v)
+										case int64:
+											aggregateResults[aggName] = currentSum + float64(v)
+										}
+									}
+								case "count":
+									if aggValue != nil {
+										currentCount := aggregateResults[aggName].(int)
+										if count, ok := aggValue.(int); ok {
+											aggregateResults[aggName] = currentCount + count
+										}
+									}
+								default:
+									// For other aggregates, collect all non-nil values
+									if aggValue != nil {
+										arr := aggregateResults[aggName].([]interface{})
+										aggregateResults[aggName] = append(arr, aggValue)
+									}
+								}
+							}
+						}
+					}
+				}
+			} else if strings.Contains(key, "__exp__") {
+				// Extract original variable name (everything before __exp__)
+				origVar := strings.Split(key, "__exp__")[0]
+				if expResults[origVar] == nil {
+					expResults[origVar] = make([]interface{}, 0)
+				}
+				if valueSlice, ok := value.([]interface{}); ok && len(valueSlice) > 0 {
+					expResults[origVar] = append(expResults[origVar], valueSlice...)
+				}
+			} else {
+				mergedResults[key] = value
+			}
+		}
+
+		// Add aggregated results back to merged results
+		if len(aggregateResults) > 0 {
+			mergedResults["aggregate"] = aggregateResults
+		}
+
+		// Clean up node IDs and add to merged graph
+		for _, node := range result.Graph.Nodes {
+			if strings.Contains(node.Id, "__exp__") {
+				node.Id = strings.Split(node.Id, "__exp__")[0]
+			}
+			mergedGraph.Nodes = append(mergedGraph.Nodes, node)
+		}
+
+		// Clean up and deduplicate edges
+		for _, edge := range result.Graph.Edges {
+			if strings.Contains(edge.From, "__exp__") {
+				edge.From = strings.Split(edge.From, "__exp__")[0]
+			}
+			if strings.Contains(edge.To, "__exp__") {
+				edge.To = strings.Split(edge.To, "__exp__")[0]
+			}
+			edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
+			if !seenEdges[edgeKey] {
+				seenEdges[edgeKey] = true
+				mergedGraph.Edges = append(mergedGraph.Edges, edge)
+			}
+		}
+
+		// Second pass: merge expanded results and deduplicate
+		for origVar, values := range expResults {
+			if len(values) > 0 {
+				// Deduplicate values
+				seen := make(map[string]interface{})
+				deduped := make([]interface{}, 0)
+
+				for _, val := range values {
+					// Convert value to string for comparison
+					valBytes, err := json.Marshal(val)
+					if err != nil {
+						continue
+					}
+					valStr := string(valBytes)
+
+					if _, exists := seen[valStr]; !exists {
+						seen[valStr] = val
+						deduped = append(deduped, val)
+					}
+				}
+
+				mergedResults[origVar] = deduped
+			}
+		}
+
+		result.Data = mergedResults
+		result.Graph = mergedGraph
+	}
+
+	return result, nil
 }
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
@@ -149,6 +311,11 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 			// Execute a Kubernetes delete operation based on the DeleteClause.
 			for _, nodeId := range c.NodeIds {
 				if resultMap[nodeId] == nil {
+					// Skip error for expanded node identifiers
+					if strings.Contains(nodeId, "__exp__") {
+						debugLog("skipping error trying to delete expanded node identifier %s", nodeId)
+						continue
+					}
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
 
@@ -187,7 +354,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 			// Iterate over the relationships in the create clause.
 			// Process Relationships
-			for idx, rel := range c.Relationships {
+			for _, rel := range c.Relationships {
 				// Determine which (if any) of the nodes in the relationship have already been fetched in a match clause, and which are new creations
 				var node *NodePattern
 				var foreignNode *NodePattern
@@ -219,7 +386,6 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				targetGVR, err := q.findGVR(node.ResourceProperties.Kind)
 				if err != nil {
 					return *results, fmt.Errorf("error finding API resource >> %s", err)
-
 				}
 				// Find the matching node from stored match nodes to get the kind
 				var foreignNodeKind string
@@ -281,7 +447,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 				} else {
 					// error out
-					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", targetGVR.Resource, foreignGVR.Resource)
+					return *results, fmt.Errorf("relationship rule not found for %s and %s - This code path should be invalid, likely problem with rule definitions", node.ResourceProperties.Kind, foreignNode.ResourceProperties.Kind)
 				}
 
 				var resourceTemplate map[string]interface{}
@@ -296,7 +462,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 
 				// loop over the resources array in the resultMap for the foreign node and create the resource
-				for _, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
+				for idx, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
 					var name string
 					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[idx]
 
@@ -328,7 +494,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									part = strings.TrimSuffix(part, "[]")
 									// create the first element in an array
 									currentForeignPart[part] = []interface{}{}
-									currentForeignPart = currentForeignPart[part].([]interface{})[idx].(map[string]interface{})
+									currentForeignPart = currentForeignPart[part].([]interface{})[0].(map[string]interface{})
 								}
 							}
 						} else {
@@ -356,7 +522,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 											part = strings.TrimSuffix(part, "[]")
 											currentPart[part] = []interface{}{}
 											currentPart[part] = append(currentPart[part].([]interface{}), make(map[string]interface{}))
-											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+											currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
 										} else {
 											currentPart[part] = make(map[string]interface{})
 											currentPart = currentPart[part].(map[string]interface{})
@@ -365,7 +531,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 										if strings.HasSuffix(part, "[]") {
 											part = strings.TrimSuffix(part, "[]")
 											// if the part is an array, recurse into the first element
-											currentPart = currentPart[part].([]interface{})[idx].(map[string]interface{})
+											currentPart = currentPart[part].([]interface{})[0].(map[string]interface{})
 										} else {
 											currentPart = currentPart[part].(map[string]interface{})
 										}
@@ -629,15 +795,380 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	return *results, nil
 }
 
+func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Expression, error) {
+	// Find all kindless nodes and their relationships
+	var kindlessNodes []*NodePattern
+	var relationships []*Relationship
+
+	for _, c := range expr.Clauses {
+		if matchClause, ok := c.(*MatchClause); ok {
+			// Find kindless nodes
+			for _, node := range matchClause.Nodes {
+				if node.ResourceProperties.Kind == "" {
+					kindlessNodes = append(kindlessNodes, node)
+				}
+			}
+
+			// Collect relationships
+			relationships = append(relationships, matchClause.Relationships...)
+
+			// Check for standalone kindless nodes
+			for _, node := range kindlessNodes {
+				isInRelationship := false
+				for _, rel := range matchClause.Relationships {
+					if rel.LeftNode.ResourceProperties.Name == node.ResourceProperties.Name ||
+						rel.RightNode.ResourceProperties.Name == node.ResourceProperties.Name {
+						isInRelationship = true
+						break
+					}
+				}
+				if !isInRelationship {
+					return nil, fmt.Errorf("kindless nodes may only be used in a relationship")
+				}
+			}
+
+			// Check for kindless-to-kindless chains in relationships
+			for _, rel := range matchClause.Relationships {
+				if rel.LeftNode.ResourceProperties.Kind == "" && rel.RightNode.ResourceProperties.Kind == "" {
+					return nil, fmt.Errorf("chaining two unknown nodes (kindless-to-kindless) is not supported - at least one node in a relationship must have a known kind")
+				}
+			}
+		}
+	}
+
+	// If no kindless nodes, no rewrite needed
+	if len(kindlessNodes) == 0 {
+		return nil, nil
+	}
+
+	// Find potential kinds for each kindless node
+	var potentialKinds []string
+	if mockFindPotentialKinds != nil {
+		// Use mock function in tests
+		potentialKinds = mockFindPotentialKinds(relationships)
+	} else {
+		// Use real function in production
+		potentialKinds = FindPotentialKindsIntersection(relationships, q.provider)
+	}
+
+	if len(potentialKinds) == 0 {
+		return nil, fmt.Errorf("unable to determine kind for nodes in relationship")
+	}
+
+	// Build expanded query
+	var matchParts []string
+	var returnParts []string
+	var setParts []string
+	var deleteParts []string
+	var whereParts []string
+	var seenNodes = make(map[string]bool)
+
+	// For each potential kind, create a match pattern and return item
+	for i, kind := range potentialKinds {
+		for _, clause := range expr.Clauses {
+			switch c := clause.(type) {
+			case *MatchClause:
+				// Build match pattern
+				var nodeParts []string
+				for _, rel := range c.Relationships {
+					var leftNodeStr, rightNodeStr string
+
+					// Build left node pattern
+					if rel.LeftNode.ResourceProperties.Kind == "" {
+						leftNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.LeftNode.ResourceProperties.Name, i, kind)
+					} else {
+						leftNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.LeftNode.ResourceProperties.Name, i, rel.LeftNode.ResourceProperties.Kind)
+					}
+
+					// Add properties to left node if any
+					if rel.LeftNode.ResourceProperties.Properties != nil {
+						props := make([]string, 0)
+						for _, prop := range rel.LeftNode.ResourceProperties.Properties.PropertyList {
+							var valueStr string
+							switch v := prop.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+						}
+						leftNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+					}
+					leftNodeStr += ")"
+
+					// Build right node pattern
+					if rel.RightNode.ResourceProperties.Kind == "" {
+						rightNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.RightNode.ResourceProperties.Name, i, kind)
+					} else {
+						rightNodeStr = fmt.Sprintf("(%s__exp__%d:%s", rel.RightNode.ResourceProperties.Name, i, rel.RightNode.ResourceProperties.Kind)
+					}
+
+					// Add properties to right node if any
+					if rel.RightNode.ResourceProperties.Properties != nil {
+						props := make([]string, 0)
+						for _, prop := range rel.RightNode.ResourceProperties.Properties.PropertyList {
+							var valueStr string
+							switch v := prop.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							props = append(props, fmt.Sprintf("%s: %s", prop.Key, valueStr))
+						}
+						rightNodeStr += fmt.Sprintf(" {%s}", strings.Join(props, ", "))
+					}
+					rightNodeStr += ")"
+
+					// Add relationship pattern
+					nodeParts = append(nodeParts, fmt.Sprintf("%s->%s", leftNodeStr, rightNodeStr))
+				}
+				if len(nodeParts) > 0 {
+					matchParts = append(matchParts, strings.Join(nodeParts, ", "))
+				}
+
+				// Handle WHERE conditions from ExtraFilters
+				for _, filter := range c.ExtraFilters {
+					parts := strings.Split(filter.Key, ".")
+					if len(parts) > 0 {
+						nodeName := parts[0]
+						propertyPath := strings.Join(parts[1:], ".")
+
+						// If the node is kindless, we need to create a where clause for each potential kind
+						if isKindless(nodeName, kindlessNodes) {
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
+								var valueStr string
+								switch v := filter.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								// Map operator names to symbols
+								operator := filter.Operator
+								switch operator {
+								case "EQUALS":
+									operator = "="
+								case "NOT_EQUALS":
+									operator = "!="
+								case "GREATER_THAN":
+									operator = ">"
+								case "LESS_THAN":
+									operator = "<"
+								case "GREATER_THAN_EQUALS":
+									operator = ">="
+								case "LESS_THAN_EQUALS":
+									operator = "<="
+								case "REGEX_COMPARE":
+									operator = "=~"
+								case "CONTAINS":
+									operator = "CONTAINS"
+								case "":
+									operator = "="
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
+							}
+						} else {
+							// If the node is not kindless, just use it as is
+							varName := fmt.Sprintf("%s__exp__0", nodeName)
+							var valueStr string
+							switch v := filter.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							// Map operator names to symbols
+							operator := filter.Operator
+							switch operator {
+							case "EQUALS":
+								operator = "="
+							case "NOT_EQUALS":
+								operator = "!="
+							case "GREATER_THAN":
+								operator = ">"
+							case "LESS_THAN":
+								operator = "<"
+							case "GREATER_THAN_EQUALS":
+								operator = ">="
+							case "LESS_THAN_EQUALS":
+								operator = "<="
+							case "REGEX_COMPARE":
+								operator = "=~"
+							case "CONTAINS":
+								operator = "CONTAINS"
+							case "":
+								operator = "="
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
+						}
+					}
+				}
+
+			case *ReturnClause:
+				// Build return items
+				for _, item := range c.Items {
+					if !seenNodes[item.JsonPath] {
+						seenNodes[item.JsonPath] = true
+						// Add a return item for each iteration
+						for j := 0; j < len(potentialKinds); j++ {
+							var returnItem string
+							if strings.Contains(item.JsonPath, ".") {
+								parts := strings.SplitN(item.JsonPath, ".", 2)
+								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
+								returnPath := fmt.Sprintf("%s.%s", varName, parts[1])
+								if item.Aggregate != "" {
+									returnItem = fmt.Sprintf("%s {%s}", item.Aggregate, returnPath)
+								} else {
+									returnItem = returnPath
+								}
+							} else {
+								varName := fmt.Sprintf("%s__exp__%d", item.JsonPath, j)
+								if item.Aggregate != "" {
+									returnItem = fmt.Sprintf("%s {%s}", item.Aggregate, varName)
+								} else {
+									returnItem = varName
+								}
+							}
+							// Add AS alias with expansion pattern
+							if item.Aggregate != "" {
+								aggType := strings.ToLower(item.Aggregate)
+								if item.Alias != "" {
+									returnItem = fmt.Sprintf("%s AS __exp__%s__%s__%d", returnItem, aggType, item.Alias, j)
+								} else {
+									// For non-aliased aggregations, use the format <aggregate_type>_<node>_<path>
+									aliasPath := item.JsonPath
+									aliasPath = strings.Replace(aliasPath, ".", "_", -1)
+									returnItem = fmt.Sprintf("%s AS __exp__%s__%s_%s__%d", returnItem, aggType, aggType, aliasPath, j)
+								}
+							} else if item.Alias != "" {
+								returnItem = fmt.Sprintf("%s AS %s", returnItem, item.Alias)
+							}
+							returnParts = append(returnParts, returnItem)
+						}
+					}
+				}
+			case *SetClause:
+				// Build set items
+				for _, kvp := range c.KeyValuePairs {
+					if strings.Contains(kvp.Key, ".") {
+						parts := strings.SplitN(kvp.Key, ".", 2)
+						// If the node being set is kindless, we need to create a set clause for each potential kind
+						if isKindless(parts[0], kindlessNodes) {
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
+								setPath := fmt.Sprintf("%s.%s", varName, parts[1])
+								var valueStr string
+								switch v := kvp.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
+							}
+						} else {
+							// If the node is not kindless, just use it as is
+							varName := fmt.Sprintf("%s__exp__0", parts[0])
+							setPath := fmt.Sprintf("%s.%s", varName, parts[1])
+							var valueStr string
+							switch v := kvp.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("'%s'", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
+							}
+							setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
+						}
+					}
+				}
+			case *DeleteClause:
+				// Build delete items
+				for _, nodeId := range c.NodeIds {
+					// If the node being deleted is kindless, we need to create a delete clause for each potential kind
+					if isKindless(nodeId, kindlessNodes) {
+						for j := 0; j < len(potentialKinds); j++ {
+							varName := fmt.Sprintf("%s__exp__%d", nodeId, j)
+							deleteParts = append(deleteParts, varName)
+						}
+					} else {
+						// If the node is not kindless, just use it as is
+						varName := fmt.Sprintf("%s__exp__0", nodeId)
+						deleteParts = append(deleteParts, varName)
+					}
+				}
+			}
+		}
+	}
+
+	// Combine into final query
+	var queryParts []string
+	if len(matchParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("MATCH %s", strings.Join(matchParts, ", ")))
+	}
+	if len(whereParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("WHERE %s", strings.Join(whereParts, ", ")))
+	}
+	if len(setParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("SET %s", strings.Join(setParts, ", ")))
+	}
+	if len(deleteParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("DELETE %s", strings.Join(deleteParts, ", ")))
+	}
+	if len(returnParts) > 0 {
+		queryParts = append(queryParts, fmt.Sprintf("RETURN %s", strings.Join(returnParts, ", ")))
+	}
+
+	query := strings.Join(queryParts, " ")
+
+	// Log the expanded query for debugging
+	debugLog("Expanded query: %s\n", query)
+
+	// Parse the expanded query into a new AST
+	newAst, err := ParseQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing expanded query: %w", err)
+	}
+
+	return newAst, nil
+}
+
+// QueryExpandedError is a special error type that indicates the query was expanded
+type QueryExpandedError struct {
+	ExpandedQuery string
+}
+
+func (e *QueryExpandedError) Error() string {
+	return fmt.Sprintf("query expanded to: %s", e.ExpandedQuery)
+}
+
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	logDebug(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
+
+	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-		// error out
-		return false, fmt.Errorf("must specify kind for all nodes in match clause")
+		// Try to resolve the kind using relationships
+		potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
+		if len(potentialKinds) == 0 {
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
+		}
+		if len(potentialKinds) > 1 {
+			// Instead of expanding the query here, we'll let rewriteQueryForKindlessNodes handle it
+			return false, &QueryExpandedError{ExpandedQuery: "needs_rewrite"}
+		}
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
+		}
 	}
+
 	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
 		return false, fmt.Errorf("error finding API resource >> %s", err)
@@ -702,29 +1233,6 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 
-	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
-	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
-
-	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
-	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
-
-	resultMapMutex.Lock()
-	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
-			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-		}
-	} else {
-		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-	}
-	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
-			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-		}
-	} else {
-		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-	}
-	resultMapMutex.Unlock()
-
 	// Add nodes and edges based on the matched resources
 	rightResources := matchedResources["right"].([]map[string]interface{})
 	leftResources := matchedResources["left"].([]map[string]interface{})
@@ -780,6 +1288,29 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		}
 	}
 
+	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
+	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
+
+	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
+	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
+
+	resultMapMutex.Lock()
+	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
+			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+		}
+	} else {
+		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+	}
+	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
+			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+		}
+	} else {
+		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+	}
+	resultMapMutex.Unlock()
+
 	return filteredA || filteredB, nil
 }
 
@@ -798,9 +1329,26 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 }
 
 func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
+	logDebug(fmt.Sprintf("Processing nodes, current graph nodes: %+v\n", results.Graph.Nodes))
+
+	// Track seen nodes for deduplication
+	seenNodes := make(map[string]bool)
+	for _, existingNode := range results.Graph.Nodes {
+		nodeKey := fmt.Sprintf("%s/%s", existingNode.Kind, existingNode.Name)
+		seenNodes[nodeKey] = true
+	}
+
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
-			return fmt.Errorf("must specify kind for all nodes in match clause")
+			// Try to resolve the kind using relationships
+			potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
+			if len(potentialKinds) == 0 {
+				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
+			}
+			if len(potentialKinds) > 1 {
+				return fmt.Errorf("ambiguous kind for node '%s' - possible kinds: %v", node.ResourceProperties.Name, potentialKinds)
+			}
+			node.ResourceProperties.Kind = potentialKinds[0]
 		}
 
 		// check if the node has already been fetched
@@ -819,33 +1367,39 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 				if !ok {
 					continue
 				}
-				node := Node{
+				newNode := Node{
 					Id:   node.ResourceProperties.Name,
 					Kind: resource["kind"].(string),
 					Name: metadata["name"].(string),
 				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
+				if newNode.Kind != "Namespace" {
+					newNode.Namespace = getNamespaceName(metadata)
 				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
+
+				// Check if we've seen this node before
+				nodeKey := fmt.Sprintf("%s/%s", newNode.Kind, newNode.Name)
+				if !seenNodes[nodeKey] {
+					seenNodes[nodeKey] = true
+					logDebug(fmt.Sprintf("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey))
+					results.Graph.Nodes = append(results.Graph.Nodes, newNode)
+				} else {
+					logDebug(fmt.Sprintf("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey))
+				}
 			}
 		} else if resultMap[node.ResourceProperties.Name] == nil {
 			// Copy from cache using the original name
 			resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
 		}
 	}
+	logDebug(fmt.Sprintf("After processNodes, graph nodes: %+v\n", results.Graph.Nodes))
 	return nil
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	logDebug(fmt.Sprintln("Building graph"))
-	logDebug(fmt.Sprintf("result.Data: %+v\n", result.Data))
-	logDebug(fmt.Sprintf("Initial result.Graph.Edges: %+v\n", result.Graph.Edges))
+	logDebug(fmt.Sprintf("Initial nodes: %+v\n", result.Graph.Nodes))
 
-	nodeMap := make(map[string]bool)
-	edgeMap := make(map[string]bool)
-
-	// Process nodes (this part remains the same)
+	// Process nodes from result data
 	for key, resources := range result.Data {
 		resourcesSlice, ok := resources.([]interface{})
 		if !ok || len(resourcesSlice) == 0 {
@@ -876,28 +1430,25 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 			if node.Kind != "Namespace" {
 				node.Namespace = getNamespaceName(metadata)
 			}
-
-			if !nodeMap[node.Id] {
-				result.Graph.Nodes = append(result.Graph.Nodes, node)
-				nodeMap[node.Id] = true
-			}
+			logDebug(fmt.Sprintf("Adding node from result data: %+v\n", node))
+			result.Graph.Nodes = append(result.Graph.Nodes, node)
 		}
 	}
 
 	// Process edges
-	newEdges := []Edge{}
+	var edges []Edge
+	edgeMap := make(map[string]bool)
 	for _, edge := range result.Graph.Edges {
 		edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
 		reverseEdgeKey := fmt.Sprintf("%s-%s-%s", edge.To, edge.From, edge.Type)
 
 		if !edgeMap[edgeKey] && !edgeMap[reverseEdgeKey] {
-			newEdges = append(newEdges, edge)
+			edges = append(edges, edge)
 			edgeMap[edgeKey] = true
 			edgeMap[reverseEdgeKey] = true
 		}
 	}
-
-	result.Graph.Edges = newEdges
+	result.Graph.Edges = edges
 }
 
 func getNamespaceName(metadata map[string]interface{}) string {
@@ -1976,54 +2527,65 @@ func prefixCreateClause(c *CreateClause, context string) *CreateClause {
 }
 
 func evaluateWildcardPath(resource interface{}, path string, filterValue interface{}, operator string) bool {
-	parts := strings.Split(path, "[*]")
-	return evaluateWildcardPathRecursive(resource, parts, 0, filterValue, operator)
-}
-
-func evaluateWildcardPathRecursive(data interface{}, parts []string, depth int, filterValue interface{}, operator string) bool {
-	if depth == len(parts)-1 {
-		// Last part - evaluate the value
-		lastPath := strings.TrimPrefix(parts[depth], ".")
-		if !strings.HasPrefix(lastPath, "$.") {
-			lastPath = "$." + lastPath
-		}
-		value, err := jsonpath.JsonPathLookup(data, lastPath)
-		if err != nil {
-			return false
-		}
-		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
-		if err != nil {
-			return false
-		}
-		return compareValues(resourceValue, filterValue, operator)
+	// Get the base path (everything before [*])
+	basePath := path[:strings.Index(path, "[*]")]
+	if !strings.HasPrefix(basePath, "$.") {
+		basePath = "$." + basePath
 	}
 
-	// Get the array at current level
-	currentPath := parts[depth]
-	if !strings.HasPrefix(currentPath, "$.") {
-		currentPath = "$." + currentPath
-	}
-	// Remove trailing dot if exists
-	currentPath = strings.TrimSuffix(currentPath, ".")
-
-	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	// Get the array using the base path
+	array, err := jsonpath.JsonPathLookup(resource, basePath)
 	if err != nil {
 		return false
 	}
 
-	// Handle different array types
-	switch arr := array.(type) {
-	case []interface{}:
-		for _, item := range arr {
-			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
+	// Convert to array of interfaces
+	items, ok := array.([]interface{})
+	if !ok {
+		return false
+	}
+
+	// Get the remaining path after [*]
+	remainingPath := path[strings.Index(path, "[*]")+3:]
+	if remainingPath != "" && !strings.HasPrefix(remainingPath, ".") {
+		remainingPath = "." + remainingPath
+	}
+
+	// Check each item in the array
+	for _, item := range items {
+		// For primitive array items
+		if remainingPath == "" {
+			itemValue, filterValue, err := convertToComparableTypes(item, filterValue)
+			if err != nil {
+				continue
+			}
+			if compareValues(itemValue, filterValue, operator) {
 				return true
 			}
+			continue
 		}
-	case []map[string]interface{}:
-		for _, item := range arr {
-			if evaluateWildcardPathRecursive(item, parts, depth+1, filterValue, operator) {
-				return true
-			}
+
+		// For object array items
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Create a new path for this item
+		itemPath := "$" + remainingPath
+
+		value, err := jsonpath.JsonPathLookup(itemMap, itemPath)
+		if err != nil {
+			continue
+		}
+
+		resourceValue, filterValue, err := convertToComparableTypes(value, filterValue)
+		if err != nil {
+			continue
+		}
+
+		if compareValues(resourceValue, filterValue, operator) {
+			return true
 		}
 	}
 
@@ -2106,7 +2668,7 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 	if !strings.HasSuffix(currentPath, ".") {
 		currentPath += "."
 	}
-	array, err := jsonpath.JsonPathLookup(data, currentPath[:len(currentPath)-1])
+	array, err := jsonpath.JsonPathLookup(data, currentPath)
 	if err != nil {
 		return err
 	}
@@ -2128,4 +2690,14 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 	}
 
 	return nil
+}
+
+// Helper function to check if a node name corresponds to a kindless node
+func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
+	for _, node := range kindlessNodes {
+		if node.ResourceProperties.Name == nodeName {
+			return true
+		}
+	}
+	return false
 }

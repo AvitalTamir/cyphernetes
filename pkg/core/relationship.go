@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -14,8 +15,10 @@ import (
 )
 
 var (
-	relationshipsMutex sync.RWMutex
-	relationships      = make(map[string][]string)
+	relationshipsMutex  sync.RWMutex
+	relationships       = make(map[string][]string)
+	potentialKindsCache = make(map[string][]string) // kind -> potential kinds
+	potentialKindsMutex sync.RWMutex
 )
 
 func AddRelationshipRule(rule RelationshipRule) {
@@ -107,9 +110,17 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	processed := 0
 	lastProgress := 0
 
+	// Initialize potential kinds cache
+	potentialKindsMutex.Lock()
+	potentialKindsCache = make(map[string][]string)
+	potentialKindsMutex.Unlock()
+
 	// Regular expression to match fields ending with 'Name', or 'Ref'
 	nameOrKeyRefFieldRegex := regexp.MustCompile(`(\w+)(Name|KeyRef)`)
 	refFieldRegex := regexp.MustCompile(`(\w+)(Ref)`)
+
+	// Map to collect potential kinds before sorting
+	tempPotentialKinds := make(map[string]map[string]bool)
 
 	for kindA, fields := range resourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
@@ -171,6 +182,16 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			kindA := strings.ToLower(gvrA.Resource)
 			kindB := strings.ToLower(gvr.Resource)
 
+			// Update potential kinds cache for both directions
+			if tempPotentialKinds[kindA] == nil {
+				tempPotentialKinds[kindA] = make(map[string]bool)
+			}
+			if tempPotentialKinds[kindB] == nil {
+				tempPotentialKinds[kindB] = make(map[string]bool)
+			}
+			tempPotentialKinds[kindA][kindB] = true
+			tempPotentialKinds[kindB][kindA] = true
+
 			// Keep the array notation in the JsonPath
 			fieldA := "$." + fullFieldPath
 			fieldB := "$.metadata.name"
@@ -213,6 +234,43 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 		processed++
 	}
+
+	// Convert temporary map to sorted slices and update cache
+	potentialKindsMutex.Lock()
+	for kind, potentialMap := range tempPotentialKinds {
+		var sortedKinds []string
+		for potentialKind := range potentialMap {
+			sortedKinds = append(sortedKinds, potentialKind)
+		}
+		sort.Strings(sortedKinds)
+		potentialKindsCache[kind] = sortedKinds
+	}
+
+	// Add hardcoded relationship rules to cache
+	for _, rule := range relationshipRules {
+		kindA := strings.ToLower(rule.KindA)
+		kindB := strings.ToLower(rule.KindB)
+
+		if potentialKindsCache[kindA] == nil {
+			potentialKindsCache[kindA] = []string{}
+		}
+		if potentialKindsCache[kindB] == nil {
+			potentialKindsCache[kindB] = []string{}
+		}
+
+		// Add B to A's potential kinds if not already present
+		if !contains(potentialKindsCache[kindA], kindB) {
+			potentialKindsCache[kindA] = append(potentialKindsCache[kindA], kindB)
+			sort.Strings(potentialKindsCache[kindA])
+		}
+
+		// Add A to B's potential kinds if not already present
+		if !contains(potentialKindsCache[kindB], kindA) {
+			potentialKindsCache[kindB] = append(potentialKindsCache[kindB], kindA)
+			sort.Strings(potentialKindsCache[kindB])
+		}
+	}
+	potentialKindsMutex.Unlock()
 
 	customRelationshipsCount, err := loadCustomRelationships()
 	if err != nil {
@@ -322,4 +380,171 @@ func GetRelationships() map[string][]string {
 	defer relationshipsMutex.RUnlock()
 
 	return relationships
+}
+
+// FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
+func FindPotentialKinds(sourceKind string, provider provider.Provider) []string {
+	sourceKind = strings.ToLower(sourceKind)
+	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
+
+	// Get the plural form using FindGVR
+	gvr, err := provider.FindGVR(sourceKind)
+	if err != nil {
+		debugLog("FindPotentialKinds: error getting GVR for %s: %v", sourceKind, err)
+		return []string{} // Return empty if we can't get proper plural form
+	}
+	sourceKind = strings.ToLower(gvr.Resource)
+
+	// Check cache with plural form
+	potentialKindsMutex.RLock()
+	if kinds, exists := potentialKindsCache[sourceKind]; exists {
+		potentialKindsMutex.RUnlock()
+		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
+		return kinds
+	}
+	potentialKindsMutex.RUnlock()
+
+	// If not in cache, fall back to scanning rules (this should be rare)
+	debugLog("FindPotentialKinds: cache miss for %s, falling back to rule scan", sourceKind)
+	potentialKinds := make(map[string]bool)
+	rules := GetRelationshipRules()
+	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
+
+	for _, rule := range rules {
+		// Get proper plural forms using FindGVR
+		gvrA, err := provider.FindGVR(rule.KindA)
+		if err != nil {
+			debugLog("Error getting GVR for %s: %v", rule.KindA, err)
+			continue
+		}
+		gvrB, err := provider.FindGVR(rule.KindB)
+		if err != nil {
+			debugLog("Error getting GVR for %s: %v", rule.KindB, err)
+			continue
+		}
+
+		ruleKindA := strings.ToLower(gvrA.Resource)
+		ruleKindB := strings.ToLower(gvrB.Resource)
+
+		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", ruleKindA, ruleKindB, rule.Relationship)
+		if ruleKindB == sourceKind {
+			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", ruleKindA)
+			potentialKinds[ruleKindA] = true
+		}
+		if ruleKindA == sourceKind {
+			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", ruleKindB)
+			potentialKinds[ruleKindB] = true
+		}
+	}
+
+	var result []string
+	for kind := range potentialKinds {
+		result = append(result, kind)
+	}
+	sort.Strings(result)
+
+	// Update cache with results
+	potentialKindsMutex.Lock()
+	potentialKindsCache[sourceKind] = result
+	potentialKindsMutex.Unlock()
+
+	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
+	return result
+}
+
+// FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
+func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) []string {
+	logDebug("FindPotentialKindsIntersection: Starting with relationships:", relationships)
+	if len(relationships) == 0 {
+		debugLog("FindPotentialKindsIntersection: no relationships provided")
+		return []string{}
+	}
+
+	// Check if there are any unknown kinds that need resolution
+	hasUnknownKind := false
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
+			hasUnknownKind = true
+			break
+		}
+	}
+
+	// If all kinds are known, return empty slice
+	if !hasUnknownKind {
+		debugLog("FindPotentialKindsIntersection: all kinds are known")
+		return []string{}
+	}
+
+	// Find all known kinds in the relationships
+	knownKinds := make(map[string]bool)
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Kind != "" {
+			knownKinds[strings.ToLower(rel.LeftNode.ResourceProperties.Kind)] = true
+			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (left): %s", rel.LeftNode.ResourceProperties.Kind))
+		}
+		if rel.RightNode.ResourceProperties.Kind != "" {
+			knownKinds[strings.ToLower(rel.RightNode.ResourceProperties.Kind)] = true
+			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (right): %s", rel.RightNode.ResourceProperties.Kind))
+		}
+	}
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: All known kinds: %v", knownKinds))
+
+	// If no known kinds, return empty
+	if len(knownKinds) == 0 {
+		logDebug("FindPotentialKindsIntersection: no known kinds found")
+		return []string{}
+	}
+
+	// Initialize result with potential kinds from first known kind
+	var firstKnownKind string
+	for kind := range knownKinds {
+		firstKnownKind = kind
+		break
+	}
+
+	result := make(map[string]bool)
+	initialPotentialKinds := FindPotentialKinds(firstKnownKind, provider)
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Initial potential kinds from %s: %v", firstKnownKind, initialPotentialKinds))
+	for _, kind := range initialPotentialKinds {
+		result[kind] = true
+	}
+
+	// For each additional known kind, intersect with its potential kinds
+	for kind := range knownKinds {
+		if kind == firstKnownKind {
+			continue
+		}
+
+		potentialKinds := FindPotentialKinds(kind, provider)
+		logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Potential kinds for %s: %v", kind, potentialKinds))
+
+		newResult := make(map[string]bool)
+		// Keep only kinds that exist in both sets
+		for _, potentialKind := range potentialKinds {
+			if result[potentialKind] {
+				logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Keeping common kind %s", potentialKind))
+				newResult[potentialKind] = true
+			}
+		}
+		result = newResult
+	}
+
+	// Convert map back to slice
+	var kinds []string
+	for kind := range result {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds) // Sort for consistent results
+	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Final result=%v", kinds))
+	return kinds
+}
+
+// Helper function to check if a string slice contains a string
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

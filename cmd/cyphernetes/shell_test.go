@@ -127,13 +127,13 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 	}{
 		{
 			name:     "Keywords",
-			input:    "MATCH (n:Node) WHERE n.property = 'value' RETURN n",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = 'value' \x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m",
+			input:    `MATCH (n:Node) WHERE n.property = "value" RETURN n`,
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[0m\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m\x1b[37m)\x1b[0m \x1b[35mWHERE\x1b[0m n.property = \"value\" \x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m",
 		},
 		{
 			name:     "Properties",
-			input:    "MATCH (n:Node {key: \"value\"})",
-			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[\x1b[33mn\x1b[0m:\x1b[94mNode\x1b[0m \x1b[37m{\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m}\x1b[0m\x1b[37m)\x1b[0m",
+			input:    `MATCH (n:Node {key: "value"})`,
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[0m\x1b[33mn\x1b[0m:\x1b[94mNode \x1b[37m{\x1b[0m\x1b[33mkey: \x1b[0m\x1b[36m\"value\"\x1b[0m\x1b[37m}\x1b[0m\x1b[0m\x1b[37m)\x1b[0m",
 		},
 		{
 			name:     "Return with JSONPath",
@@ -149,6 +149,21 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 			name:     "Return with JSONPath and asterisk",
 			input:    "RETURN n.*",
 			expected: "\x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m.*",
+		},
+		{
+			name:     "Kindless node",
+			input:    "MATCH (:Pod) RETURN n",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[0m:\x1b[94mPod\x1b[0m\x1b[37m)\x1b[0m \x1b[35mRETURN\x1b[0m\x1b[35m n\x1b[0m",
+		},
+		{
+			name:     "Anonymous node",
+			input:    "MATCH (pod) RETURN pod",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[0m\x1b[33mpod\x1b[0m\x1b[37m)\x1b[0m \x1b[35mRETURN\x1b[0m\x1b[35m pod\x1b[0m",
+		},
+		{
+			name:     "Mixed nodes",
+			input:    "MATCH (pod)-[:EXPOSED_BY]->(:Service) RETURN pod",
+			expected: "\x1b[35mMATCH\x1b[0m \x1b[37m(\x1b[0m\x1b[33mpod\x1b[0m\x1b[37m)\x1b[0m-\x1b[37m[\x1b[0m\x1b[94m:EXPOSED_BY\x1b[0m\x1b[37m]\x1b[0m->\x1b[37m(\x1b[0m:\x1b[94mService\x1b[0m\x1b[37m)\x1b[0m \x1b[35mRETURN\x1b[0m\x1b[35m pod\x1b[0m",
 		},
 	}
 

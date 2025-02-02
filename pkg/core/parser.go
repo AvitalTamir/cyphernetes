@@ -8,16 +8,18 @@ import (
 )
 
 type Parser struct {
-	lexer    *Lexer
-	current  Token
-	pos      int
-	inCreate bool
+	lexer            *Lexer
+	current          Token
+	pos              int
+	inCreate         bool
+	anonymousCounter int
 }
 
 func NewRecursiveParser(input string) *Parser {
 	lexer := NewLexer(input)
 	return &Parser{
-		lexer: lexer,
+		lexer:            lexer,
+		anonymousCounter: 0,
 	}
 }
 
@@ -181,6 +183,14 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 		return nil, err
 	}
 
+	// Validate that we don't have standalone anonymous nodes
+	if len(nodeRels.Nodes) == 1 && len(nodeRels.Relationships) == 0 {
+		node := nodeRels.Nodes[0]
+		if node.IsAnonymous || (node.ResourceProperties != nil && node.ResourceProperties.Name == "") {
+			return nil, fmt.Errorf("standalone anonymous nodes are not allowed")
+		}
+	}
+
 	var filters []*KeyValuePair
 	if p.current.Type == WHERE {
 		p.advance()
@@ -277,13 +287,34 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 	}
 	p.advance()
 
-	if p.current.Type != IDENT {
-		return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
-	}
-	name := p.current.Literal
-	p.advance()
-
+	var name string
 	var resourceProps *ResourceProperties
+	isAnonymous := false
+
+	// Handle empty node ()
+	if p.current.Type == RPAREN {
+		p.advance()
+		name = p.nextAnonymousVar()
+		isAnonymous = true
+		return &NodePattern{
+			ResourceProperties: &ResourceProperties{
+				Name: name,
+				Kind: "",
+			},
+			IsAnonymous: isAnonymous,
+		}, nil
+	}
+
+	// Handle variable name if present
+	if p.current.Type == IDENT {
+		name = p.current.Literal
+		p.advance()
+	} else {
+		name = p.nextAnonymousVar()
+		isAnonymous = true
+	}
+
+	// Handle kind if present
 	if p.current.Type == COLON {
 		p.advance()
 		var err error
@@ -291,17 +322,32 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 		if err != nil {
 			return nil, err
 		}
-		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
-		}
-		p.advance()
 	} else {
-		if p.current.Type != RPAREN {
-			return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
+		// Initialize resourceProps for kindless node
+		resourceProps = &ResourceProperties{
+			Name: name,
+			Kind: "", // Empty kind for variable-only nodes
 		}
-		p.advance()
-		resourceProps = &ResourceProperties{Name: name}
+
+		// Check for properties
+		if p.current.Type == LBRACE {
+			p.advance()
+			props, err := p.parseProperties()
+			if err != nil {
+				return nil, err
+			}
+			resourceProps.Properties = props
+			if p.current.Type != RBRACE {
+				return nil, fmt.Errorf("expected }, got \"%v\"", p.current.Literal)
+			}
+			p.advance()
+		}
 	}
+
+	if p.current.Type != RPAREN {
+		return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
+	}
+	p.advance()
 
 	// Check for invalid relationship tokens immediately after closing parenthesis
 	debugLog("After node pattern, checking next token: \"%v\"", p.current.Literal)
@@ -310,7 +356,10 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
-	return &NodePattern{ResourceProperties: resourceProps}, nil
+	return &NodePattern{
+		ResourceProperties: resourceProps,
+		IsAnonymous:        isAnonymous,
+	}, nil
 }
 
 // parseResourceProperties parses the properties of a node or relationship
@@ -934,4 +983,28 @@ func debugLog(format string, args ...interface{}) {
 	if LogLevel == "debug" {
 		log.Printf(format, args...)
 	}
+}
+
+// Add helper method to generate anonymous variable names
+func (p *Parser) nextAnonymousVar() string {
+	p.anonymousCounter++
+	return fmt.Sprintf("_anon%d", p.anonymousCounter)
+}
+
+// ValidateAnonymousNode checks if an anonymous node is valid (not standalone)
+func ValidateAnonymousNode(node *NodePattern, relationships []*Relationship) error {
+	if !node.IsAnonymous {
+		return nil // Not an anonymous node, no validation needed
+	}
+
+	// Check if the node appears in any relationship
+	for _, rel := range relationships {
+		if rel.LeftNode.ResourceProperties.Name == node.ResourceProperties.Name ||
+			rel.RightNode.ResourceProperties.Name == node.ResourceProperties.Name {
+			return nil // Node is used in a relationship, valid
+		}
+	}
+
+	// Node is anonymous and not used in any relationship
+	return fmt.Errorf("standalone anonymous node '()' is not allowed")
 }

@@ -155,16 +155,13 @@ var (
 	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in)\b`)
 	bracketsRegex   = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
 	variableRegex   = regexp.MustCompile(`"(.*?)"`)
-	identifierRegex = regexp.MustCompile(`0m(\w+):([.\w]+)`)
-	propertiesRegex = regexp.MustCompile(`\{((?:[^{}]|\{[^{}]*\})*)\}`)
+	identifierRegex = regexp.MustCompile(`\(([^:)]*?)(?::([^)]+))?\)`)
+	propertiesRegex = regexp.MustCompile(`{([^{}]+)}`)
 	returnRegex     = regexp.MustCompile(`(?i)(return)(\s+.*)`)
 )
 
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	lineStr := string(line)
-
-	// Coloring for brackets ((), {}, [], <>)
-	lineStr = bracketsRegex.ReplaceAllString(lineStr, wrapInColor("$0", 37)) // White for brackets
 
 	// Coloring for keywords
 	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
@@ -175,68 +172,99 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		return match
 	})
 
-	// Coloring for quoted variables
-	lineStr = variableRegex.ReplaceAllString(lineStr, wrapInColor("$0", 90)) // Dark grey for quoted variables
-
-	// Coloring for identifiers (left and right of the colon)
-	lineStr = identifierRegex.ReplaceAllString(lineStr, wrapInColor("$1", 33)+":"+wrapInColor("$2", 94)) // Orange for left, Light blue for right
-
-	// Color RETURN keyword and its arguments
-	lineStr = returnRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
-		parts := returnRegex.FindStringSubmatch(match)
+	// Coloring for node patterns (must come before properties)
+	lineStr = identifierRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		parts := identifierRegex.FindStringSubmatch(match)
 		if len(parts) == 3 {
-			rest := parts[2]
-
-			nonAsterisksOrDotsRegex := `[^*.,]+`
-			coloredRest := regexp.MustCompile(nonAsterisksOrDotsRegex).ReplaceAllStringFunc(rest, func(submatch string) string {
-				return wrapInColor(submatch, 35) // Purple for non-asterisks or dots
-			})
-
-			return wrapInColor(strings.ToUpper(parts[1]), 35) + coloredRest
+			if parts[1] == "" && parts[2] != "" {
+				// Case 2: (:word) - kindless node
+				return wrapInColor("(", 37) + ":" + wrapInColor(parts[2], 94) + wrapInColor(")", 37)
+			} else if parts[1] != "" && parts[2] == "" {
+				// Case 1: (word) - anonymous node
+				return wrapInColor("(", 37) + wrapInColor(parts[1], 33) + wrapInColor(")", 37)
+			} else if parts[1] != "" && parts[2] != "" {
+				// Case 3: (word:word) - standard node
+				return wrapInColor("(", 37) + wrapInColor(parts[1], 33) + ":" + wrapInColor(parts[2], 94) + wrapInColor(")", 37)
+			}
 		}
 		return match
 	})
 
-	lineStr = regexp.MustCompile(propertiesRegex.String()).ReplaceAllStringFunc(lineStr, func(match string) string {
-		return colorizeProperties(match)
+	// Color relationship patterns
+	lineStr = regexp.MustCompile(`\[(:([^\]]+))\]`).ReplaceAllStringFunc(lineStr, func(match string) string {
+		parts := regexp.MustCompile(`\[(:([^\]]+))\]`).FindStringSubmatch(match)
+		if len(parts) == 3 {
+			return wrapInColor("[", 37) + wrapInColor(":"+parts[2], 94) + wrapInColor("]", 37)
+		}
+		return match
+	})
+
+	// Color RETURN keyword and its arguments with JSONPath
+	lineStr = regexp.MustCompile(`(?i)(RETURN)(\s+[^,]+(?:\s*,\s*[^,]+)*)`).ReplaceAllStringFunc(lineStr, func(match string) string {
+		// Color the RETURN keyword
+		result := wrapInColor("RETURN", 35)
+
+		// Split the rest by commas
+		rest := match[6:] // Skip "RETURN"
+		parts := strings.Split(rest, ",")
+
+		for i, part := range parts {
+			if i > 0 {
+				result += ","
+			}
+
+			// Handle "AS" keyword
+			if strings.Contains(strings.ToUpper(part), " AS ") {
+				asParts := strings.SplitN(part, " AS ", 2)
+				result += wrapInColor(" "+strings.TrimSpace(asParts[0]), 35)
+				result += " " + wrapInColor("AS", 35) + " " + strings.TrimSpace(asParts[1])
+				continue
+			}
+
+			// Handle JSONPath
+			part = strings.TrimSpace(part)
+			if strings.Contains(part, ".*") {
+				varName := strings.TrimSuffix(part, ".*")
+				result += wrapInColor(" "+varName, 35) + ".*"
+			} else if strings.Contains(part, ".") {
+				dotParts := strings.SplitN(part, ".", 2)
+				result += wrapInColor(" "+dotParts[0], 35) + "." + wrapInColor(dotParts[1], 35)
+			} else {
+				result += wrapInColor(" "+part, 35)
+			}
+		}
+
+		return result
+	})
+
+	// Coloring for properties
+	lineStr = regexp.MustCompile(`{([^{}]+)}`).ReplaceAllStringFunc(lineStr, func(match string) string {
+		// Extract just the inner content without braces
+		inner := match[1 : len(match)-1]
+		return wrapInColor("{", 37) + colorizePropertyContent(inner) + wrapInColor("}", 37)
 	})
 
 	return []rune(lineStr)
 }
 
-func colorizeProperties(obj string) string {
+func colorizePropertyContent(content string) string {
 	if core.NoColor {
-		return obj
+		return content
 	}
 
-	// Remove existing color codes
-	stripped := regexp.MustCompile(`\x1b\[[0-9;]*[mK]`).ReplaceAllString(obj, "")
-
-	// Remove the outer curly braces before processing
-	stripped = strings.TrimPrefix(stripped, "{")
-	stripped = strings.TrimSuffix(stripped, "}")
-
-	// Colorize properties
-	colored := regexp.MustCompile(`((?:"(?:[^"\\]|\\.)*"|[^:,{}]+)\s*:\s*)("[^"]*"|[^,{}]+|(\{[^{}]*\}))`).ReplaceAllStringFunc(stripped, func(prop string) string {
+	// Colorize key-value pairs
+	return regexp.MustCompile(`((?:"(?:[^"\\]|\\.)*"|[^:,{}]+)\s*:\s*)("[^"]*"|[^,{}]+)`).ReplaceAllStringFunc(content, func(prop string) string {
 		parts := regexp.MustCompile(`((?:"(?:[^"\\]|\\.)*"|[^:,{}]+)\s*:\s*)(.+)`).FindStringSubmatch(prop)
 		if len(parts) == 3 {
 			key := parts[1]
 			value := parts[2]
-
-			// Check if value is a nested object
-			if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
-				value = colorizeProperties(value) // Recursively colorize nested objects
-			} else {
-				value = wrapInColor(value, 36) // Cyan for non-object values
+			if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+				return wrapInColor(key, 33) + wrapInColor(value, 36)
 			}
-
-			return wrapInColor(key, 33) + value
+			return wrapInColor(key, 33) + wrapInColor(value, 36)
 		}
 		return prop
 	})
-
-	// Add back the outer curly braces
-	return "{" + colored + "}"
 }
 
 type Listener interface {
