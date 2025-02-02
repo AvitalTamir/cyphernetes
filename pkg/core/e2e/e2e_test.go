@@ -262,6 +262,103 @@ var _ = Describe("Cyphernetes E2E", func() {
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 		})
+
+		It("Should execute MATCH queries with AND in WHERE clauses correctly", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-where-and",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app":     "test",
+						"version": "v1",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: ptr.To(int32(3)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+									Resources: corev1.ResourceRequirements{
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    resource.MustParse("100m"),
+											corev1.ResourceMemory: resource.MustParse("128Mi"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a MATCH query with AND in WHERE clause")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+                MATCH (d:Deployment)
+                WHERE d.metadata.labels.app = "test" 
+                  AND d.spec.replicas = 3 
+                  AND d.spec.template.spec.containers[0].resources.requests.memory = "128Mi"
+                RETURN d.metadata.name, d.spec.replicas
+            `)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok := result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(HaveLen(1), "Expected exactly one deployment")
+
+			resultDeployment, ok := deployments[0].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected deployment to be a map")
+			Expect(resultDeployment["name"]).To(Equal("test-deployment-where-and"))
+
+			By("Testing mixed AND and comma separators")
+			ast, err = core.ParseQuery(`
+                MATCH (d:Deployment)
+                WHERE d.metadata.labels.app = "test",
+                      d.spec.replicas = 3 AND
+                      d.spec.template.spec.containers[0].resources.requests.memory = "128Mi"
+                RETURN d.metadata.name, d.spec.replicas
+            `)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok = result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(HaveLen(1), "Expected exactly one deployment")
+
+			resultDeployment, ok = deployments[0].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "Expected deployment to be a map")
+			Expect(resultDeployment["name"]).To(Equal("test-deployment-where-and"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
 	})
 
 	Context("Label Update Operations", func() {

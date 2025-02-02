@@ -3,7 +3,13 @@ package core
 const (
 	ILLEGAL TokenType = iota
 	EOF
+	IDENT
+	INT
+	STRING
+	NUMBER
+	BOOLEAN
 	NULL
+	JSONDATA
 
 	// Keywords
 	MATCH
@@ -14,26 +20,9 @@ const (
 	RETURN
 	IN
 	AS
-
-	// Identifiers and literals
-	IDENT
-	STRING
-	INT
-	NUMBER
-	BOOLEAN
-	JSONPATH
-	JSONDATA
-
-	// Delimiters
-	LPAREN   // (
-	RPAREN   // )
-	LBRACE   // {
-	RBRACE   // }
-	LBRACKET // [
-	RBRACKET // ]
-	COLON    // :
-	COMMA    // ,
-	DOT      // .
+	COUNT
+	SUM
+	AND
 
 	// Operators
 	EQUALS
@@ -42,8 +31,19 @@ const (
 	LESS_THAN
 	GREATER_THAN_EQUALS
 	LESS_THAN_EQUALS
-	CONTAINS
 	REGEX_COMPARE
+	CONTAINS
+
+	// Delimiters
+	LPAREN
+	RPAREN
+	LBRACE
+	RBRACE
+	LBRACKET
+	RBRACKET
+	COLON
+	COMMA
+	DOT
 
 	// Relationship tokens
 	REL_NOPROPS_RIGHT
@@ -54,8 +54,4 @@ const (
 	REL_BEGINPROPS_NONE
 	REL_ENDPROPS_RIGHT
 	REL_ENDPROPS_NONE
-
-	// Aggregation functions
-	COUNT
-	SUM
 )

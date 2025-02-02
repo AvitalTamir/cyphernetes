@@ -611,7 +611,30 @@ func TestRecursiveParser(t *testing.T) {
 		},
 		{
 			name:  "match with various WHERE operators",
-			input: `MATCH (p:Pod) WHERE p.status.phase != "Running", p.metadata.name =~ "^test-.*", p.spec.containers[0].resources.requests.memory CONTAINS "Gi" RETURN p.metadata.name`,
+			input: `MATCH (p:Pod) WHERE p.status.phase != "Running" AND p.metadata.name =~ "^test-.*" AND p.spec.containers[0].resources.requests.memory CONTAINS "Gi" RETURN p.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{Key: "p.status.phase", Value: "Running", Operator: "NOT_EQUALS"},
+							{Key: "p.metadata.name", Value: "^test-.*", Operator: "REGEX_COMPARE"},
+							{Key: "p.spec.containers[0].resources.requests.memory", Value: "Gi", Operator: "CONTAINS"},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with mixed AND and comma separators",
+			input: `MATCH (p:Pod) WHERE p.status.phase != "Running", p.metadata.name =~ "^test-.*" AND p.spec.containers[0].resources.requests.memory CONTAINS "Gi" RETURN p.metadata.name`,
 			want: &Expression{
 				Clauses: []Clause{
 					&MatchClause{

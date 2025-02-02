@@ -823,7 +823,7 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 			Operator: operator,
 		})
 
-		if p.current.Type != COMMA {
+		if p.current.Type != COMMA && p.current.Type != AND {
 			break
 		}
 		p.advance()
