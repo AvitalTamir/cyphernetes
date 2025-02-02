@@ -462,9 +462,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 
 				// loop over the resources array in the resultMap for the foreign node and create the resource
-				for _, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
+				for idx, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
 					var name string
-					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]
+					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[idx]
 
 					fields := append([]string{criteriaField}, defaultPropFields...)
 					foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
