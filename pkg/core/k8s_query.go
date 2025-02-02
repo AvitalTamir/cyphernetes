@@ -313,6 +313,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				if resultMap[nodeId] == nil {
 					// Skip error for expanded node identifiers
 					if strings.Contains(nodeId, "__exp__") {
+						debugLog("skipping error trying to delete expanded node identifier %s", nodeId)
 						continue
 					}
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
