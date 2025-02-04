@@ -972,7 +972,12 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 								case "":
 									operator = "="
 								}
-								whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
+
+								notPrefix := ""
+								if filter.IsNegated {
+									notPrefix = "NOT "
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 							}
 						} else {
 							// If the node is not kindless, just use it as is
@@ -1006,7 +1011,12 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 							case "":
 								operator = "="
 							}
-							whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
+
+							notPrefix := ""
+							if filter.IsNegated {
+								notPrefix = "NOT "
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
@@ -1153,28 +1163,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
-
-	// Resolve kinds if needed
-	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-		// Try to resolve the kind using relationships
-		potentialKinds, err := FindPotentialKindsIntersection(c.Relationships, q.provider)
-		if err != nil {
-			return false, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
-		}
-		if len(potentialKinds) == 0 {
-			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
-		}
-		if len(potentialKinds) > 1 {
-			// Instead of expanding the query here, we'll let rewriteQueryForKindlessNodes handle it
-			return false, &QueryExpandedError{ExpandedQuery: "needs_rewrite"}
-		}
-		if rel.LeftNode.ResourceProperties.Kind == "" {
-			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
-		}
-		if rel.RightNode.ResourceProperties.Kind == "" {
-			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
-		}
-	}
+	var filteredA, filteredB bool
 
 	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
@@ -1238,84 +1227,127 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	}
 	resultMapMutex.RUnlock()
 
+	// First apply filters to both sides independently
+	if len(c.ExtraFilters) > 0 {
+		var filteredLeft []map[string]interface{}
+		var filteredRight []map[string]interface{}
+
+		// Filter left resources
+		for _, resource := range resourcesA {
+			keep := true
+			hasMatchingFilter := false
+			for _, filter := range c.ExtraFilters {
+				parts := strings.Split(filter.Key, ".")
+				if parts[0] == rel.LeftNode.ResourceProperties.Name {
+					hasMatchingFilter = true
+					path := "$." + strings.Join(parts[1:], ".")
+					value, err := jsonpath.JsonPathLookup(resource, path)
+					if err != nil {
+						if filter.IsNegated {
+							continue // For negated conditions, missing path means condition is satisfied
+						}
+						keep = false
+						break
+					}
+
+					resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+					if err != nil {
+						if filter.IsNegated {
+							continue
+						}
+						keep = false
+						break
+					}
+
+					result := compareValues(resourceValue, filterValue, filter.Operator)
+					if filter.IsNegated {
+						result = !result
+					}
+					keep = keep && result
+					if !keep {
+						break
+					}
+				}
+			}
+			// If no matching filters were found for this resource, keep it
+			if !hasMatchingFilter || keep {
+				filteredLeft = append(filteredLeft, resource)
+			}
+		}
+
+		// Filter right resources
+		for _, resource := range resourcesB {
+			keep := true
+			hasMatchingFilter := false
+			for _, filter := range c.ExtraFilters {
+				parts := strings.Split(filter.Key, ".")
+				if parts[0] == rel.RightNode.ResourceProperties.Name {
+					hasMatchingFilter = true
+					path := "$." + strings.Join(parts[1:], ".")
+					value, err := jsonpath.JsonPathLookup(resource, path)
+					if err != nil {
+						if filter.IsNegated {
+							continue // For negated conditions, missing path means condition is satisfied
+						}
+						keep = false
+						break
+					}
+
+					resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+					if err != nil {
+						if filter.IsNegated {
+							continue
+						}
+						keep = false
+						break
+					}
+
+					result := compareValues(resourceValue, filterValue, filter.Operator)
+					if filter.IsNegated {
+						result = !result
+					}
+					keep = keep && result
+					if !keep {
+						break
+					}
+				}
+			}
+			// If no matching filters were found for this resource, keep it
+			if !hasMatchingFilter || keep {
+				filteredRight = append(filteredRight, resource)
+			}
+		}
+
+		// Update resources with filtered results
+		if filteredDirection == Left {
+			resourcesA = filteredRight
+			resourcesB = filteredLeft
+		} else {
+			resourcesA = filteredLeft
+			resourcesB = filteredRight
+		}
+	}
+
+	// Now apply relationship rules to filtered resources
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
 
-	// Add nodes and edges based on the matched resources
-	rightResources := matchedResources["right"].([]map[string]interface{})
-	leftResources := matchedResources["left"].([]map[string]interface{})
-
-	// Add nodes
-	for _, rightResource := range rightResources {
-		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.RightNode.ResourceProperties.Name,
-					Kind: rightResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
-		}
+	// Track if filtering occurred
+	if filteredDirection == Left {
+		filteredA = len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
+		filteredB = len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
+	} else {
+		filteredA = len(matchedResources["left"].([]map[string]interface{})) < len(resourcesA)
+		filteredB = len(matchedResources["right"].([]map[string]interface{})) < len(resourcesB)
 	}
 
-	for _, leftResource := range leftResources {
-		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.LeftNode.ResourceProperties.Name,
-					Kind: leftResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
-		}
-	}
-
-	// Process edges
-	for _, rightResource := range rightResources {
-		for _, leftResource := range leftResources {
-			// Check if these resources actually match according to the criteria
-			for _, criterion := range rule.MatchCriteria {
-				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
-					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
-					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
-					results.Graph.Edges = append(results.Graph.Edges, Edge{
-						From: rightNodeId,
-						To:   leftNodeId,
-						Type: string(relType),
-					})
-				}
-			}
-		}
-	}
-
-	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
-	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
-
+	// Update filtered results
 	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
 	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
 
+	// Update result map
 	resultMapMutex.Lock()
-	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
-			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-		}
-	} else {
-		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-	}
-	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
-			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-		}
-	} else {
-		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-	}
+	resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+	resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
 	resultMapMutex.Unlock()
 
 	return filteredA || filteredB, nil
