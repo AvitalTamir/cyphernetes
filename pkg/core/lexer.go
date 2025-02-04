@@ -82,6 +82,8 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: BOOLEAN, Literal: lit}
 			case "NULL":
 				return Token{Type: NULL, Literal: lit}
+			case "NOT":
+				return Token{Type: NOT, Literal: lit}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
 				return Token{Type: IDENT, Literal: lit}

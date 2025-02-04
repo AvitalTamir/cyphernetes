@@ -765,6 +765,13 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 	var pairs []*KeyValuePair
 
 	for {
+		// Check for NOT token before the identifier
+		isNegated := false
+		if p.current.Type == NOT {
+			isNegated = true
+			p.advance()
+		}
+
 		if p.current.Type != IDENT {
 			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
 		}
@@ -818,9 +825,10 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 		}
 
 		pairs = append(pairs, &KeyValuePair{
-			Key:      path.String(),
-			Value:    value,
-			Operator: operator,
+			Key:       path.String(),
+			Value:     value,
+			Operator:  operator,
+			IsNegated: isNegated,
 		})
 
 		if p.current.Type != COMMA && p.current.Type != AND {

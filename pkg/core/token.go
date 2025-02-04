@@ -23,6 +23,7 @@ const (
 	COUNT
 	SUM
 	AND
+	NOT
 
 	// Operators
 	EQUALS

@@ -359,6 +359,152 @@ var _ = Describe("Cyphernetes E2E", func() {
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 		})
+
+		It("Should execute MATCH queries with NOT in WHERE clauses correctly", func() {
+			By("Creating test resources")
+			testDeployment1 := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-not-1",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app": "test-not",
+						"env": "prod",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-not",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-not",
+								"env": "prod",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment1)).Should(Succeed())
+
+			testDeployment2 := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-not-2",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app": "test-not",
+						"env": "staging",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-not",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-not",
+								"env": "staging",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment2)).Should(Succeed())
+
+			By("Waiting for deployments to be created")
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: testNamespace,
+					Name:      "test-deployment-not-1",
+				}, &appsv1.Deployment{})
+			}, timeout, interval).Should(Succeed())
+
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: testNamespace,
+					Name:      "test-deployment-not-2",
+				}, &appsv1.Deployment{})
+			}, timeout, interval).Should(Succeed())
+
+			By("Executing a MATCH query with NOT in WHERE clause")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE NOT d.metadata.labels.env = "prod"
+				RETURN d.metadata.name, d.metadata.labels.env
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the NOT filter results")
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok := result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(HaveLen(1), "Expected only one deployment")
+
+			deployment := deployments[0].(map[string]interface{})
+			metadata := deployment["metadata"].(map[string]interface{})
+			labels := metadata["labels"].(map[string]interface{})
+			Expect(metadata["name"]).To(Equal("test-deployment-not-2"))
+			Expect(labels["env"]).To(Equal("staging"))
+
+			By("Testing multiple NOT conditions")
+			ast, err = core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE NOT d.metadata.labels.env = "prod" AND NOT d.metadata.name = "test-deployment-not-1"
+				RETURN d.metadata.name, d.metadata.labels.env
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying multiple NOT conditions results")
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok = result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(HaveLen(1), "Expected only one deployment")
+
+			deployment = deployments[0].(map[string]interface{})
+			metadata = deployment["metadata"].(map[string]interface{})
+			labels = metadata["labels"].(map[string]interface{})
+			Expect(metadata["name"]).To(Equal("test-deployment-not-2"))
+			Expect(labels["env"]).To(Equal("staging"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment1)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
+		})
 	})
 
 	Context("Label Update Operations", func() {

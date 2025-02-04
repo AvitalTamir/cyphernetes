@@ -1302,6 +1302,28 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with NOT in WHERE clause",
+			input: `MATCH (p:Pod) WHERE NOT p.status.phase = "Running" AND NOT p.metadata.name = "test" RETURN p.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{Key: "p.status.phase", Value: "Running", Operator: "EQUALS", IsNegated: true},
+							{Key: "p.metadata.name", Value: "test", Operator: "EQUALS", IsNegated: true},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

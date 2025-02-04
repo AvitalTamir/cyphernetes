@@ -2078,6 +2078,9 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					// If path contains wildcards, we need special handling
 					if strings.Contains(path, "[*]") {
 						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+						if filter.IsNegated {
+							keep = !keep
+						}
 					} else {
 						// Regular path handling
 						value, err := jsonpath.JsonPathLookup(resource, path)
@@ -2093,6 +2096,9 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 						}
 
 						keep = compareValues(resourceValue, filterValue, filter.Operator)
+						if filter.IsNegated {
+							keep = !keep
+						}
 					}
 
 					if !keep {
