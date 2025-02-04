@@ -108,7 +108,10 @@ func TestFindPotentialKindsIntersection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindPotentialKindsIntersection(tt.relationships, mockProvider)
+			got, err := FindPotentialKindsIntersection(tt.relationships, mockProvider)
+			if err != nil {
+				t.Errorf("FindPotentialKindsIntersection() error = %v", err)
+			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FindPotentialKindsIntersection() = %v, want %v", got, tt.want)
 			}
@@ -217,7 +220,10 @@ func TestFindPotentialKindsWithPartialKnownRelationship(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindPotentialKindsIntersection(tt.relationships, mockProvider)
+			got, err := FindPotentialKindsIntersection(tt.relationships, mockProvider)
+			if err != nil {
+				t.Errorf("FindPotentialKindsIntersection() error = %v", err)
+			}
 			sort.Strings(got)
 			sort.Strings(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
@@ -264,7 +270,10 @@ func TestFindPotentialKinds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindPotentialKinds(tt.sourceKind, mockProvider)
+			got, err := FindPotentialKinds(tt.sourceKind, mockProvider)
+			if err != nil {
+				t.Errorf("FindPotentialKinds() error = %v", err)
+			}
 			// Sort both slices for consistent comparison
 			sort.Strings(got)
 			sort.Strings(tt.want)

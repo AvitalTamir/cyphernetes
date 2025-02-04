@@ -181,16 +181,28 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 			kindA := strings.ToLower(gvrA.Resource)
 			kindB := strings.ToLower(gvr.Resource)
+			kindAFull := kindA
+			kindBFull := kindB
+			if gvrA.Group != "" {
+				kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
+			} else {
+				kindAFull = "core." + kindA
+			}
+			if gvr.Group != "" {
+				kindBFull = fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group)
+			} else {
+				kindBFull = "core." + kindB
+			}
 
 			// Update potential kinds cache for both directions
-			if tempPotentialKinds[kindA] == nil {
-				tempPotentialKinds[kindA] = make(map[string]bool)
+			if tempPotentialKinds[kindAFull] == nil {
+				tempPotentialKinds[kindAFull] = make(map[string]bool)
 			}
-			if tempPotentialKinds[kindB] == nil {
-				tempPotentialKinds[kindB] = make(map[string]bool)
+			if tempPotentialKinds[kindBFull] == nil {
+				tempPotentialKinds[kindBFull] = make(map[string]bool)
 			}
-			tempPotentialKinds[kindA][kindB] = true
-			tempPotentialKinds[kindB][kindA] = true
+			tempPotentialKinds[kindAFull][kindBFull] = true
+			tempPotentialKinds[kindBFull][kindAFull] = true
 
 			// Keep the array notation in the JsonPath
 			fieldA := "$." + fullFieldPath
@@ -251,23 +263,45 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		kindA := strings.ToLower(rule.KindA)
 		kindB := strings.ToLower(rule.KindB)
 
-		if potentialKindsCache[kindA] == nil {
-			potentialKindsCache[kindA] = []string{}
+		// resolve gvr for kindA and kindB
+		gvrA, err := tryResolveGVR(provider, kindA)
+		if err != nil {
+			continue
 		}
-		if potentialKindsCache[kindB] == nil {
-			potentialKindsCache[kindB] = []string{}
+		gvrB, err := tryResolveGVR(provider, kindB)
+		if err != nil {
+			continue
+		}
+
+		var kindAFull, kindBFull string
+		if gvrA.Group != "" {
+			kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
+		} else {
+			kindAFull = "core." + kindA
+		}
+		if gvrB.Group != "" {
+			kindBFull = fmt.Sprintf("%s.%s", gvrB.Resource, gvrB.Group)
+		} else {
+			kindBFull = "core." + kindB
+		}
+
+		if potentialKindsCache[kindAFull] == nil {
+			potentialKindsCache[kindAFull] = []string{}
+		}
+		if potentialKindsCache[kindBFull] == nil {
+			potentialKindsCache[kindBFull] = []string{}
 		}
 
 		// Add B to A's potential kinds if not already present
-		if !contains(potentialKindsCache[kindA], kindB) {
-			potentialKindsCache[kindA] = append(potentialKindsCache[kindA], kindB)
-			sort.Strings(potentialKindsCache[kindA])
+		if !contains(potentialKindsCache[kindAFull], kindBFull) {
+			potentialKindsCache[kindAFull] = append(potentialKindsCache[kindAFull], kindBFull)
+			sort.Strings(potentialKindsCache[kindAFull])
 		}
 
 		// Add A to B's potential kinds if not already present
-		if !contains(potentialKindsCache[kindB], kindA) {
-			potentialKindsCache[kindB] = append(potentialKindsCache[kindB], kindA)
-			sort.Strings(potentialKindsCache[kindB])
+		if !contains(potentialKindsCache[kindBFull], kindAFull) {
+			potentialKindsCache[kindBFull] = append(potentialKindsCache[kindBFull], kindAFull)
+			sort.Strings(potentialKindsCache[kindBFull])
 		}
 	}
 	potentialKindsMutex.Unlock()
@@ -383,24 +417,30 @@ func GetRelationships() map[string][]string {
 }
 
 // FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
-func FindPotentialKinds(sourceKind string, provider provider.Provider) []string {
+func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string, error) {
 	sourceKind = strings.ToLower(sourceKind)
 	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
 
 	// Get the plural form using FindGVR
-	gvr, err := provider.FindGVR(sourceKind)
+	gvr, err := tryResolveGVR(provider, sourceKind)
 	if err != nil {
-		debugLog("FindPotentialKinds: error getting GVR for %s: %v", sourceKind, err)
-		return []string{} // Return empty if we can't get proper plural form
+		return []string{}, fmt.Errorf("error getting GVR for %s: %v", sourceKind, err)
 	}
 	sourceKind = strings.ToLower(gvr.Resource)
 
+	var sourceKindFull string
+	if gvr.Group != "" {
+		sourceKindFull = fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group)
+	} else {
+		sourceKindFull = "core." + sourceKind
+	}
+
 	// Check cache with plural form
 	potentialKindsMutex.RLock()
-	if kinds, exists := potentialKindsCache[sourceKind]; exists {
+	if kinds, exists := potentialKindsCache[sourceKindFull]; exists {
 		potentialKindsMutex.RUnlock()
 		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
-		return kinds
+		return kinds, nil
 	}
 	potentialKindsMutex.RUnlock()
 
@@ -449,15 +489,15 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) []string 
 	potentialKindsMutex.Unlock()
 
 	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
-	return result
+	return result, nil
 }
 
 // FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
-func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) []string {
+func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) ([]string, error) {
 	logDebug("FindPotentialKindsIntersection: Starting with relationships:", relationships)
 	if len(relationships) == 0 {
 		debugLog("FindPotentialKindsIntersection: no relationships provided")
-		return []string{}
+		return []string{}, nil
 	}
 
 	// Check if there are any unknown kinds that need resolution
@@ -472,7 +512,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	// If all kinds are known, return empty slice
 	if !hasUnknownKind {
 		debugLog("FindPotentialKindsIntersection: all kinds are known")
-		return []string{}
+		return []string{}, nil
 	}
 
 	// Find all known kinds in the relationships
@@ -492,7 +532,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	// If no known kinds, return empty
 	if len(knownKinds) == 0 {
 		logDebug("FindPotentialKindsIntersection: no known kinds found")
-		return []string{}
+		return []string{}, nil
 	}
 
 	// Initialize result with potential kinds from first known kind
@@ -503,7 +543,10 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	}
 
 	result := make(map[string]bool)
-	initialPotentialKinds := FindPotentialKinds(firstKnownKind, provider)
+	initialPotentialKinds, err := FindPotentialKinds(firstKnownKind, provider)
+	if err != nil {
+		return nil, fmt.Errorf("%s", err)
+	}
 	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Initial potential kinds from %s: %v", firstKnownKind, initialPotentialKinds))
 	for _, kind := range initialPotentialKinds {
 		result[kind] = true
@@ -515,7 +558,10 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 			continue
 		}
 
-		potentialKinds := FindPotentialKinds(kind, provider)
+		potentialKinds, err := FindPotentialKinds(kind, provider)
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
+		}
 		logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Potential kinds for %s: %v", kind, potentialKinds))
 
 		newResult := make(map[string]bool)
@@ -536,7 +582,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 	}
 	sort.Strings(kinds) // Sort for consistent results
 	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Final result=%v", kinds))
-	return kinds
+	return kinds, nil
 }
 
 // Helper function to check if a string slice contains a string
