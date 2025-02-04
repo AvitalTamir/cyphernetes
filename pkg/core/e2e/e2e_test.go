@@ -2651,7 +2651,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		// Simpler query that will match both ReplicaSet and Service
 		ast, err := core.ParseQuery(`
 				MATCH (d:Deployment)->(x)
-				WHERE d.metadata.name = "test-delete-kindless"
+				WHERE d.metadata.name = "test-delete-kindless" AND d.metadata.namespace = "` + testNamespace + `"
 				DELETE x
 			`)
 		Expect(err).NotTo(HaveOccurred())
@@ -2659,7 +2659,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		// First, let's verify what we're about to delete
 		verifyAst, err := core.ParseQuery(`
 				MATCH (d:Deployment)->(x)
-				WHERE d.metadata.name = "test-delete-kindless"
+				WHERE d.metadata.name = "test-delete-kindless" AND d.metadata.namespace = "` + testNamespace + `"
 				RETURN x.kind as kind, x.metadata.name as name
 			`)
 		Expect(err).NotTo(HaveOccurred())
@@ -2810,7 +2810,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		// Query to patch both ReplicaSet and Service
 		ast, err := core.ParseQuery(`
 				MATCH (d:Deployment)->(x)
-				WHERE d.metadata.name = "test-patch-kindless"
+				WHERE d.metadata.name = "test-patch-kindless" AND d.metadata.namespace = "` + testNamespace + `"
 				SET x.metadata.labels.patched = "true"
 			`)
 		Expect(err).NotTo(HaveOccurred())
@@ -3092,12 +3092,12 @@ var _ = Describe("Input Validation", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
 
 			By("Testing with invalid field selector")
-			_, err = provider.GetK8sResources("pod", "invalid==field", "", testNamespace)
+			_, err = provider.GetK8sResources("pod", "invalid==field", "", "default")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("field label not supported"))
 
 			By("Testing with invalid label selector")
-			_, err = provider.GetK8sResources("pod", "", "invalid=label=value", testNamespace)
+			_, err = provider.GetK8sResources("pod", "", "invalid=label=value", "default")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("found '=', expected: ',' or 'end of string'"))
 
@@ -3112,7 +3112,7 @@ var _ = Describe("Input Validation", func() {
 	Context("PatchK8sResource", func() {
 		It("should handle invalid inputs correctly", func() {
 			By("Testing with empty kind")
-			err = provider.PatchK8sResource("", "name", testNamespace, []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("", "name", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
 
@@ -3120,7 +3120,7 @@ var _ = Describe("Input Validation", func() {
 			testPod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-patch-pod",
-					Namespace: testNamespace,
+					Namespace: "default",
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -3131,25 +3131,25 @@ var _ = Describe("Input Validation", func() {
 					},
 				},
 			}
-			err = provider.CreateK8sResource("pod", "test-patch-pod", testNamespace, testPod)
+			err = provider.CreateK8sResource("pod", "test-patch-pod", "default", testPod)
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				_ = provider.DeleteK8sResources("pod", "test-patch-pod", testNamespace)
+				_ = provider.DeleteK8sResources("pod", "test-patch-pod", "default")
 			})
 
 			By("Testing with invalid JSON patch")
-			err = provider.PatchK8sResource("pod", "test-patch-pod", testNamespace, []byte(`invalid json`))
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`invalid json`))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid"))
 
 			By("Testing with invalid patch operation")
-			err = provider.PatchK8sResource("pod", "test-patch-pod", testNamespace, []byte(`[{"op": "invalid", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`[{"op": "invalid", "path": "/metadata/labels/test", "value": "test"}]`))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("the server rejected our request"))
 
 			By("Testing with non-existent resource")
-			err = provider.PatchK8sResource("pod", "non-existent-pod", testNamespace, []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("pod", "non-existent-pod", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
@@ -3161,7 +3161,7 @@ var _ = Describe("Input Validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Testing empty query")
-			_, err = executor.Execute(nil, testNamespace)
+			_, err = executor.Execute(nil, "default")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("empty query"))
 
@@ -3178,7 +3178,7 @@ var _ = Describe("Input Validation", func() {
 			By("Testing invalid relationship")
 			ast, err := core.ParseQuery("MATCH (p:Pod)->(s:NonExistentKind) RETURN p")
 			Expect(err).NotTo(HaveOccurred())
-			_, err = executor.Execute(ast, testNamespace)
+			_, err = executor.Execute(ast, "default")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error finding API resource >> resource \"NonExistentKind\" not found"))
 		})
