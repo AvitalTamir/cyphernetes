@@ -843,12 +843,16 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 
 	// Find potential kinds for each kindless node
 	var potentialKinds []string
+	var err error
 	if mockFindPotentialKinds != nil {
 		// Use mock function in tests
 		potentialKinds = mockFindPotentialKinds(relationships)
 	} else {
 		// Use real function in production
-		potentialKinds = FindPotentialKindsIntersection(relationships, q.provider)
+		potentialKinds, err = FindPotentialKindsIntersection(relationships, q.provider)
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
+		}
 	}
 
 	if len(potentialKinds) == 0 {
@@ -1124,7 +1128,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 	query := strings.Join(queryParts, " ")
 
 	// Log the expanded query for debugging
-	debugLog("Expanded query: %s\n", query)
+	logDebug(fmt.Sprintf("Expanded query: %s\n", query))
 
 	// Parse the expanded query into a new AST
 	newAst, err := ParseQuery(query)
@@ -1153,7 +1157,10 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	// Resolve kinds if needed
 	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
 		// Try to resolve the kind using relationships
-		potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
+		potentialKinds, err := FindPotentialKindsIntersection(c.Relationships, q.provider)
+		if err != nil {
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
+		}
 		if len(potentialKinds) == 0 {
 			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
 		}
@@ -1341,7 +1348,10 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Kind == "" {
 			// Try to resolve the kind using relationships
-			potentialKinds := FindPotentialKindsIntersection(c.Relationships, q.provider)
+			potentialKinds, err := FindPotentialKindsIntersection(c.Relationships, q.provider)
+			if err != nil {
+				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
+			}
 			if len(potentialKinds) == 0 {
 				return fmt.Errorf("unable to determine kind for node '%s' - no relationships found", node.ResourceProperties.Name)
 			}
@@ -1873,110 +1883,6 @@ func sumMemoryBytes(memStrs []string) (int64, error) {
 
 	return memSum, nil
 }
-
-// Add new function to handle multi-context execution
-// func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
-// 	results := &QueryResult{
-// 		Data: make(map[string]interface{}),
-// 		Graph: Graph{
-// 			Nodes: []Node{},
-// 			Edges: []Edge{},
-// 		},
-// 	}
-
-// 	// Process each context
-// 	for _, context := range ast.Contexts {
-// 		contextExecutor, err := GetContextQueryExecutor(context)
-// 		if err != nil {
-// 			return QueryResult{}, fmt.Errorf("error getting context executor: %v", err)
-// 		}
-
-// 		// Create a modified AST with prefixed variables
-// 		modifiedAst := &Expression{
-// 			Clauses:  make([]Clause, len(ast.Clauses)),
-// 			Contexts: ast.Contexts,
-// 		}
-
-// 		// Deep copy and modify the AST to prefix all node names with context
-// 		for i, clause := range ast.Clauses {
-// 			switch c := clause.(type) {
-// 			case *MatchClause:
-// 				newClause := *c
-// 				for _, node := range newClause.Nodes {
-// 					node.ResourceProperties.Name = context + "_" + node.ResourceProperties.Name
-// 				}
-// 				for _, rel := range newClause.Relationships {
-// 					rel.LeftNode.ResourceProperties.Name = context + "_" + rel.LeftNode.ResourceProperties.Name
-// 					rel.RightNode.ResourceProperties.Name = context + "_" + rel.RightNode.ResourceProperties.Name
-// 				}
-// 				modifiedAst.Clauses[i] = &newClause
-// 			case *ReturnClause:
-// 				newClause := *c
-// 				newItems := make([]*ReturnItem, len(c.Items))
-// 				for j, item := range c.Items {
-// 					newItem := *item
-// 					parts := strings.Split(item.JsonPath, ".")
-// 					if len(parts) > 0 {
-// 						parts[0] = context + "_" + parts[0]
-// 						newItem.JsonPath = strings.Join(parts, ".")
-// 					}
-// 					newItems[j] = &newItem
-// 				}
-// 				newClause.Items = newItems
-// 				modifiedAst.Clauses[i] = &newClause
-// 			case *SetClause:
-// 				newClause := *c
-// 				newPairs := make([]*KeyValuePair, len(c.KeyValuePairs))
-// 				for j, kvp := range c.KeyValuePairs {
-// 					newKvp := *kvp
-// 					parts := strings.Split(kvp.Key, ".")
-// 					if len(parts) > 0 {
-// 						parts[0] = context + "_" + parts[0]
-// 						newKvp.Key = strings.Join(parts, ".")
-// 					}
-// 					newPairs[j] = &newKvp
-// 				}
-// 				newClause.KeyValuePairs = newPairs
-// 				modifiedAst.Clauses[i] = &newClause
-// 			case *DeleteClause:
-// 				newClause := *c
-// 				newNodeIds := make([]string, len(c.NodeIds))
-// 				for j, nodeId := range c.NodeIds {
-// 					newNodeIds[j] = context + "_" + nodeId
-// 				}
-// 				newClause.NodeIds = newNodeIds
-// 				modifiedAst.Clauses[i] = &newClause
-// 			case *CreateClause:
-// 				newClause := *c
-// 				for _, node := range newClause.Nodes {
-// 					node.ResourceProperties.Name = context + "_" + node.ResourceProperties.Name
-// 				}
-// 				for _, rel := range newClause.Relationships {
-// 					rel.LeftNode.ResourceProperties.Name = context + "_" + rel.LeftNode.ResourceProperties.Name
-// 					rel.RightNode.ResourceProperties.Name = context + "_" + rel.RightNode.ResourceProperties.Name
-// 				}
-// 				modifiedAst.Clauses[i] = &newClause
-// 			default:
-// 				modifiedAst.Clauses[i] = clause
-// 			}
-// 		}
-
-// 		contextResult, err := contextExecutor.ExecuteSingleQuery(modifiedAst, namespace)
-// 		if err != nil {
-// 			return QueryResult{}, fmt.Errorf("error executing query in context %s: %v", context, err)
-// 		}
-
-// 		// Merge results
-// 		for key, value := range contextResult.Data {
-// 			results.Data[context+"_"+key] = value
-// 		}
-
-// 		results.Graph.Nodes = append(results.Graph.Nodes, contextResult.Graph.Nodes...)
-// 		results.Graph.Edges = append(results.Graph.Edges, contextResult.Graph.Edges...)
-// 	}
-
-// 	return *results, nil
-// }
 
 func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
 	if len(ast.Contexts) == 0 {
