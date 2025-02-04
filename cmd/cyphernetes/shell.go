@@ -152,12 +152,12 @@ func getCurrentContextFromConfig() (string, string, error) {
 type syntaxHighlighter struct{}
 
 var (
-	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|contains|set|delete|create|sum|count|as|in|not|and)\b`)
-	bracketsRegex   = regexp.MustCompile(`[\(\)\[\]\{\}\<\>]`)
-	variableRegex   = regexp.MustCompile(`"(.*?)"`)
+	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|set|delete|create|sum|count|as|in|not|and|return)\b`)
 	identifierRegex = regexp.MustCompile(`\(([^:)]*?)(?::([^)]+))?\)`)
 	propertiesRegex = regexp.MustCompile(`{([^{}]+)}`)
-	returnRegex     = regexp.MustCompile(`(?i)(return)(\s+.*)`)
+	jsonPathRegex   = regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\b`)
+	stringRegex     = regexp.MustCompile(`"[^"]*"`)
+	operatorRegex   = regexp.MustCompile(`(?i)(?:\s+)(=~|!=|>=|<=|=|>|<|CONTAINS)(?:\s+)`)
 )
 
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
@@ -199,47 +199,35 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		return match
 	})
 
-	// Color RETURN keyword and its arguments with JSONPath
-	lineStr = regexp.MustCompile(`(?i)(RETURN)(\s+[^,]+(?:\s*,\s*[^,]+)*)`).ReplaceAllStringFunc(lineStr, func(match string) string {
-		// Color the RETURN keyword
-		result := wrapInColor("RETURN", 35)
-
-		// Split the rest by commas
-		rest := match[6:] // Skip "RETURN"
-		parts := strings.Split(rest, ",")
-
-		for i, part := range parts {
+	// Color JSONPaths
+	lineStr = jsonPathRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		parts := strings.Split(match, ".")
+		for i := range parts {
 			if i > 0 {
-				result += ","
-			}
-
-			// Handle "AS" keyword
-			if strings.Contains(strings.ToUpper(part), " AS ") {
-				asParts := strings.SplitN(part, " AS ", 2)
-				result += wrapInColor(" "+strings.TrimSpace(asParts[0]), 35)
-				result += " " + wrapInColor("AS", 35) + " " + strings.TrimSpace(asParts[1])
-				continue
-			}
-
-			// Handle JSONPath
-			part = strings.TrimSpace(part)
-			if strings.Contains(part, ".*") {
-				varName := strings.TrimSuffix(part, ".*")
-				result += wrapInColor(" "+varName, 35) + ".*"
-			} else if strings.Contains(part, ".") {
-				dotParts := strings.SplitN(part, ".", 2)
-				result += wrapInColor(" "+dotParts[0], 35) + "." + wrapInColor(dotParts[1], 35)
+				parts[i] = wrapInColor(".", 35) + parts[i] // Purple dots, default color for text
 			} else {
-				result += wrapInColor(" "+part, 35)
+				parts[i] = wrapInColor(parts[i], 33) // Yellow for first part
 			}
 		}
+		return strings.Join(parts, "")
+	})
 
-		return result
+	// Color operators
+	lineStr = operatorRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		// Preserve the spaces but color the operator
+		spaces := regexp.MustCompile(`^\s+`).FindString(match)
+		endSpaces := regexp.MustCompile(`\s+$`).FindString(match)
+		operator := strings.TrimSpace(match)
+		return spaces + wrapInColor(strings.ToUpper(operator), 90) + endSpaces // Dark grey for operators
+	})
+
+	// Color strings
+	lineStr = stringRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
+		return wrapInColor(match, 36) // Cyan for strings
 	})
 
 	// Coloring for properties
-	lineStr = regexp.MustCompile(`{([^{}]+)}`).ReplaceAllStringFunc(lineStr, func(match string) string {
-		// Extract just the inner content without braces
+	lineStr = propertiesRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		inner := match[1 : len(match)-1]
 		return wrapInColor("{", 37) + colorizePropertyContent(inner) + wrapInColor("}", 37)
 	})
