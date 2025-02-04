@@ -602,7 +602,7 @@ func buildDataAndGraph(resultMap map[string]interface{}, result *string, graph *
 				})
 			}
 		}
-		if edges, ok := graphInternal.(map[string]interface{})["Edges"]; ok {
+		if edges, ok := graphInternal.(map[string]interface{})["Edges"]; ok && edges != nil {
 			for _, edge := range edges.([]interface{}) {
 				// check LeftNode and RightNode are not nil
 				if edge.(map[string]interface{})["From"] != nil && edge.(map[string]interface{})["To"] != nil && edge.(map[string]interface{})["Type"] != nil {
