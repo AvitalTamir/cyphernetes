@@ -939,86 +939,43 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 						nodeName := parts[0]
 						propertyPath := strings.Join(parts[1:], ".")
 
-						// If the node is kindless, we need to create a where clause for each potential kind
-						if isKindless(nodeName, kindlessNodes) {
-							for j := 0; j < len(potentialKinds); j++ {
-								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-								var valueStr string
-								switch v := filter.Value.(type) {
-								case string:
-									valueStr = fmt.Sprintf("\"%s\"", v)
-								default:
-									valueStr = fmt.Sprintf("%v", v)
-								}
-								// Map operator names to symbols
-								operator := filter.Operator
-								switch operator {
-								case "EQUALS":
-									operator = "="
-								case "NOT_EQUALS":
-									operator = "!="
-								case "GREATER_THAN":
-									operator = ">"
-								case "LESS_THAN":
-									operator = "<"
-								case "GREATER_THAN_EQUALS":
-									operator = ">="
-								case "LESS_THAN_EQUALS":
-									operator = "<="
-								case "REGEX_COMPARE":
-									operator = "=~"
-								case "CONTAINS":
-									operator = "CONTAINS"
-								case "":
-									operator = "="
-								}
-
-								notPrefix := ""
-								if filter.IsNegated {
-									notPrefix = "NOT "
-								}
-								whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
+						for j := 0; j < len(potentialKinds); j++ {
+							varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
+							var valueStr string
+							switch v := filter.Value.(type) {
+							case string:
+								valueStr = fmt.Sprintf("\"%s\"", v)
+							default:
+								valueStr = fmt.Sprintf("%v", v)
 							}
-						} else {
-							// For non-kindless nodes, add the condition for each expanded pattern
-							for j := 0; j < len(potentialKinds); j++ {
-								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-								var valueStr string
-								switch v := filter.Value.(type) {
-								case string:
-									valueStr = fmt.Sprintf("\"%s\"", v)
-								default:
-									valueStr = fmt.Sprintf("%v", v)
-								}
-								// Map operator names to symbols
-								operator := filter.Operator
-								switch operator {
-								case "EQUALS":
-									operator = "="
-								case "NOT_EQUALS":
-									operator = "!="
-								case "GREATER_THAN":
-									operator = ">"
-								case "LESS_THAN":
-									operator = "<"
-								case "GREATER_THAN_EQUALS":
-									operator = ">="
-								case "LESS_THAN_EQUALS":
-									operator = "<="
-								case "REGEX_COMPARE":
-									operator = "=~"
-								case "CONTAINS":
-									operator = "CONTAINS"
-								case "":
-									operator = "="
-								}
-
-								notPrefix := ""
-								if filter.IsNegated {
-									notPrefix = "NOT "
-								}
-								whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
+							// Map operator names to symbols
+							operator := filter.Operator
+							switch operator {
+							case "EQUALS":
+								operator = "="
+							case "NOT_EQUALS":
+								operator = "!="
+							case "GREATER_THAN":
+								operator = ">"
+							case "LESS_THAN":
+								operator = "<"
+							case "GREATER_THAN_EQUALS":
+								operator = ">="
+							case "LESS_THAN_EQUALS":
+								operator = "<="
+							case "REGEX_COMPARE":
+								operator = "=~"
+							case "CONTAINS":
+								operator = "CONTAINS"
+							case "":
+								operator = "="
 							}
+
+							notPrefix := ""
+							if filter.IsNegated {
+								notPrefix = "NOT "
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
