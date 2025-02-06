@@ -1324,6 +1324,27 @@ func TestRecursiveParser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "match with escaped dots in json paths",
+			input: `MATCH (d:Deployment) WHERE d.metadata.annotations.meta\.helm\.sh/release-name = "my-app" RETURN d.metadata.annotations.meta\.helm\.sh/release-name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
+						},
+						ExtraFilters: []*KeyValuePair{
+							{Key: "d.metadata.annotations.meta\\.helm\\.sh/release-name", Value: "my-app", Operator: "EQUALS"},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d.metadata.annotations.meta\\.helm\\.sh/release-name"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

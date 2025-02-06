@@ -16,6 +16,8 @@ type Lexer struct {
 	inNodeLabel   bool
 	inPropertyKey bool
 	inJsonData    bool
+	isInJsonPath  bool
+	lastToken     Token
 }
 
 func NewLexer(input string) *Lexer {
@@ -35,12 +37,16 @@ func (l *Lexer) NextToken() Token {
 	}
 
 	// Skip whitespace
-	for {
-		ch := l.s.Peek()
-		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
-			break
-		}
-		l.s.Next()
+	l.skipWhitespace()
+
+	if l.s.Peek() == scanner.EOF {
+		return Token{Type: EOF, Literal: ""}
+	}
+
+	// Check if we're in a property access context (after a dot in a WHERE or RETURN clause)
+	// or if we're in a WHERE clause and the last token was a comma or AND
+	if (l.lastToken.Type == DOT || l.lastToken.Type == COMMA || l.lastToken.Type == AND || l.lastToken.Type == WHERE) && !l.inJsonData && !l.inPropertyKey {
+		l.isInJsonPath = true
 	}
 
 	tok := l.s.Scan()
@@ -86,14 +92,63 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: NOT, Literal: lit}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
-				return Token{Type: IDENT, Literal: lit}
+				if !l.isInJsonPath {
+					return Token{Type: IDENT, Literal: lit}
+				}
 			}
 		}
 		var fullLit strings.Builder
 		fullLit.WriteString(lit)
 
 		// Handle dots in identifiers
-		for l.s.Peek() == '.' || l.s.Peek() == '"' {
+		for l.s.Peek() == '.' || l.s.Peek() == '"' || (l.isInJsonPath && l.s.Peek() == '\\') || l.s.Peek() == '-' {
+			// First check for escaped dots in JSON paths
+			if l.isInJsonPath && l.s.Peek() == '\\' {
+				l.s.Next() // consume backslash
+				if l.s.Peek() == '.' {
+					l.s.Next()                 // consume dot
+					fullLit.WriteString("\\.") // Write the escaped dot
+
+					// Continue scanning the rest of the identifier
+					scanTok := l.s.Scan()
+					if scanTok != scanner.Ident {
+						return Token{Type: ILLEGAL, Literal: fullLit.String()}
+					}
+					fullLit.WriteString(l.s.TokenText())
+
+					// Continue scanning for more parts (like helm.sh/release-name)
+					for l.s.Peek() == '.' || l.s.Peek() == '/' || (l.isInJsonPath && l.s.Peek() == '\\') || l.s.Peek() == '-' {
+						if l.isInJsonPath && l.s.Peek() == '\\' {
+							l.s.Next() // consume backslash
+							if l.s.Peek() == '.' {
+								l.s.Next() // consume dot
+								fullLit.WriteString("\\.")
+								scanTok = l.s.Scan()
+								if scanTok != scanner.Ident {
+									return Token{Type: ILLEGAL, Literal: fullLit.String()}
+								}
+								fullLit.WriteString(l.s.TokenText())
+								continue
+							}
+							return Token{Type: ILLEGAL, Literal: "\\"}
+						}
+						ch := l.s.Next()
+						fullLit.WriteRune(ch)
+						scanTok = l.s.Scan()
+						if scanTok != scanner.Ident {
+							return Token{Type: ILLEGAL, Literal: fullLit.String()}
+						}
+						fullLit.WriteString(l.s.TokenText())
+					}
+					debugLog("Built escaped identifier: '%s'", fullLit.String())
+					resultTok := Token{Type: IDENT, Literal: fullLit.String()}
+					l.lastToken = resultTok
+					return resultTok
+				}
+				// Not a dot after backslash, treat as illegal
+				return Token{Type: ILLEGAL, Literal: "\\"}
+			}
+
 			next := l.s.Next()
 			debugLog("Lexer peeked: '%c'", next)
 			if next == '"' {
@@ -102,28 +157,61 @@ func (l *Lexer) NextToken() Token {
 				debugLog("Added quote to identifier: '%s'", fullLit.String())
 				continue
 			}
-			fullLit.WriteRune('.')
 
-			tok := l.s.Scan()
-			if tok != scanner.Ident {
-				return Token{Type: ILLEGAL, Literal: fullLit.String()}
+			if next == '-' {
+				fullLit.WriteRune('-')
+				scanTok := l.s.Scan()
+				if scanTok != scanner.Ident {
+					return Token{Type: ILLEGAL, Literal: fullLit.String()}
+				}
+				fullLit.WriteString(l.s.TokenText())
+				continue
 			}
-			fullLit.WriteString(l.s.TokenText())
-			debugLog("Built identifier: '%s'", fullLit.String())
+
+			// Handle dots differently for resource kinds vs JSON paths
+			if l.inNodeLabel {
+				// For resource kinds, combine with dots
+				fullLit.WriteRune('.')
+				scanTok := l.s.Scan()
+				if scanTok != scanner.Ident {
+					return Token{Type: ILLEGAL, Literal: fullLit.String()}
+				}
+				fullLit.WriteString(l.s.TokenText())
+				continue
+			}
+
+			// For JSON paths, return separate tokens
+			debugLog("Final identifier: '%s'", fullLit.String())
+			l.buf.hasNext = true
+			l.buf.tok = DOT
+			l.buf.lit = "."
+			tok := Token{Type: IDENT, Literal: fullLit.String()}
+			l.lastToken = tok
+			return tok
 		}
 		debugLog("Final identifier: '%s'", fullLit.String())
-		return Token{Type: IDENT, Literal: fullLit.String()}
+		tok := Token{Type: IDENT, Literal: fullLit.String()}
+		l.lastToken = tok
+		return tok
 
 	case scanner.Int:
-		return Token{Type: NUMBER, Literal: l.s.TokenText()}
+		debugLog("Got number: '%s'", l.s.TokenText())
+		tok := Token{Type: NUMBER, Literal: l.s.TokenText()}
+		l.lastToken = tok
+		return tok
 
 	case scanner.String:
+		debugLog("Got string: '%s'", l.s.TokenText())
 		lit := l.s.TokenText()
+		var tok Token
 		if l.inNodeLabel && l.inPropertyKey && !l.inJsonData {
 			l.inPropertyKey = false
-			return Token{Type: IDENT, Literal: strings.Trim(lit, "\"")}
+			tok = Token{Type: IDENT, Literal: strings.Trim(lit, "\"")}
+		} else {
+			tok = Token{Type: STRING, Literal: lit}
 		}
-		return Token{Type: STRING, Literal: lit}
+		l.lastToken = tok
+		return tok
 
 	case '*':
 		return Token{Type: ILLEGAL, Literal: "*"}
@@ -166,7 +254,9 @@ func (l *Lexer) NextToken() Token {
 		}
 		return Token{Type: COMMA, Literal: ","}
 	case '.':
-		return Token{Type: DOT, Literal: "."}
+		tok := Token{Type: DOT, Literal: "."}
+		l.lastToken = tok
+		return tok
 
 	case '=':
 		if l.s.Peek() == '~' {
@@ -243,4 +333,19 @@ func (l *Lexer) SetParsingContexts(parsing bool) {
 // Add method to set JSON data parsing state
 func (l *Lexer) SetParsingJsonData(parsing bool) {
 	l.inJsonData = true
+}
+
+// Add method to set JSON path parsing state
+func (l *Lexer) SetParsingJsonPath(parsing bool) {
+	l.isInJsonPath = parsing
+}
+
+func (l *Lexer) skipWhitespace() {
+	for {
+		ch := l.s.Peek()
+		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+			break
+		}
+		l.s.Next()
+	}
 }

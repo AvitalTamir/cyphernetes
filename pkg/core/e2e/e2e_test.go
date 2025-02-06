@@ -505,6 +505,68 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(k8sClient.Delete(ctx, testDeployment1)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, testDeployment2)).Should(Succeed())
 		})
+
+		It("Should handle escaped dots in JSON paths correctly", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-dots",
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						"meta.cyphernet.es/foo": "bar",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "test-dots",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "test-dots",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a MATCH query with escaped dots")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+                MATCH (d:Deployment)
+                WHERE d.metadata.annotations.meta\.cyphernet\.es/foo = "bar"
+                RETURN d.metadata.annotations.meta\.cyphernet\.es/foo
+            `)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Data).To(HaveKey("d.metadata.annotations.meta\\.cyphernet\\.es/foo"))
+			values, ok := result.Data["d.metadata.annotations.meta\\.cyphernet\\.es/foo"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result to be a slice")
+			Expect(values).To(HaveLen(1), "Expected exactly one result")
+			Expect(values[0]).To(Equal("bar"), "Expected annotation value to be 'bar'")
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
 	})
 
 	Context("Label Update Operations", func() {
@@ -2646,7 +2708,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Enable debug logging to see the expanded query
-		core.LogLevel = "debug"
+		// core.LogLevel = "debug"
 
 		// Simpler query that will match both ReplicaSet and Service
 		ast, err := core.ParseQuery(`
@@ -2673,7 +2735,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reset log level
-		core.LogLevel = ""
+		// core.LogLevel = ""
 
 		By("Verifying resources were deleted")
 		// Verify the specific ReplicaSet we saw deleted is gone or a different one exists with the same name
@@ -2805,7 +2867,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Enable debug logging to see the expanded query
-		core.LogLevel = "debug"
+		// core.LogLevel = "debug"
 
 		// Query to patch both ReplicaSet and Service
 		ast, err := core.ParseQuery(`
@@ -2819,7 +2881,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Reset log level
-		core.LogLevel = ""
+		// core.LogLevel = ""
 
 		By("Verifying resources were patched")
 		// Verify ReplicaSet was patched

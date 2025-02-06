@@ -280,6 +280,20 @@ func TestLexer(t *testing.T) {
 				{Type: EOF, Literal: ""},
 			},
 		},
+		{
+			name:  "escaped dots in json paths",
+			input: `d.metadata.annotations.meta\.helm\.sh/release-name`,
+			expected: []Token{
+				{Type: IDENT, Literal: "d"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "metadata"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "annotations"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "meta\\.helm\\.sh/release-name"},
+				{Type: EOF, Literal: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {
