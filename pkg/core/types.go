@@ -92,9 +92,10 @@ type Property struct {
 
 // KeyValuePair represents a key-value pair with an operator
 type KeyValuePair struct {
-	Key      string
-	Value    interface{}
-	Operator string
+	Key       string
+	Value     interface{}
+	Operator  string
+	IsNegated bool
 }
 
 // Relationship represents a relationship between nodes

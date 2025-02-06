@@ -939,44 +939,8 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 						nodeName := parts[0]
 						propertyPath := strings.Join(parts[1:], ".")
 
-						// If the node is kindless, we need to create a where clause for each potential kind
-						if isKindless(nodeName, kindlessNodes) {
-							for j := 0; j < len(potentialKinds); j++ {
-								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-								var valueStr string
-								switch v := filter.Value.(type) {
-								case string:
-									valueStr = fmt.Sprintf("\"%s\"", v)
-								default:
-									valueStr = fmt.Sprintf("%v", v)
-								}
-								// Map operator names to symbols
-								operator := filter.Operator
-								switch operator {
-								case "EQUALS":
-									operator = "="
-								case "NOT_EQUALS":
-									operator = "!="
-								case "GREATER_THAN":
-									operator = ">"
-								case "LESS_THAN":
-									operator = "<"
-								case "GREATER_THAN_EQUALS":
-									operator = ">="
-								case "LESS_THAN_EQUALS":
-									operator = "<="
-								case "REGEX_COMPARE":
-									operator = "=~"
-								case "CONTAINS":
-									operator = "CONTAINS"
-								case "":
-									operator = "="
-								}
-								whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
-							}
-						} else {
-							// If the node is not kindless, just use it as is
-							varName := fmt.Sprintf("%s__exp__0", nodeName)
+						for j := 0; j < len(potentialKinds); j++ {
+							varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
 							var valueStr string
 							switch v := filter.Value.(type) {
 							case string:
@@ -1006,7 +970,12 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 							case "":
 								operator = "="
 							}
-							whereParts = append(whereParts, fmt.Sprintf("%s.%s %s %s", varName, propertyPath, operator, valueStr))
+
+							notPrefix := ""
+							if filter.IsNegated {
+								notPrefix = "NOT "
+							}
+							whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
@@ -2078,6 +2047,9 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					// If path contains wildcards, we need special handling
 					if strings.Contains(path, "[*]") {
 						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+						if filter.IsNegated {
+							keep = !keep
+						}
 					} else {
 						// Regular path handling
 						value, err := jsonpath.JsonPathLookup(resource, path)
@@ -2093,6 +2065,9 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 						}
 
 						keep = compareValues(resourceValue, filterValue, filter.Operator)
+						if filter.IsNegated {
+							keep = !keep
+						}
 					}
 
 					if !keep {

@@ -76,10 +76,14 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: SUM, Literal: lit}
 			case "CONTAINS":
 				return Token{Type: CONTAINS, Literal: lit}
+			case "AND":
+				return Token{Type: AND, Literal: lit}
 			case "TRUE", "FALSE":
 				return Token{Type: BOOLEAN, Literal: lit}
 			case "NULL":
 				return Token{Type: NULL, Literal: lit}
+			case "NOT":
+				return Token{Type: NOT, Literal: lit}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
 				return Token{Type: IDENT, Literal: lit}
