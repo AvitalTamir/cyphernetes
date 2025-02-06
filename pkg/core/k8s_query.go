@@ -614,12 +614,21 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					return *results, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
-				pathParts := strings.Split(item.JsonPath, ".")[1:]
-				pathStr := "$." + strings.Join(pathParts, ".")
-
-				if pathStr == "$." {
-					pathStr = "$"
+				// Transform path to jsonpath format
+				path := strings.Replace(item.JsonPath, nodeId+".", "$.", 1)
+				if path == "$." {
+					path = "$"
 				}
+
+				// Compile and fix the path
+				if !strings.Contains(path, ".") {
+					path = "$"
+				}
+				compiledPath, err := jsonpath.Compile(path)
+				if err != nil {
+					return *results, fmt.Errorf("error compiling path %s: %v", path, err)
+				}
+				compiledPath = fixCompiledPath(compiledPath)
 
 				if results.Data[nodeId] == nil {
 					results.Data[nodeId] = []interface{}{}
@@ -635,7 +644,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 					currentMap := results.Data[nodeId].([]interface{})[idx].(map[string]interface{})
 
-					result, err := jsonpath.JsonPathLookup(resource, pathStr)
+					result, err := compiledPath.Lookup(resource)
 					if err != nil {
 						logDebug("Path not found:", item.JsonPath)
 						result = nil
@@ -662,75 +671,40 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									v2 = v2.Elem()
 								}
 
-								isCPUResource := strings.Contains(pathStr, "resources.limits.cpu") || strings.Contains(pathStr, "resources.requests.cpu")
-								isMemoryResource := strings.Contains(pathStr, "resources.limits.memory") || strings.Contains(pathStr, "resources.requests.memory")
+								isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
+								isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
 								switch v1.Kind() {
 								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 									aggregateResult = v1.Int() + v2.Int()
-								case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-									aggregateResult = v1.Uint() + v2.Uint()
 								case reflect.Float32, reflect.Float64:
 									aggregateResult = v1.Float() + v2.Float()
 								case reflect.String:
 									if isCPUResource {
-										v1Cpu, err := convertToMilliCPU(v1.String())
+										// Convert CPU strings to millicores
+										cpu1, err := convertToMilliCPU(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
+											return *results, err
 										}
-										v2Cpu, err := convertToMilliCPU(v2.String())
+										cpu2, err := convertToMilliCPU(v2.String())
 										if err != nil {
-											return *results, fmt.Errorf("error processing cpu resources value: %v", err)
+											return *results, err
 										}
-
-										aggregateResult = convertMilliCPUToStandard(v1Cpu + v2Cpu)
+										aggregateResult = convertMilliCPUToStandard(cpu1 + cpu2)
 									} else if isMemoryResource {
-										v1Mem, err := convertMemoryToBytes(v1.String())
+										// Convert memory strings to bytes
+										mem1, err := convertMemoryToBytes(v1.String())
 										if err != nil {
-											return *results, fmt.Errorf("error processing memory resources value: %v", err)
+											return *results, err
 										}
-										v2Mem, err := convertMemoryToBytes(v2.String())
+										mem2, err := convertMemoryToBytes(v2.String())
 										if err != nil {
-											return *results, fmt.Errorf("error processing memory resources value: %v", err)
+											return *results, err
 										}
-
-										aggregateResult = convertBytesToMemory(v1Mem + v2Mem)
-									}
-								case reflect.Slice:
-									v1Strs, err := convertToStringSlice(v1)
-									if err != nil {
-										return *results, fmt.Errorf("error converting v1 to string slice: %v", err)
-									}
-
-									v2Strs, err := convertToStringSlice(v2)
-									if err != nil {
-										return *results, fmt.Errorf("error converting v2 to string slice: %v", err)
-									}
-
-									if isCPUResource {
-										v1CpuSum, err := sumMilliCPU(v1Strs)
-										if err != nil {
-											return *results, fmt.Errorf("error processing v1 cpu value: %v", err)
-										}
-
-										v2CpuSum, err := sumMilliCPU(v2Strs)
-										if err != nil {
-											return *results, fmt.Errorf("error processing v2 cpu value: %v", err)
-										}
-
-										aggregateResult = []string{convertMilliCPUToStandard(v1CpuSum + v2CpuSum)}
-									} else if isMemoryResource {
-										v1MemSum, err := sumMemoryBytes(v1Strs)
-										if err != nil {
-											return *results, fmt.Errorf("error processing v1 memory value: %v", err)
-										}
-
-										v2MemSum, err := sumMemoryBytes(v2Strs)
-										if err != nil {
-											return *results, fmt.Errorf("error processing v2 memory value: %v", err)
-										}
-
-										aggregateResult = []string{convertBytesToMemory(v1MemSum + v2MemSum)}
+										aggregateResult = convertBytesToMemory(mem1 + mem2)
+									} else {
+										// Handle unsupported types or error out
+										return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
 									}
 								default:
 									// Handle unsupported types or error out
@@ -743,9 +717,51 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					if item.Aggregate == "" {
 						key := item.Alias
 						if key == "" {
+							// Split the path into parts, excluding the node identifier
+							path := strings.TrimPrefix(item.JsonPath, nodeId+".")
+
+							// Split on unescaped dots only
+							var pathParts []string
+							var currentPart strings.Builder
+							var escaped bool
+
+							for i := 0; i < len(path); i++ {
+								if escaped {
+									// For escaped dots, add the dot without the backslash
+									if path[i] == '.' {
+										currentPart.WriteByte(path[i])
+									} else {
+										// For any other escaped character, keep both the backslash and the character
+										currentPart.WriteByte('\\')
+										currentPart.WriteByte(path[i])
+									}
+									escaped = false
+									continue
+								}
+
+								if path[i] == '\\' {
+									escaped = true
+									continue
+								}
+
+								if path[i] == '.' && !escaped {
+									if currentPart.Len() > 0 {
+										pathParts = append(pathParts, currentPart.String())
+										currentPart.Reset()
+									}
+								} else {
+									currentPart.WriteByte(path[i])
+								}
+							}
+
+							if currentPart.Len() > 0 {
+								pathParts = append(pathParts, currentPart.String())
+							}
+
 							if len(pathParts) == 1 {
 								key = pathParts[0]
 							} else if len(pathParts) > 1 {
+								// Restore nested structure
 								nestedMap := currentMap
 								for i := 0; i < len(pathParts)-1; i++ {
 									if _, exists := nestedMap[pathParts[i]]; !exists {
@@ -755,7 +771,8 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 								}
 								nestedMap[pathParts[len(pathParts)-1]] = result
 								continue
-							} else {
+							}
+							if key == nodeId {
 								key = "$"
 							}
 						}
@@ -770,7 +787,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					key := item.Alias
 					if key == "" {
-						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.Replace(pathStr, "$.", "", 1)
+						key = strings.ToLower(item.Aggregate) + ":" + nodeId + "." + strings.TrimPrefix(path, "$.")
 					}
 
 					if slice, ok := aggregateResult.([]interface{}); ok && len(slice) == 0 {
@@ -1954,6 +1971,22 @@ func (q *QueryExecutor) Provider() provider.Provider {
 	return q.provider
 }
 
+func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
+	i := 0
+	for i < len(compiledPath.Steps) {
+		step := compiledPath.Steps[i]
+		if strings.HasSuffix(step.Key, "\\") && i+1 < len(compiledPath.Steps) {
+			nextStep := compiledPath.Steps[i+1]
+			step.Key = step.Key[:len(step.Key)-1] + "." + nextStep.Key
+			compiledPath.Steps[i] = step
+			compiledPath.Steps = append(compiledPath.Steps[:i+1], compiledPath.Steps[i+2:]...)
+		} else {
+			i++
+		}
+	}
+	return compiledPath
+}
+
 func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
 	namespace := Namespace
 
@@ -2044,6 +2077,16 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 					path := filter.Key
 					path = strings.Replace(path, resultMapKey+".", "$.", 1)
 
+					// Compile and fix the path
+					compiledPath, err := jsonpath.Compile(path)
+					if err != nil {
+						keep = false
+						break
+					}
+					compiledPath = fixCompiledPath(compiledPath)
+
+					logDebug("Looking up path: %s in resource: %+v", path, resource)
+
 					// If path contains wildcards, we need special handling
 					if strings.Contains(path, "[*]") {
 						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
@@ -2051,8 +2094,8 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 							keep = !keep
 						}
 					} else {
-						// Regular path handling
-						value, err := jsonpath.JsonPathLookup(resource, path)
+						// Regular path handling using the fixed compiled path
+						value, err := compiledPath.Lookup(resource)
 						if err != nil {
 							keep = false
 							break
