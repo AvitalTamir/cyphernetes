@@ -1,4 +1,4 @@
-<img width="1219" alt="Screenshot 2024-10-15 at 0 03 00" src="https://github.com/user-attachments/assets/e3a36dcf-2add-44fb-8c8a-71225e0e026b">
+<img width="1440" alt="Screenshot 2025-02-06 at 21 11 45" src="https://github.com/user-attachments/assets/d8eadc99-069e-4c95-aee6-b3530f890f03" />
 
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
 
