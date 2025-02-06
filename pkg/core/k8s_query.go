@@ -718,7 +718,46 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 						key := item.Alias
 						if key == "" {
 							// Split the path into parts, excluding the node identifier
-							pathParts := strings.Split(strings.TrimPrefix(item.JsonPath, nodeId+"."), ".")
+							path := strings.TrimPrefix(item.JsonPath, nodeId+".")
+
+							// Split on unescaped dots only
+							var pathParts []string
+							var currentPart strings.Builder
+							var escaped bool
+
+							for i := 0; i < len(path); i++ {
+								if escaped {
+									// For escaped dots, add the dot without the backslash
+									if path[i] == '.' {
+										currentPart.WriteByte(path[i])
+									} else {
+										// For any other escaped character, keep both the backslash and the character
+										currentPart.WriteByte('\\')
+										currentPart.WriteByte(path[i])
+									}
+									escaped = false
+									continue
+								}
+
+								if path[i] == '\\' {
+									escaped = true
+									continue
+								}
+
+								if path[i] == '.' && !escaped {
+									if currentPart.Len() > 0 {
+										pathParts = append(pathParts, currentPart.String())
+										currentPart.Reset()
+									}
+								} else {
+									currentPart.WriteByte(path[i])
+								}
+							}
+
+							if currentPart.Len() > 0 {
+								pathParts = append(pathParts, currentPart.String())
+							}
+
 							if len(pathParts) == 1 {
 								key = pathParts[0]
 							} else if len(pathParts) > 1 {

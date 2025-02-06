@@ -513,7 +513,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 					Name:      "test-deployment-dots",
 					Namespace: testNamespace,
 					Annotations: map[string]string{
-						"meta.cyphernet.es/foo": "bar",
+						"meta.cyphernet.es/foo-bar": "baz",
 					},
 				},
 				Spec: appsv1.DeploymentSpec{
@@ -550,19 +550,25 @@ var _ = Describe("Cyphernetes E2E", func() {
 
 			ast, err := core.ParseQuery(`
                 MATCH (d:Deployment)
-                WHERE d.metadata.annotations.meta\.cyphernet\.es/foo = "bar"
-                RETURN d.metadata.annotations.meta\.cyphernet\.es/foo
+                WHERE d.metadata.annotations.meta\.cyphernet\.es/foo-bar = "baz"
+                RETURN d.metadata.annotations.meta\.cyphernet\.es/foo-bar
             `)
 			Expect(err).NotTo(HaveOccurred())
 
 			result, err := executor.Execute(ast, testNamespace)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(result.Data).To(HaveKey("d.metadata.annotations.meta\\.cyphernet\\.es/foo"))
-			values, ok := result.Data["d.metadata.annotations.meta\\.cyphernet\\.es/foo"].([]interface{})
-			Expect(ok).To(BeTrue(), "Expected result to be a slice")
-			Expect(values).To(HaveLen(1), "Expected exactly one result")
-			Expect(values[0]).To(Equal("bar"), "Expected annotation value to be 'bar'")
+			// Check for the nested structure
+			Expect(result.Data).To(HaveKey("d"))
+			dSlice, ok := result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected d to be a slice")
+			Expect(dSlice).To(HaveLen(1), "Expected exactly one deployment")
+
+			d := dSlice[0].(map[string]interface{})
+			metadata := d["metadata"].(map[string]interface{})
+			annotations := metadata["annotations"].(map[string]interface{})
+			Expect(annotations).To(HaveKey("meta.cyphernet.es/foo-bar"))
+			Expect(annotations["meta.cyphernet.es/foo-bar"]).To(Equal("baz"))
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
