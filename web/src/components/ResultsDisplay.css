@@ -97,3 +97,34 @@
 .format-selector input[type="radio"] {
   cursor: pointer;
 }
+
+.search-container {
+  width: calc(100% - 7rem);
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 2;
+}
+
+.results-search-input {
+  font-family: monospace;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 1px solid #666;
+  background-color: rgba(40, 40, 40, 0.9);
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.results-search-input:focus {
+  border-color: #888;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.results-search-input::placeholder {
+  color: #888;
+}
