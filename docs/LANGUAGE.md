@@ -276,6 +276,7 @@ RETURN d.metadata.annotations.meta\.cyphernet\.es/foo-bar
 * `=` - equal to
 * `!=` - not equal to
 * `<` - less than
+* `>` - greater than
 * `<=` - less than or equal to
 * `>=` - greater than or equal to
 * `=~` - regex matching
