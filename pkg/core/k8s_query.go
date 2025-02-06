@@ -717,12 +717,24 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					if item.Aggregate == "" {
 						key := item.Alias
 						if key == "" {
-							// Use the last step from the compiled path as the key
-							if len(compiledPath.Steps) == 0 {
+							// Split the path into parts, excluding the node identifier
+							pathParts := strings.Split(strings.TrimPrefix(item.JsonPath, nodeId+"."), ".")
+							if len(pathParts) == 1 {
+								key = pathParts[0]
+							} else if len(pathParts) > 1 {
+								// Restore nested structure
+								nestedMap := currentMap
+								for i := 0; i < len(pathParts)-1; i++ {
+									if _, exists := nestedMap[pathParts[i]]; !exists {
+										nestedMap[pathParts[i]] = make(map[string]interface{})
+									}
+									nestedMap = nestedMap[pathParts[i]].(map[string]interface{})
+								}
+								nestedMap[pathParts[len(pathParts)-1]] = result
+								continue
+							}
+							if key == nodeId {
 								key = "$"
-							} else {
-								lastStep := compiledPath.Steps[len(compiledPath.Steps)-1]
-								key = lastStep.Key
 							}
 						}
 						currentMap[key] = result
