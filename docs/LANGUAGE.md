@@ -245,11 +245,37 @@ RETURN d.spec.replicas
 }
 ```
 
+### Escaping Dots in JSONPaths
+
+Cyphernetes supports escaping dots in JSONPaths using a backslash. This is useful when querying resources that have dots in their field names.
+
+```graphql
+MATCH (d:Deployment {name: "nginx-internal"})
+WHERE d.metadata.annotations.meta\.cyphernet\.es/foo-bar = "baz"
+RETURN d.metadata.annotations.meta\.cyphernet\.es/foo-bar
+```
+
+(output)
+
+```json
+{
+  "d": [
+    {
+      "name": "nginx-internal",
+      "metadata": {
+        "annotations": {
+          "meta.cyphernet.es/foo-bar": "baz"
+        }
+      }
+    }
+  ]
+}
+```
+
 `WHERE` clauses support the following operators:
 * `=` - equal to
 * `!=` - not equal to
 * `<` - less than
-* `>` - greater than
 * `<=` - less than or equal to
 * `>=` - greater than or equal to
 * `=~` - regex matching
