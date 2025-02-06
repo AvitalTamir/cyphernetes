@@ -152,12 +152,12 @@ func getCurrentContextFromConfig() (string, string, error) {
 type syntaxHighlighter struct{}
 
 var (
-	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|set|delete|create|sum|count|as|in|not|and|return)\b`)
+	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|set|delete|create|sum|count|contains|as|in|not|and|return)\b`)
 	identifierRegex = regexp.MustCompile(`\(([^:)]*?)(?::([^)]+))?\)`)
 	propertiesRegex = regexp.MustCompile(`{([^{}]+)}`)
 	jsonPathRegex   = regexp.MustCompile(`\b([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+)\b`)
 	stringRegex     = regexp.MustCompile(`"[^"]*"`)
-	operatorRegex   = regexp.MustCompile(`(?i)(?:\s+)(=~|!=|>=|<=|=|>|<|CONTAINS)(?:\s+)`)
+	operatorRegex   = regexp.MustCompile(`(?i)(?:\s+)(=~|!=|>=|<=|=|>|<)(?:\s+)`)
 )
 
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
