@@ -110,8 +110,9 @@ const config: Config = {
       copyright: `Copyright © ${new Date().getFullYear()} Cyphernetes. Built with Docusaurus.`,
     },
     prism: {
-      theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      theme: prismThemes.vsDark,
+      darkTheme: prismThemes.vsDark,
+      defaultLanguage: "bash",
     },
   } satisfies Preset.ThemeConfig,
 };
