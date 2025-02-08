@@ -73,7 +73,6 @@ Cyphernetes also supports modifying resources:
 Create new resources:
 
 ```graphql
-// Create a new namespace
 CREATE (n:Namespace {
   metadata: {
     name: "my-namespace"
@@ -86,7 +85,6 @@ CREATE (n:Namespace {
 Delete resources:
 
 ```graphql
-// Delete all failed pods
 MATCH (p:Pod)
 WHERE p.status.phase = "Failed"
 DELETE p;
@@ -97,7 +95,6 @@ DELETE p;
 Modify resource properties:
 
 ```graphql
-// Scale a deployment
 MATCH (d:Deployment {metadata: {name: "my-app"}})
 SET d.spec.replicas = 3;
 ```
@@ -109,7 +106,6 @@ Here are some common query patterns:
 ### Finding Resources by Label
 
 ```graphql
-// Find pods with specific labels
 MATCH (p:Pod)
 WHERE p.metadata.labels.app = "my-app"
 RETURN p;
