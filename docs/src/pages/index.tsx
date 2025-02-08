@@ -17,7 +17,7 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className={clsx(styles.button, styles.buttonPrimary)}
-            to="/docs/intro"
+            to="/docs/installation"
           >
             Get Started
           </Link>
