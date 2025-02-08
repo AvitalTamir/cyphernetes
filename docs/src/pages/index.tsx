@@ -107,6 +107,7 @@ function HomepageFeatures() {
   return (
     <section className={styles.features}>
       <div className="container">
+        <h2 className={styles.sectionTitle}>Why Cyphernetes?</h2>
         <div className={styles.grid}>
           <Feature
             emoji="🎯"
@@ -129,6 +130,48 @@ function HomepageFeatures() {
   );
 }
 
+function GrowingEcosystem() {
+  return (
+    <section className={clsx(styles.section, styles.sectionAlt)}>
+      <div className="container">
+        <h2 className={styles.sectionTitle}>A Growing Ecosystem</h2>
+        <div className={styles.ecosystemGrid}>
+          <div className={styles.ecosystemCard}>
+            <img
+              src="https://cyphernet.es/media/72f1a5fe67e738dd69972bc0ec7d4acf.png"
+              alt="Interactive Shell"
+              className={styles.ecosystemImage}
+            />
+            <h3>Fully-Featured Interactive Shell</h3>
+            <p>
+              Powerful interactive shell with auto-completion and syntax
+              highlighting.
+            </p>
+          </div>
+          <div className={styles.ecosystemCard}>
+            <img
+              src="https://cyphernet.es/media/44867f192636ac9cde31e5f91f64d620.png"
+              alt="Web Client"
+              className={styles.ecosystemImage}
+            />
+            <h3>Beautiful Web Client</h3>
+            <p>Experience Kubernetes in a whole new way with the Web UI.</p>
+          </div>
+          <div className={styles.ecosystemCard}>
+            <img
+              src="https://cyphernet.es/media/d4edb7f7277955da813f0565055c7989.png"
+              alt="K8s Operators"
+              className={styles.ecosystemImage}
+            />
+            <h3>Instant K8s Operators</h3>
+            <p>Plug it into CI/CD. Spin up Operators in minutes.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
@@ -140,6 +183,7 @@ export default function Home(): ReactNode {
       <main>
         <CodeComparison />
         <HomepageFeatures />
+        <GrowingEcosystem />
       </main>
     </Layout>
   );
