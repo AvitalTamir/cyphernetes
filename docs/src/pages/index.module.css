@@ -5,6 +5,17 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;500;600;700&display=swap');
 
+.particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
 .heroBanner {
   padding: 8rem 0 6rem;
   text-align: center;
@@ -12,6 +23,11 @@
   overflow: hidden;
   background: linear-gradient(135deg, var(--ifm-color-primary-darkest) 0%, var(--ifm-color-primary-darker) 100%);
   color: white;
+}
+
+.heroBanner .container {
+  position: relative;
+  z-index: 2;
 }
 
 .heroTitle {
@@ -199,12 +215,16 @@
   align-items: center;
   margin: 0 auto;
   padding: 1rem;
+  position: relative;
+  z-index: 2;
 }
 
 .heroImage img {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
+  position: relative;
+  z-index: 2;
 }
 
 .heroImage img:hover {
