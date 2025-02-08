@@ -25,6 +25,10 @@ WHERE p.status.phase != "Running"
 DELETE p;
 ```
 
+📚 **Documentation**
+
+For comprehensive documentation, visit our official documentation site at [https://cyphernet.es/docs](https://cyphernet.es/docs).
+
 ## How?
 
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
