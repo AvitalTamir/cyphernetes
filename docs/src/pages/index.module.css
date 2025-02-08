@@ -3,10 +3,10 @@
  * and scoped locally.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Russo+One&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;500;600;700&display=swap');
 
 .heroBanner {
-  padding: 6rem 0;
+  padding: 8rem 0 6rem;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -15,47 +15,41 @@
 }
 
 .heroTitle {
-  font-size: 3.5rem;
+  font-size: 4rem;
   font-weight: 800;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   background: linear-gradient(to right, #ffffff, #e2e8f0);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .heroSubtitle {
   font-size: 1.5rem;
   opacity: 0.9;
   max-width: 600px;
-  margin: 0 auto 2rem;
+  margin: 0 auto 3rem;
   line-height: 1.6;
-}
-
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 4rem 2rem;
-  }
-  .heroTitle {
-    font-size: 2.5rem;
-  }
-  .heroSubtitle {
-    font-size: 1.25rem;
-  }
+  font-family: 'Inter', sans-serif;
 }
 
 .buttons {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 1.5rem;
+  margin-bottom: 4rem;
 }
 
 .button {
-  padding: 0.8rem 2rem;
+  padding: 1rem 2.5rem;
   font-size: 1.1rem;
   font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: 'Inter', sans-serif;
+  border: 2px solid transparent;
 }
 
 .buttonPrimary {
@@ -65,7 +59,9 @@
 
 .buttonPrimary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
+  color: var(--ifm-color-primary-darkest);
 }
 
 .buttonSecondary {
@@ -77,29 +73,37 @@
 .buttonSecondary:hover {
   background: rgba(255, 255, 255, 0.1);
   transform: translateY(-2px);
+  text-decoration: none;
+  color: white;
 }
 
 .emoji {
-  font-size: 1.8rem;
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .features {
-  padding: 6rem 0;
-  background: var(--ifm-color-emphasis-100);
+  padding: 8rem 0;
+  background: linear-gradient(180deg, var(--ifm-color-emphasis-100) 0%, var(--ifm-background-color) 100%);
+  position: relative;
 }
 
 .featureCard {
   background: var(--ifm-background-color);
-  border-radius: 12px;
-  padding: 2rem;
+  border-radius: 16px;
+  padding: 2.5rem;
   height: 100%;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--ifm-color-emphasis-200);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .featureCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-color: var(--ifm-color-primary);
 }
 
 .featureTitle {
@@ -107,21 +111,23 @@
   font-weight: 700;
   margin-bottom: 1rem;
   color: var(--ifm-color-primary);
+  font-family: 'Inter', sans-serif;
 }
 
 .featureDescription {
   font-size: 1.1rem;
   line-height: 1.6;
   color: var(--ifm-color-emphasis-700);
+  margin: 0;
 }
 
 .section {
-  padding: 4rem 0;
-  width: 100%;
+  padding: 8rem 0;
+  position: relative;
 }
 
 .sectionAlt {
-  background: var(--ifm-color-emphasis-100);
+  background: linear-gradient(180deg, var(--ifm-background-color) 0%, var(--ifm-color-emphasis-100) 100%);
 }
 
 .sectionInner {
@@ -132,8 +138,13 @@
 }
 
 .sectionTitle {
+  font-size: 3rem;
+  font-weight: 800;
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 4rem;
+  color: var(--ifm-color-primary);
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .grid {
@@ -146,8 +157,11 @@
 }
 
 .codeComparison {
-  padding: 6rem 0;
+  padding: 8rem 0;
   background: var(--ifm-background-color);
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .codeComparison .row {
@@ -158,20 +172,25 @@
   padding: 0 1rem;
 }
 
-@media screen and (max-width: 996px) {
-  .codeComparison .row {
-    flex-direction: column;
-    margin: 0;
-  }
-  
-  .codeComparison .col {
-    margin-bottom: 2rem;
-    padding: 0;
-  }
-  
-  .codeComparison .col:last-child {
-    margin-bottom: 0;
-  }
+.codeBlockTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+.codeBlock {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.codeBlock:hover {
+  transform: translateY(-4px);
 }
 
 .heroImage {
@@ -194,8 +213,8 @@
 
 .ecosystemGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 3rem;
   margin: 0 auto;
   max-width: var(--ifm-container-width);
   padding: 0 var(--ifm-spacing-horizontal);
@@ -203,57 +222,86 @@
 
 .ecosystemCard {
   background: var(--ifm-background-color);
-  border-radius: 12px;
-  padding: 2rem;
+  border-radius: 16px;
+  padding: 3rem 2rem;
   text-align: center;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid var(--ifm-color-emphasis-200);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .ecosystemCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-color: var(--ifm-color-primary);
 }
 
 .ecosystemImage {
-  width: 120px;
-  height: 120px;
-  margin-bottom: 1.5rem;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 2rem;
   transition: transform 0.3s ease;
 }
 
 .ecosystemCard:hover .ecosystemImage {
-  transform: scale(1.05);
+  transform: scale(1.1);
 }
 
 .ecosystemCard h3 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   margin-bottom: 1rem;
   color: var(--ifm-color-primary);
+  font-family: 'Inter', sans-serif;
 }
 
 .ecosystemCard p {
   font-size: 1.1rem;
   line-height: 1.6;
   color: var(--ifm-color-emphasis-700);
-  margin-bottom: 0;
+  margin: 0;
 }
 
-.sectionTitle {
-  font-size: 2.5rem;
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: 3rem;
-  color: var(--ifm-color-primary);
-}
-
-@media screen and (max-width: 768px) {
-  .ecosystemGrid {
-    grid-template-columns: 1fr;
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 6rem 2rem 4rem;
+  }
+  
+  .heroTitle {
+    font-size: 3rem;
+  }
+  
+  .heroSubtitle {
+    font-size: 1.25rem;
   }
   
   .sectionTitle {
-    font-size: 2rem;
+    font-size: 2.5rem;
+  }
+  
+  .codeComparison .row {
+    flex-direction: column;
+    margin: 0;
+  }
+  
+  .codeComparison .col {
+    margin-bottom: 2rem;
+    padding: 0;
+  }
+  
+  .codeComparison .col:last-child {
+    margin-bottom: 0;
+  }
+  
+  .buttons {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .button {
+    width: 100%;
+    max-width: 300px;
   }
 }
