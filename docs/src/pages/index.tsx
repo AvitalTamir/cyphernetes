@@ -28,6 +28,14 @@ function HomepageHeader() {
             View on GitHub
           </Link>
         </div>
+        <div className={styles.heroImage}>
+          <img
+            src="https://cyphernet.es/media/dfc9cea8094d9c8e54bad630359ab252.png"
+            alt="Cyphernetes Visualization"
+            width="100%"
+            style={{ maxWidth: "800px", marginTop: "2rem" }}
+          />
+        </div>
       </div>
     </header>
   );

@@ -173,3 +173,21 @@
     margin-bottom: 0;
   }
 }
+
+.heroImage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.heroImage img {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.heroImage img:hover {
+  transform: scale(1.02);
+}
