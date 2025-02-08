@@ -134,7 +134,7 @@ function HomepageHeader() {
         </div>
         <div className={styles.heroImage}>
           <img
-            src="https://cyphernet.es/media/dfc9cea8094d9c8e54bad630359ab252.png"
+            src="/img/visualization.png"
             alt="Cyphernetes Visualization"
             width="100%"
             style={{ maxWidth: "800px", marginTop: "2rem" }}
@@ -242,7 +242,7 @@ function GrowingEcosystem() {
         <div className={styles.ecosystemGrid}>
           <div className={styles.ecosystemCard}>
             <img
-              src="https://cyphernet.es/media/72f1a5fe67e738dd69972bc0ec7d4acf.png"
+              src="/img/cli.png"
               alt="Interactive Shell"
               className={styles.ecosystemImage}
             />
@@ -254,7 +254,7 @@ function GrowingEcosystem() {
           </div>
           <div className={styles.ecosystemCard}>
             <img
-              src="https://cyphernet.es/media/44867f192636ac9cde31e5f91f64d620.png"
+              src="/img/web.png"
               alt="Web Client"
               className={styles.ecosystemImage}
             />
@@ -263,7 +263,7 @@ function GrowingEcosystem() {
           </div>
           <div className={styles.ecosystemCard}>
             <img
-              src="https://cyphernet.es/media/d4edb7f7277955da813f0565055c7989.png"
+              src="/img/operators.png"
               alt="K8s Operators"
               className={styles.ecosystemImage}
             />
