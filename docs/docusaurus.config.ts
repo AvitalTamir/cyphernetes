@@ -104,6 +104,15 @@ const config: Config = {
             },
           ],
         },
+        {
+          title: "Contact",
+          items: [
+            {
+              label: "Email",
+              href: "mailto:team@cyphernet.es",
+            },
+          ],
+        },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} Cyphernetes. Built with Docusaurus.`,
     },
