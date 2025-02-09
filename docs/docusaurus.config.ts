@@ -6,7 +6,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 
 const config: Config = {
   title: "Cyphernetes",
-  tagline: "A Cypher-inspired query language for Kubernetes",
+  tagline: "A Kubernetes Query Language",
   favicon: "img/favicon.ico",
 
   // Set the production url of your site here
@@ -49,8 +49,6 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: "img/cyphernetes-social-card.jpg",
     docs: {
       sidebar: {
         hideable: true,

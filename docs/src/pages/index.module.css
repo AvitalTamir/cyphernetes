@@ -21,8 +21,7 @@
   text-align: center;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--ifm-color-primary-darkest) 0%, var(--ifm-color-primary-darker) 100%);
-  color: white;
+  background: linear-gradient(135deg,#ff5757,#8c52ff);
 }
 
 .heroBanner .container {
@@ -34,11 +33,9 @@
   font-size: 4rem;
   font-weight: 800;
   margin-bottom: 1.5rem;
-  background: linear-gradient(to right, #ffffff, #e2e8f0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   font-family: 'Inter', sans-serif;
   letter-spacing: -0.02em;
+  color: #ffffff;
 }
 
 .heroSubtitle {
@@ -48,6 +45,7 @@
   margin: 0 auto 3rem;
   line-height: 1.6;
   font-family: 'Inter', sans-serif;
+  color: #ffffff;
 }
 
 .buttons {
@@ -195,6 +193,7 @@
   font-size: 1.25rem;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
+  color: var(--ifm-color-primary);
 }
 
 .codeBlock {
