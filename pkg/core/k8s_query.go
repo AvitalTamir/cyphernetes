@@ -2037,7 +2037,13 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	if err != nil {
 		return fmt.Errorf("error getting resource property name: %v", err)
 	}
-	if resultCache[cacheKey] == nil {
+
+	// Lock for reading from cache
+	resultMapMutex.RLock()
+	cachedResult := resultCache[cacheKey]
+	resultMapMutex.RUnlock()
+
+	if cachedResult == nil {
 		// Get resources using the provider
 		resources, err := q.provider.GetK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector, namespace)
 		if err != nil {
@@ -2124,12 +2130,23 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			}
 		}
 
-		// Cache the filtered results
+		// Lock for writing to both maps
+		resultMapMutex.Lock()
 		resultCache[cacheKey] = filtered
 		resultMap[n.ResourceProperties.Name] = filtered
+		resultMapMutex.Unlock()
+
 	} else {
+		resultMapMutex.Lock()
 		resultMap[n.ResourceProperties.Name] = resultCache[cacheKey]
+		resultMapMutex.Unlock()
+
 	}
+
+	// Lock for writing to resultMap
+	resultMapMutex.Lock()
+	resultMap[n.ResourceProperties.Name] = cachedResult
+	resultMapMutex.Unlock()
 
 	return nil
 }
