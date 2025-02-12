@@ -2135,18 +2135,12 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		resultCache[cacheKey] = filtered
 		resultMap[n.ResourceProperties.Name] = filtered
 		resultMapMutex.Unlock()
-
 	} else {
+		// If we found it in cache, just copy to resultMap
 		resultMapMutex.Lock()
-		resultMap[n.ResourceProperties.Name] = resultCache[cacheKey]
+		resultMap[n.ResourceProperties.Name] = cachedResult
 		resultMapMutex.Unlock()
-
 	}
-
-	// Lock for writing to resultMap
-	resultMapMutex.Lock()
-	resultMap[n.ResourceProperties.Name] = cachedResult
-	resultMapMutex.Unlock()
 
 	return nil
 }
