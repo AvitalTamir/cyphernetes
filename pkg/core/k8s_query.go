@@ -950,49 +950,52 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 				}
 
 				// Handle WHERE conditions from ExtraFilters
-				for _, filter := range c.ExtraFilters {
-					parts := strings.Split(filter.Key, ".")
-					if len(parts) > 0 {
-						nodeName := parts[0]
-						propertyPath := strings.Join(parts[1:], ".")
+				for _, extraFilter := range c.ExtraFilters {
+					if extraFilter.Type == "KeyValuePair" {
+						filter := extraFilter.KeyValuePair
+						parts := strings.Split(filter.Key, ".")
+						if len(parts) > 0 {
+							nodeName := parts[0]
+							propertyPath := strings.Join(parts[1:], ".")
 
-						for j := 0; j < len(potentialKinds); j++ {
-							varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-							var valueStr string
-							switch v := filter.Value.(type) {
-							case string:
-								valueStr = fmt.Sprintf("\"%s\"", v)
-							default:
-								valueStr = fmt.Sprintf("%v", v)
-							}
-							// Map operator names to symbols
-							operator := filter.Operator
-							switch operator {
-							case "EQUALS":
-								operator = "="
-							case "NOT_EQUALS":
-								operator = "!="
-							case "GREATER_THAN":
-								operator = ">"
-							case "LESS_THAN":
-								operator = "<"
-							case "GREATER_THAN_EQUALS":
-								operator = ">="
-							case "LESS_THAN_EQUALS":
-								operator = "<="
-							case "REGEX_COMPARE":
-								operator = "=~"
-							case "CONTAINS":
-								operator = "CONTAINS"
-							case "":
-								operator = "="
-							}
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
+								var valueStr string
+								switch v := filter.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								// Map operator names to symbols
+								operator := filter.Operator
+								switch operator {
+								case "EQUALS":
+									operator = "="
+								case "NOT_EQUALS":
+									operator = "!="
+								case "GREATER_THAN":
+									operator = ">"
+								case "LESS_THAN":
+									operator = "<"
+								case "GREATER_THAN_EQUALS":
+									operator = ">="
+								case "LESS_THAN_EQUALS":
+									operator = "<="
+								case "REGEX_COMPARE":
+									operator = "=~"
+								case "CONTAINS":
+									operator = "CONTAINS"
+								case "":
+									operator = "="
+								}
 
-							notPrefix := ""
-							if filter.IsNegated {
-								notPrefix = "NOT "
+								notPrefix := ""
+								if filter.IsNegated {
+									notPrefix = "NOT "
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 							}
-							whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
@@ -1987,7 +1990,7 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	return compiledPath
 }
 
-func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
+func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) (err error) {
 	namespace := Namespace
 
 	// Create a copy of ResourceProperties
@@ -2058,69 +2061,72 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		for _, resource := range resourceList {
 			keep := true
 			// Apply extra filters
-			for _, filter := range extraFilters {
-				// Extract node name from filter key
-				var resultMapKey string
-				dotIndex := strings.Index(filter.Key, ".")
-				if dotIndex != -1 {
-					resultMapKey = filter.Key[:dotIndex]
-				} else {
-					resultMapKey = filter.Key
-				}
-
-				// Handle escaped dots
-				for strings.HasSuffix(resultMapKey, "\\") {
-					nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
-					if nextDotIndex == -1 {
-						resultMapKey = filter.Key
-						break
-					}
-					resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
-				}
-
-				if resultMapKey == n.ResourceProperties.Name {
-					// Transform path
-					path := filter.Key
-					path = strings.Replace(path, resultMapKey+".", "$.", 1)
-
-					// Compile and fix the path
-					compiledPath, err := jsonpath.Compile(path)
-					if err != nil {
-						keep = false
-						break
-					}
-					compiledPath = fixCompiledPath(compiledPath)
-
-					logDebug("Looking up path: %s in resource: %+v", path, resource)
-
-					// If path contains wildcards, we need special handling
-					if strings.Contains(path, "[*]") {
-						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
-						if filter.IsNegated {
-							keep = !keep
-						}
+			for _, extraFilter := range extraFilters {
+				if extraFilter.Type == "KeyValuePair" {
+					filter := extraFilter.KeyValuePair
+					// Extract node name from filter key
+					var resultMapKey string
+					dotIndex := strings.Index(filter.Key, ".")
+					if dotIndex != -1 {
+						resultMapKey = filter.Key[:dotIndex]
 					} else {
-						// Regular path handling using the fixed compiled path
-						value, err := compiledPath.Lookup(resource)
-						if err != nil {
-							keep = false
-							break
-						}
-
-						resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-						if err != nil {
-							keep = false
-							break
-						}
-
-						keep = compareValues(resourceValue, filterValue, filter.Operator)
-						if filter.IsNegated {
-							keep = !keep
-						}
+						resultMapKey = filter.Key
 					}
 
-					if !keep {
-						break
+					// Handle escaped dots
+					for strings.HasSuffix(resultMapKey, "\\") {
+						nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
+						if nextDotIndex == -1 {
+							resultMapKey = filter.Key
+							break
+						}
+						resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
+					}
+
+					if resultMapKey == n.ResourceProperties.Name {
+						// Transform path
+						path := filter.Key
+						path = strings.Replace(path, resultMapKey+".", "$.", 1)
+
+						// Compile and fix the path
+						compiledPath, err := jsonpath.Compile(path)
+						if err != nil {
+							keep = false
+							break
+						}
+						compiledPath = fixCompiledPath(compiledPath)
+
+						logDebug("Looking up path: %s in resource: %+v", path, resource)
+
+						// If path contains wildcards, we need special handling
+						if strings.Contains(path, "[*]") {
+							keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+							if filter.IsNegated {
+								keep = !keep
+							}
+						} else {
+							// Regular path handling using the fixed compiled path
+							value, err := compiledPath.Lookup(resource)
+							if err != nil {
+								keep = false
+								break
+							}
+
+							resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+							if err != nil {
+								keep = false
+								break
+							}
+
+							keep = compareValues(resourceValue, filterValue, filter.Operator)
+							if filter.IsNegated {
+								keep = !keep
+							}
+						}
+
+						if !keep {
+							break
+						}
 					}
 				}
 			}
@@ -2303,7 +2309,7 @@ func prefixMatchClause(c *MatchClause, context string) *MatchClause {
 	modified := &MatchClause{
 		Nodes:         make([]*NodePattern, len(c.Nodes)),
 		Relationships: make([]*Relationship, len(c.Relationships)),
-		ExtraFilters:  make([]*KeyValuePair, len(c.ExtraFilters)),
+		ExtraFilters:  make([]*Filter, len(c.ExtraFilters)),
 	}
 
 	// Prefix node names
@@ -2343,15 +2349,21 @@ func prefixMatchClause(c *MatchClause, context string) *MatchClause {
 	}
 
 	// Prefix filter variables
-	for i, filter := range c.ExtraFilters {
-		parts := strings.Split(filter.Key, ".")
-		if len(parts) > 0 {
-			parts[0] = context + "_" + parts[0]
-		}
-		modified.ExtraFilters[i] = &KeyValuePair{
-			Key:      strings.Join(parts, "."),
-			Value:    filter.Value,
-			Operator: filter.Operator,
+	for i, extraFilter := range c.ExtraFilters {
+		if extraFilter.Type == "KeyValuePair" {
+			filter := extraFilter.KeyValuePair
+			parts := strings.Split(filter.Key, ".")
+			if len(parts) > 0 {
+				parts[0] = context + "_" + parts[0]
+			}
+			modified.ExtraFilters[i] = &Filter{
+				Type: "KeyValuePair",
+				KeyValuePair: &KeyValuePair{
+					Key:      strings.Join(parts, "."),
+					Value:    filter.Value,
+					Operator: filter.Operator,
+				},
+			}
 		}
 	}
 

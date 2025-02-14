@@ -55,11 +55,14 @@ func TestRecursiveParser(t *testing.T) {
 								},
 							},
 						},
-						ExtraFilters: []*KeyValuePair{
+						ExtraFilters: []*Filter{
 							{
-								Key:      "pod.metadata.name",
-								Value:    "nginx",
-								Operator: "EQUALS",
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "pod.metadata.name",
+									Value:    "nginx",
+									Operator: "EQUALS",
+								},
 							},
 						},
 					},
@@ -258,11 +261,14 @@ func TestRecursiveParser(t *testing.T) {
 								},
 							},
 						},
-						ExtraFilters: []*KeyValuePair{
+						ExtraFilters: []*Filter{
 							{
-								Key:      "pod.spec.containers[0].image",
-								Value:    "nginx",
-								Operator: "EQUALS",
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "pod.spec.containers[0].image",
+									Value:    "nginx",
+									Operator: "EQUALS",
+								},
 							},
 						},
 					},
@@ -476,11 +482,14 @@ func TestRecursiveParser(t *testing.T) {
 								},
 							},
 						},
-						ExtraFilters: []*KeyValuePair{
+						ExtraFilters: []*Filter{
 							{
-								Key:      "d.spec.replicas",
-								Value:    1,
-								Operator: "EQUALS",
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "d.spec.replicas",
+									Value:    1,
+									Operator: "EQUALS",
+								},
 							},
 						},
 					},
@@ -618,10 +627,31 @@ func TestRecursiveParser(t *testing.T) {
 						Nodes: []*NodePattern{
 							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
 						},
-						ExtraFilters: []*KeyValuePair{
-							{Key: "p.status.phase", Value: "Running", Operator: "NOT_EQUALS"},
-							{Key: "p.metadata.name", Value: "^test-.*", Operator: "REGEX_COMPARE"},
-							{Key: "p.spec.containers[0].resources.requests.memory", Value: "Gi", Operator: "CONTAINS"},
+						ExtraFilters: []*Filter{
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.status.phase",
+									Value:    "Running",
+									Operator: "NOT_EQUALS",
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.metadata.name",
+									Value:    "^test-.*",
+									Operator: "REGEX_COMPARE",
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.spec.containers[0].resources.requests.memory",
+									Value:    "Gi",
+									Operator: "CONTAINS",
+								},
+							},
 						},
 					},
 					&ReturnClause{
@@ -641,10 +671,31 @@ func TestRecursiveParser(t *testing.T) {
 						Nodes: []*NodePattern{
 							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
 						},
-						ExtraFilters: []*KeyValuePair{
-							{Key: "p.status.phase", Value: "Running", Operator: "NOT_EQUALS"},
-							{Key: "p.metadata.name", Value: "^test-.*", Operator: "REGEX_COMPARE"},
-							{Key: "p.spec.containers[0].resources.requests.memory", Value: "Gi", Operator: "CONTAINS"},
+						ExtraFilters: []*Filter{
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.status.phase",
+									Value:    "Running",
+									Operator: "NOT_EQUALS",
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.metadata.name",
+									Value:    "^test-.*",
+									Operator: "REGEX_COMPARE",
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "p.spec.containers[0].resources.requests.memory",
+									Value:    "Gi",
+									Operator: "CONTAINS",
+								},
+							},
 						},
 					},
 					&ReturnClause{
@@ -981,11 +1032,14 @@ func TestRecursiveParser(t *testing.T) {
 								},
 							},
 						},
-						ExtraFilters: []*KeyValuePair{
+						ExtraFilters: []*Filter{
 							{
-								Key:      "pod.spec.containers[*].image",
-								Value:    "nginx",
-								Operator: "EQUALS",
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "pod.spec.containers[*].image",
+									Value:    "nginx",
+									Operator: "EQUALS",
+								},
 							},
 						},
 					},
@@ -1011,11 +1065,14 @@ func TestRecursiveParser(t *testing.T) {
 								},
 							},
 						},
-						ExtraFilters: []*KeyValuePair{
+						ExtraFilters: []*Filter{
 							{
-								Key:      "pod.spec.containers[*].volumeMounts[*].name",
-								Value:    "config",
-								Operator: "EQUALS",
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "pod.spec.containers[*].volumeMounts[*].name",
+									Value:    "config",
+									Operator: "EQUALS",
+								},
 							},
 						},
 					},
@@ -1311,14 +1368,112 @@ func TestRecursiveParser(t *testing.T) {
 						Nodes: []*NodePattern{
 							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
 						},
-						ExtraFilters: []*KeyValuePair{
-							{Key: "p.status.phase", Value: "Running", Operator: "EQUALS", IsNegated: true},
-							{Key: "p.metadata.name", Value: "test", Operator: "EQUALS", IsNegated: true},
+						ExtraFilters: []*Filter{
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:       "p.status.phase",
+									Value:     "Running",
+									Operator:  "EQUALS",
+									IsNegated: true,
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:       "p.metadata.name",
+									Value:     "test",
+									Operator:  "EQUALS",
+									IsNegated: true,
+								},
+							},
 						},
 					},
 					&ReturnClause{
 						Items: []*ReturnItem{
 							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with pattern in WHERE clause",
+			input: `MATCH (s:Service) WHERE NOT (s)->(:Endpoints) RETURN s.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+						},
+						ExtraFilters: []*Filter{
+							{
+								Type: "SubMatch",
+								SubMatch: &SubMatch{
+									IsNegated: true,
+									Nodes: []*NodePattern{
+										{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+										{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Endpoints"}, IsAnonymous: true},
+									},
+									Relationships: []*Relationship{
+										{
+											Direction: Right,
+											LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "s", Kind: "Service"}},
+											RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Endpoints"}, IsAnonymous: true},
+										},
+									},
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "s.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with pattern and value comparison in WHERE clause",
+			input: `MATCH (pvc:PersistentVolumeClaim) WHERE NOT (pvc)->(:Pod) AND pvc.status.phase = "Bound" RETURN pvc.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "pvc", Kind: "PersistentVolumeClaim"}},
+						},
+						ExtraFilters: []*Filter{
+							{
+								Type: "SubMatch",
+								SubMatch: &SubMatch{
+									IsNegated: true,
+									Nodes: []*NodePattern{
+										{ResourceProperties: &ResourceProperties{Name: "pvc", Kind: "PersistentVolumeClaim"}},
+										{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Pod"}, IsAnonymous: true},
+									},
+									Relationships: []*Relationship{
+										{
+											Direction: Right,
+											LeftNode:  &NodePattern{ResourceProperties: &ResourceProperties{Name: "pvc", Kind: "PersistentVolumeClaim"}},
+											RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Pod"}, IsAnonymous: true},
+										},
+									},
+								},
+							},
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "pvc.status.phase",
+									Value:    "Bound",
+									Operator: "EQUALS",
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "pvc.metadata.name"},
 						},
 					},
 				},
@@ -1333,8 +1488,15 @@ func TestRecursiveParser(t *testing.T) {
 						Nodes: []*NodePattern{
 							{ResourceProperties: &ResourceProperties{Name: "d", Kind: "Deployment"}},
 						},
-						ExtraFilters: []*KeyValuePair{
-							{Key: "d.metadata.annotations.meta\\.helm\\.sh/release-name", Value: "my-app", Operator: "EQUALS"},
+						ExtraFilters: []*Filter{
+							{
+								Type: "KeyValuePair",
+								KeyValuePair: &KeyValuePair{
+									Key:      "d.metadata.annotations.meta\\.helm\\.sh/release-name",
+									Value:    "my-app",
+									Operator: "EQUALS",
+								},
+							},
 						},
 					},
 					&ReturnClause{
@@ -1344,6 +1506,36 @@ func TestRecursiveParser(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:    "invalid submatch - no reference to original match variables",
+			input:   `MATCH (s:Service) WHERE NOT (x:Service)->(:Endpoints) RETURN s.metadata.name`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid submatch - reference node includes kind",
+			input:   `MATCH (s:Service) WHERE NOT (s:Service)->(:Endpoints) RETURN s.metadata.name`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid submatch - reference node includes properties",
+			input:   `MATCH (s:Service) WHERE NOT (s {name: "foo"})->(:Endpoints) RETURN s.metadata.name`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid submatch - other node includes variable",
+			input:   `MATCH (s:Service) WHERE NOT (s)->(e:Endpoints) RETURN s.metadata.name`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid submatch - multiple references to match variables",
+			input:   `MATCH (s:Service) WHERE NOT (s)->(:Endpoints)->(s) RETURN s.metadata.name`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid submatch - reference to undefined variable",
+			input:   `MATCH (s:Service) WHERE NOT (x)->(:Endpoints) RETURN s.metadata.name`,
+			wantErr: true,
 		},
 	}
 

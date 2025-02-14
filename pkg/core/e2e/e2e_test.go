@@ -573,6 +573,121 @@ var _ = Describe("Cyphernetes E2E", func() {
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 		})
+
+		It("Should execute pattern matching in WHERE clauses correctly", func() {
+			By("Creating test resources")
+			// Create a deployment that owns a replicaset that owns pods
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-pattern",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app": "pattern-test",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: ptr.To(int32(1)),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app": "pattern-test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app": "pattern-test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			// Wait for deployment and its resources to be ready
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: testNamespace,
+					Name:      "test-deployment-pattern",
+				}, &appsv1.Deployment{})
+			}, timeout, interval).Should(Succeed())
+
+			By("Executing a pattern matching query")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Query to find pods owned by the deployment through a replicaset
+			ast, err := core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE d.metadata.name = "test-deployment-pattern" AND
+					NOT (d)->(:ReplicaSet)->(:Pod)
+				RETURN d
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify deployment is found
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok := result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(BeEmpty(), "Expected no deployments")
+		})
+
+		It("Should handle invalid pattern matching queries correctly", func() {
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Rejecting a pattern with no reference to match variables")
+			_, err = core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE (x)->(:ReplicaSet)
+				RETURN d
+			`)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pattern must reference exactly one variable"))
+
+			By("Rejecting a pattern with multiple references to match variables")
+			_, err = core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE (d)->(r:ReplicaSet)->(d)
+				RETURN d
+			`)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("pattern must reference exactly one variable"))
+
+			By("Rejecting a pattern with a reference node that has a kind")
+			_, err = core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE (d:Pod)->(r:ReplicaSet)
+				RETURN d
+			`)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("reference node cannot have a kind"))
+
+			By("Rejecting a pattern with a reference node that has properties")
+			_, err = core.ParseQuery(`
+				MATCH (d:Deployment {name: "test"})
+				WHERE (d {name: "foo"})->(r:ReplicaSet)
+				RETURN d
+			`)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("reference node cannot have properties"))
+		})
 	})
 
 	Context("Label Update Operations", func() {
