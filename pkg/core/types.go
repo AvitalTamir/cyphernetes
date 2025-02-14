@@ -46,9 +46,10 @@ type Filter struct {
 
 // SubMatch represents a pattern match within a WHERE clause
 type SubMatch struct {
-	IsNegated     bool
-	Nodes         []*NodePattern
-	Relationships []*Relationship
+	IsNegated         bool
+	Nodes             []*NodePattern
+	Relationships     []*Relationship
+	ReferenceNodeName string
 }
 
 // CreateClause represents a CREATE clause

@@ -792,12 +792,21 @@ func (p *Parser) parseKeyValuePairs() ([]*Filter, error) {
 				return nil, err
 			}
 
+			var referenceNodeName string
+			for _, node := range nodeRels.Nodes {
+				if !strings.Contains(node.ResourceProperties.Name, "_anon") {
+					referenceNodeName = node.ResourceProperties.Name
+					break
+				}
+			}
+
 			filters = append(filters, &Filter{
 				Type: "SubMatch",
 				SubMatch: &SubMatch{
-					IsNegated:     isNegated,
-					Nodes:         nodeRels.Nodes,
-					Relationships: nodeRels.Relationships,
+					IsNegated:         isNegated,
+					Nodes:             nodeRels.Nodes,
+					Relationships:     nodeRels.Relationships,
+					ReferenceNodeName: referenceNodeName,
 				},
 			})
 		} else {

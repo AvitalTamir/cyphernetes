@@ -2057,6 +2057,8 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 		resourceList := resources.([]map[string]interface{})
 		var filtered []map[string]interface{}
 
+		var subMatches []*SubMatch
+
 		// Process each resource
 		for _, resource := range resourceList {
 			keep := true
@@ -2129,40 +2131,42 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 						}
 					}
 				} else if extraFilter.Type == "SubMatch" {
-					var referenceNodeName string
-					for _, node := range extraFilter.SubMatch.Nodes {
-						if !strings.Contains(node.ResourceProperties.Name, "_anon") {
-							referenceNodeName = node.ResourceProperties.Name
-							break
-						}
-					}
-
-					if extraFilter.SubMatch.IsNegated {
-						// For negated patterns, we need to check if the pattern does NOT match
-						matches, err := q.checkPatternMatch(resource, referenceNodeName, extraFilter.SubMatch)
-						if err != nil {
-							keep = false
-							break
-						}
-						keep = !matches
-					} else {
-						// For regular patterns, we need to check if the pattern matches
-						matches, err := q.checkPatternMatch(resource, referenceNodeName, extraFilter.SubMatch)
-						if err != nil {
-							keep = false
-							break
-						}
-						keep = matches
-					}
-					if !keep {
-						break
-					}
+					subMatches = append(subMatches, extraFilter.SubMatch)
 				}
 			}
 
 			if keep {
 				filtered = append(filtered, resource)
 			}
+		}
+
+		for _, subMatch := range subMatches {
+			if subMatch.ReferenceNodeName != n.ResourceProperties.Name {
+				continue
+			}
+
+			// for each submatch, run checkSubMatch
+			subMatchResults, err := q.checkSubMatch(subMatch, n.ResourceProperties.Name)
+			if err != nil {
+				return fmt.Errorf("error checking submatch: %v", err)
+			}
+
+			// find the delta between subMatchResults and filtered
+			// if subMatch.IsNegated, discard the delta
+			// if not negated, keep the delta
+			var newFiltered []map[string]interface{}
+			// Get matched resources for this node if they exist
+			matchedResources, hasMatches := subMatchResults["_ref_"+n.ResourceProperties.Name]
+
+			for _, resource := range filtered {
+				isMatch := hasMatches && isResourceInList(resource, matchedResources)
+				// For negated patterns, keep resources that DON'T match
+				// For non-negated patterns, keep resources that DO match
+				if isMatch != subMatch.IsNegated {
+					newFiltered = append(newFiltered, resource)
+				}
+			}
+			filtered = newFiltered
 		}
 
 		// Lock for writing to both maps
@@ -2678,73 +2682,106 @@ func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
 	return false
 }
 
-func (q *QueryExecutor) checkPatternMatch(resource map[string]interface{}, nodeName string, pattern *SubMatch) (bool, error) {
-	// fmt.Printf("Resource: %v\n", resource)
-	// fmt.Printf("Pattern nodes: %v\n", pattern.Nodes)
-	// fmt.Printf("Pattern relationships: %v\n", pattern.Relationships)
-
+func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName string) (map[string][]map[string]interface{}, error) {
 	// Create temporary results and filtered results maps
 	tempResults := QueryResult{
 		Data: make(map[string]interface{}),
 	}
 	filteredResults := make(map[string][]map[string]interface{})
+	resultMap := make(map[string][]map[string]interface{})
 
-	// Store the current resource in our local result map under the reference node name
-	localResultMap := make(map[string][]map[string]interface{})
-	// fmt.Printf("Initial localResultMap: %v\n", localResultMap)
+	for _, node := range subMatch.Nodes {
+		if node.ResourceProperties.Name == referenceNodeName {
+			node.ResourceProperties.Name = "_ref_" + node.ResourceProperties.Name
+			break
+		}
+	}
+
+	// also rename this node in the relationships
+	for _, rel := range subMatch.Relationships {
+		if rel.LeftNode.ResourceProperties.Name == referenceNodeName {
+			rel.LeftNode.ResourceProperties.Name = "_ref_" + rel.LeftNode.ResourceProperties.Name
+		}
+		if rel.RightNode.ResourceProperties.Name == referenceNodeName {
+			rel.RightNode.ResourceProperties.Name = "_ref_" + rel.RightNode.ResourceProperties.Name
+		}
+	}
 
 	// Create a match clause for relationship processing
 	matchClause := &MatchClause{
-		Nodes:         pattern.Nodes,
-		Relationships: pattern.Relationships,
+		Nodes:         subMatch.Nodes,
+		Relationships: subMatch.Relationships,
 	}
 
-	// Process each relationship in the pattern
-	for _, rel := range pattern.Relationships {
-		// fmt.Printf("Processing relationship - Left: %s Right: %s\n", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
-
-		// Get resources for nodes that aren't the reference node
-		if rel.LeftNode.ResourceProperties.Name != nodeName {
-			// fmt.Printf("Getting resources for left node: %s\n", rel.LeftNode.ResourceProperties.Name)
-			err := getNodeResources(rel.LeftNode, q, nil)
+	// Get resources for the reference node first
+	for _, node := range matchClause.Nodes {
+		if node.ResourceProperties.Name == "_ref_"+subMatch.ReferenceNodeName {
+			err := getNodeResources(node, q, nil)
 			if err != nil {
-				// fmt.Printf("Error getting left node resources: %s\n", err)
-				return false, err
+				return nil, err
+			}
+			// Initialize filteredResults and resultMap with the reference node's resources
+			filteredResults[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
+			resultMap[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
+			break
+		}
+	}
+
+	// Process each relationship in the pattern, with multiple passes if needed
+	for i := 0; i < len(matchClause.Relationships)*2; i++ {
+		filteringOccurred := false
+
+		for _, rel := range matchClause.Relationships {
+			// Get resources for nodes that aren't the reference node
+			if rel.LeftNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
+				err := getNodeResources(rel.LeftNode, q, nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if rel.RightNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
+				err := getNodeResources(rel.RightNode, q, nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// Process the relationship and update filteredResults
+			filtered, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults)
+			if err != nil {
+				return nil, err
+			}
+			filteringOccurred = filteringOccurred || filtered
+
+			// Check if either side of the relationship has no results
+			leftResults := filteredResults[rel.LeftNode.ResourceProperties.Name]
+			rightResults := filteredResults[rel.RightNode.ResourceProperties.Name]
+			if len(leftResults) == 0 || len(rightResults) == 0 {
+				// If any part of the chain has no results, the entire pattern doesn't match
+				return make(map[string][]map[string]interface{}), nil
 			}
 		}
-		if rel.RightNode.ResourceProperties.Name != nodeName {
-			// fmt.Printf("Getting resources for right node: %s\n", rel.RightNode.ResourceProperties.Name)
-			err := getNodeResources(rel.RightNode, q, nil)
-			if err != nil {
-				// fmt.Printf("Error getting right node resources: %s\n", err)
-				return false, err
-			}
+
+		if !filteringOccurred {
+			break
 		}
 
-		_, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults)
-		if err != nil {
-			// fmt.Printf("Error processing relationship: %s\n", err)
-			return false, err
-		}
-		// fmt.Printf("Filtered results: %v\n", filteredResults)
-
-		// Update our local result map with filtered results
+		// Update resultMap with filtered results for the next pass
 		for k, v := range filteredResults {
-			localResultMap[k] = v
+			resultMap[k] = v
 		}
-		// fmt.Printf("Updated localResultMap: %v\n", localResultMap)
 	}
 
-	// Now check if the filtered results contain the resource
-	for _, v := range localResultMap {
-		for _, item := range v {
-			// Compare maps by converting to JSON strings
-			resourceJSON, _ := json.Marshal(resource)
-			itemJSON, _ := json.Marshal(item)
-			if string(resourceJSON) == string(itemJSON) {
-				return true, nil
-			}
+	return filteredResults, nil
+}
+
+func isResourceInList(resource map[string]interface{}, matchedResources []map[string]interface{}) bool {
+	resourceJSON, _ := json.Marshal(resource)
+	for _, matchedResource := range matchedResources {
+		matchedJSON, _ := json.Marshal(matchedResource)
+		if string(resourceJSON) == string(matchedJSON) {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }

@@ -1422,6 +1422,7 @@ func TestRecursiveParser(t *testing.T) {
 											RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Endpoints"}, IsAnonymous: true},
 										},
 									},
+									ReferenceNodeName: "s",
 								},
 							},
 						},
@@ -1459,6 +1460,7 @@ func TestRecursiveParser(t *testing.T) {
 											RightNode: &NodePattern{ResourceProperties: &ResourceProperties{Name: "_anon1", Kind: "Pod"}, IsAnonymous: true},
 										},
 									},
+									ReferenceNodeName: "pvc",
 								},
 							},
 							{
