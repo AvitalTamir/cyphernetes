@@ -586,7 +586,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 					},
 				},
 				Spec: appsv1.DeploymentSpec{
-					Replicas: ptr.To(int32(1)),
+					Replicas: ptr.To(int32(0)),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"app": "pattern-test",
@@ -629,8 +629,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			// Query to find pods owned by the deployment through a replicaset
 			ast, err := core.ParseQuery(`
 				MATCH (d:Deployment)
-				WHERE d.metadata.name = "test-deployment-pattern" AND
-					NOT (d)->(:ReplicaSet)->(:Pod)
+				WHERE NOT (d)->(:ReplicaSet)->(:Pod)
 				RETURN d
 			`)
 			Expect(err).NotTo(HaveOccurred())
@@ -642,7 +641,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(result.Data).To(HaveKey("d"))
 			deployments, ok := result.Data["d"].([]interface{})
 			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
-			Expect(deployments).To(BeEmpty(), "Expected no deployments")
+			Expect(deployments).To(HaveLen(1), "Expected a single deployment")
 		})
 
 		It("Should handle invalid pattern matching queries correctly", func() {

@@ -2128,6 +2128,35 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 							break
 						}
 					}
+				} else if extraFilter.Type == "SubMatch" {
+					var referenceNodeName string
+					for _, node := range extraFilter.SubMatch.Nodes {
+						if !strings.Contains(node.ResourceProperties.Name, "_anon") {
+							referenceNodeName = node.ResourceProperties.Name
+							break
+						}
+					}
+
+					if extraFilter.SubMatch.IsNegated {
+						// For negated patterns, we need to check if the pattern does NOT match
+						matches, err := q.checkPatternMatch(resource, referenceNodeName, extraFilter.SubMatch)
+						if err != nil {
+							keep = false
+							break
+						}
+						keep = !matches
+					} else {
+						// For regular patterns, we need to check if the pattern matches
+						matches, err := q.checkPatternMatch(resource, referenceNodeName, extraFilter.SubMatch)
+						if err != nil {
+							keep = false
+							break
+						}
+						keep = matches
+					}
+					if !keep {
+						break
+					}
 				}
 			}
 
@@ -2647,4 +2676,75 @@ func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
 		}
 	}
 	return false
+}
+
+func (q *QueryExecutor) checkPatternMatch(resource map[string]interface{}, nodeName string, pattern *SubMatch) (bool, error) {
+	// fmt.Printf("Resource: %v\n", resource)
+	// fmt.Printf("Pattern nodes: %v\n", pattern.Nodes)
+	// fmt.Printf("Pattern relationships: %v\n", pattern.Relationships)
+
+	// Create temporary results and filtered results maps
+	tempResults := QueryResult{
+		Data: make(map[string]interface{}),
+	}
+	filteredResults := make(map[string][]map[string]interface{})
+
+	// Store the current resource in our local result map under the reference node name
+	localResultMap := make(map[string][]map[string]interface{})
+	// fmt.Printf("Initial localResultMap: %v\n", localResultMap)
+
+	// Create a match clause for relationship processing
+	matchClause := &MatchClause{
+		Nodes:         pattern.Nodes,
+		Relationships: pattern.Relationships,
+	}
+
+	// Process each relationship in the pattern
+	for _, rel := range pattern.Relationships {
+		// fmt.Printf("Processing relationship - Left: %s Right: %s\n", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
+
+		// Get resources for nodes that aren't the reference node
+		if rel.LeftNode.ResourceProperties.Name != nodeName {
+			// fmt.Printf("Getting resources for left node: %s\n", rel.LeftNode.ResourceProperties.Name)
+			err := getNodeResources(rel.LeftNode, q, nil)
+			if err != nil {
+				// fmt.Printf("Error getting left node resources: %s\n", err)
+				return false, err
+			}
+		}
+		if rel.RightNode.ResourceProperties.Name != nodeName {
+			// fmt.Printf("Getting resources for right node: %s\n", rel.RightNode.ResourceProperties.Name)
+			err := getNodeResources(rel.RightNode, q, nil)
+			if err != nil {
+				// fmt.Printf("Error getting right node resources: %s\n", err)
+				return false, err
+			}
+		}
+
+		_, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults)
+		if err != nil {
+			// fmt.Printf("Error processing relationship: %s\n", err)
+			return false, err
+		}
+		// fmt.Printf("Filtered results: %v\n", filteredResults)
+
+		// Update our local result map with filtered results
+		for k, v := range filteredResults {
+			localResultMap[k] = v
+		}
+		// fmt.Printf("Updated localResultMap: %v\n", localResultMap)
+	}
+
+	// Now check if the filtered results contain the resource
+	for _, v := range localResultMap {
+		for _, item := range v {
+			// Compare maps by converting to JSON strings
+			resourceJSON, _ := json.Marshal(resource)
+			itemJSON, _ := json.Marshal(item)
+			if string(resourceJSON) == string(itemJSON) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
