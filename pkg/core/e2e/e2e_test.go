@@ -642,6 +642,22 @@ var _ = Describe("Cyphernetes E2E", func() {
 			deployments, ok := result.Data["d"].([]interface{})
 			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
 			Expect(deployments).To(HaveLen(1), "Expected a single deployment")
+
+			// Query to find pods owned by the deployment through a replicaset
+			ast, err = core.ParseQuery(`
+				MATCH (d:Deployment)
+				WHERE (d)->(:ReplicaSet)->(:Pod)
+				RETURN d
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Data).To(HaveKey("d"))
+			deployments, ok = result.Data["d"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+			Expect(deployments).To(BeEmpty(), "Expected no deployments")
 		})
 
 		It("Should handle invalid pattern matching queries correctly", func() {

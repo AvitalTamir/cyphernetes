@@ -14,14 +14,16 @@ type Parser struct {
 	inCreate         bool
 	anonymousCounter int
 	matchVariables   map[string]*NodePattern // Track variables defined in MATCH clause
+	matchNodes       []*NodePattern          // Track nodes from the current match clause
 }
 
-func NewRecursiveParser(input string) *Parser {
+func NewParser(input string) *Parser {
 	lexer := NewLexer(input)
 	return &Parser{
 		lexer:            lexer,
 		anonymousCounter: 0,
 		matchVariables:   make(map[string]*NodePattern),
+		matchNodes:       make([]*NodePattern, 0),
 	}
 }
 
@@ -184,6 +186,9 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Store nodes for later use in WHERE clause validation
+	p.matchNodes = nodeRels.Nodes
 
 	// Track variables from the MATCH clause
 	p.trackMatchVariables(nodeRels.Nodes)
@@ -781,6 +786,11 @@ func (p *Parser) parseKeyValuePairs() ([]*Filter, error) {
 
 		// Check if this is a submatch pattern
 		if p.current.Type == LPAREN {
+			// Check if there are any kindless nodes in the match clause
+			if hasKindlessNodes(p.matchNodes) {
+				return nil, fmt.Errorf("pattern-based filters in WHERE clause are not allowed when kindless nodes exist in the MATCH clause")
+			}
+
 			nodeRels, err := p.parseNodeRelationshipList()
 			if err != nil {
 				return nil, err
@@ -1021,7 +1031,7 @@ func (p *Parser) parseRelationshipProperties() (*ResourceProperties, error) {
 
 // ParseQuery is the main entry point for parsing Cyphernetes queries
 func ParseQuery(query string) (*Expression, error) {
-	parser := NewRecursiveParser(query)
+	parser := NewParser(query)
 	expr, err := parser.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("parse error: %w", err)
@@ -1125,4 +1135,14 @@ func extractKeyValuePairs(filters []*Filter) []*KeyValuePair {
 		}
 	}
 	return kvPairs
+}
+
+// Add helper function to check for kindless nodes
+func hasKindlessNodes(nodes []*NodePattern) bool {
+	for _, node := range nodes {
+		if node.ResourceProperties != nil && node.ResourceProperties.Kind == "" {
+			return true
+		}
+	}
+	return false
 }

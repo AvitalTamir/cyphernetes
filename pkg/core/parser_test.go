@@ -11,7 +11,7 @@ func init() {
 	LogLevel = "debug"
 }
 
-func TestRecursiveParser(t *testing.T) {
+func TestParser(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
@@ -1647,7 +1647,7 @@ func TestParserErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("Testing input: %q", tt.input)
 
-			parser := NewRecursiveParser(tt.input)
+			parser := NewParser(tt.input)
 			_, err := parser.Parse()
 			if err == nil {
 				t.Errorf("ParseQuery() expected error containing %q, got nil", tt.contains)
