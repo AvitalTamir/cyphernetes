@@ -146,14 +146,24 @@ div[class^='codeBlockContainer'] {
 div[class^='codeBlockContent'] {
   background-color: var(--code-block-bg);
   color: var(--code-block-color);
+  padding: 1rem;
 }
 
 .prism-code {
   background-color: var(--code-block-bg) !important;
   color: var(--code-block-color) !important;
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  padding: 1rem !important;
 }
 
 :not(pre) > code {
   background-color: var(--ifm-code-background);
   border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure code blocks in tabs have proper padding */
+.tabs-container .tabs-content .prism-code {
+  margin: 0;
+  padding: 1rem !important;
 }
