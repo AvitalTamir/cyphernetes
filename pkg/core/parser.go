@@ -65,7 +65,7 @@ func (p *Parser) Parse() (*Expression, error) {
 	if p.current.Type == WHERE {
 		if matchClause, ok := firstClause.(*MatchClause); ok {
 			p.advance()
-			filters, err := p.parseKeyValuePairs()
+			filters, err := p.parseFilters()
 			if err != nil {
 				return nil, fmt.Errorf("parsing WHERE clause: %w", err)
 			}
@@ -204,7 +204,7 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 	var filters []*Filter
 	if p.current.Type == WHERE {
 		p.advance()
-		filters, err = p.parseKeyValuePairs()
+		filters, err = p.parseFilters()
 		if err != nil {
 			return nil, err
 		}
@@ -541,7 +541,7 @@ func (p *Parser) parseSetClause() (*SetClause, error) {
 	}
 	p.advance()
 
-	filters, err := p.parseKeyValuePairs()
+	filters, err := p.parseFilters()
 	if err != nil {
 		return nil, err
 	}
@@ -772,8 +772,8 @@ func (p *Parser) parseProperties() (*Properties, error) {
 	return &Properties{PropertyList: propertyList}, nil
 }
 
-// parseKeyValuePairs parses a list of key-value pairs with operators
-func (p *Parser) parseKeyValuePairs() ([]*Filter, error) {
+// parseFilters parses a list of either key-value pairs with operators or submatch patterns
+func (p *Parser) parseFilters() ([]*Filter, error) {
 	var filters []*Filter
 
 	for {
