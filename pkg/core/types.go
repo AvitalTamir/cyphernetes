@@ -34,7 +34,22 @@ type Clause interface {
 type MatchClause struct {
 	Nodes         []*NodePattern
 	Relationships []*Relationship
-	ExtraFilters  []*KeyValuePair
+	ExtraFilters  []*Filter
+}
+
+// Filter represents a filter condition in a WHERE clause
+type Filter struct {
+	Type         string        // "KeyValuePair" or "SubMatch"
+	KeyValuePair *KeyValuePair // Used when Type is "KeyValuePair"
+	SubMatch     *SubMatch     // Used when Type is "SubMatch"
+}
+
+// SubMatch represents a pattern match within a WHERE clause
+type SubMatch struct {
+	IsNegated         bool
+	Nodes             []*NodePattern
+	Relationships     []*Relationship
+	ReferenceNodeName string
 }
 
 // CreateClause represents a CREATE clause

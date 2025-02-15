@@ -950,49 +950,52 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 				}
 
 				// Handle WHERE conditions from ExtraFilters
-				for _, filter := range c.ExtraFilters {
-					parts := strings.Split(filter.Key, ".")
-					if len(parts) > 0 {
-						nodeName := parts[0]
-						propertyPath := strings.Join(parts[1:], ".")
+				for _, extraFilter := range c.ExtraFilters {
+					if extraFilter.Type == "KeyValuePair" {
+						filter := extraFilter.KeyValuePair
+						parts := strings.Split(filter.Key, ".")
+						if len(parts) > 0 {
+							nodeName := parts[0]
+							propertyPath := strings.Join(parts[1:], ".")
 
-						for j := 0; j < len(potentialKinds); j++ {
-							varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-							var valueStr string
-							switch v := filter.Value.(type) {
-							case string:
-								valueStr = fmt.Sprintf("\"%s\"", v)
-							default:
-								valueStr = fmt.Sprintf("%v", v)
-							}
-							// Map operator names to symbols
-							operator := filter.Operator
-							switch operator {
-							case "EQUALS":
-								operator = "="
-							case "NOT_EQUALS":
-								operator = "!="
-							case "GREATER_THAN":
-								operator = ">"
-							case "LESS_THAN":
-								operator = "<"
-							case "GREATER_THAN_EQUALS":
-								operator = ">="
-							case "LESS_THAN_EQUALS":
-								operator = "<="
-							case "REGEX_COMPARE":
-								operator = "=~"
-							case "CONTAINS":
-								operator = "CONTAINS"
-							case "":
-								operator = "="
-							}
+							for j := 0; j < len(potentialKinds); j++ {
+								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
+								var valueStr string
+								switch v := filter.Value.(type) {
+								case string:
+									valueStr = fmt.Sprintf("\"%s\"", v)
+								default:
+									valueStr = fmt.Sprintf("%v", v)
+								}
+								// Map operator names to symbols
+								operator := filter.Operator
+								switch operator {
+								case "EQUALS":
+									operator = "="
+								case "NOT_EQUALS":
+									operator = "!="
+								case "GREATER_THAN":
+									operator = ">"
+								case "LESS_THAN":
+									operator = "<"
+								case "GREATER_THAN_EQUALS":
+									operator = ">="
+								case "LESS_THAN_EQUALS":
+									operator = "<="
+								case "REGEX_COMPARE":
+									operator = "=~"
+								case "CONTAINS":
+									operator = "CONTAINS"
+								case "":
+									operator = "="
+								}
 
-							notPrefix := ""
-							if filter.IsNegated {
-								notPrefix = "NOT "
+								notPrefix := ""
+								if filter.IsNegated {
+									notPrefix = "NOT "
+								}
+								whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 							}
-							whereParts = append(whereParts, fmt.Sprintf("%s%s.%s %s %s", notPrefix, varName, propertyPath, operator, valueStr))
 						}
 					}
 				}
@@ -1987,7 +1990,7 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	return compiledPath
 }
 
-func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValuePair) (err error) {
+func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) (err error) {
 	namespace := Namespace
 
 	// Create a copy of ResourceProperties
@@ -2037,7 +2040,13 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 	if err != nil {
 		return fmt.Errorf("error getting resource property name: %v", err)
 	}
-	if resultCache[cacheKey] == nil {
+
+	// Lock for reading from cache
+	resultMapMutex.RLock()
+	cachedResult := resultCache[cacheKey]
+	resultMapMutex.RUnlock()
+
+	if cachedResult == nil {
 		// Get resources using the provider
 		resources, err := q.provider.GetK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector, namespace)
 		if err != nil {
@@ -2048,74 +2057,81 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 		resourceList := resources.([]map[string]interface{})
 		var filtered []map[string]interface{}
 
+		var subMatches []*SubMatch
+
 		// Process each resource
 		for _, resource := range resourceList {
 			keep := true
 			// Apply extra filters
-			for _, filter := range extraFilters {
-				// Extract node name from filter key
-				var resultMapKey string
-				dotIndex := strings.Index(filter.Key, ".")
-				if dotIndex != -1 {
-					resultMapKey = filter.Key[:dotIndex]
-				} else {
-					resultMapKey = filter.Key
-				}
-
-				// Handle escaped dots
-				for strings.HasSuffix(resultMapKey, "\\") {
-					nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
-					if nextDotIndex == -1 {
-						resultMapKey = filter.Key
-						break
-					}
-					resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
-				}
-
-				if resultMapKey == n.ResourceProperties.Name {
-					// Transform path
-					path := filter.Key
-					path = strings.Replace(path, resultMapKey+".", "$.", 1)
-
-					// Compile and fix the path
-					compiledPath, err := jsonpath.Compile(path)
-					if err != nil {
-						keep = false
-						break
-					}
-					compiledPath = fixCompiledPath(compiledPath)
-
-					logDebug("Looking up path: %s in resource: %+v", path, resource)
-
-					// If path contains wildcards, we need special handling
-					if strings.Contains(path, "[*]") {
-						keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
-						if filter.IsNegated {
-							keep = !keep
-						}
+			for _, extraFilter := range extraFilters {
+				if extraFilter.Type == "KeyValuePair" {
+					filter := extraFilter.KeyValuePair
+					// Extract node name from filter key
+					var resultMapKey string
+					dotIndex := strings.Index(filter.Key, ".")
+					if dotIndex != -1 {
+						resultMapKey = filter.Key[:dotIndex]
 					} else {
-						// Regular path handling using the fixed compiled path
-						value, err := compiledPath.Lookup(resource)
+						resultMapKey = filter.Key
+					}
+
+					// Handle escaped dots
+					for strings.HasSuffix(resultMapKey, "\\") {
+						nextDotIndex := strings.Index(filter.Key[len(resultMapKey)+1:], ".")
+						if nextDotIndex == -1 {
+							resultMapKey = filter.Key
+							break
+						}
+						resultMapKey = filter.Key[:len(resultMapKey)+1+nextDotIndex]
+					}
+
+					if resultMapKey == n.ResourceProperties.Name {
+						// Transform path
+						path := filter.Key
+						path = strings.Replace(path, resultMapKey+".", "$.", 1)
+
+						// Compile and fix the path
+						compiledPath, err := jsonpath.Compile(path)
 						if err != nil {
 							keep = false
 							break
 						}
+						compiledPath = fixCompiledPath(compiledPath)
 
-						resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-						if err != nil {
-							keep = false
+						logDebug("Looking up path: %s in resource: %+v", path, resource)
+
+						// If path contains wildcards, we need special handling
+						if strings.Contains(path, "[*]") {
+							keep = evaluateWildcardPath(resource, path, filter.Value, filter.Operator)
+							if filter.IsNegated {
+								keep = !keep
+							}
+						} else {
+							// Regular path handling using the fixed compiled path
+							value, err := compiledPath.Lookup(resource)
+							if err != nil {
+								keep = false
+								break
+							}
+
+							resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+							if err != nil {
+								keep = false
+								break
+							}
+
+							keep = compareValues(resourceValue, filterValue, filter.Operator)
+							if filter.IsNegated {
+								keep = !keep
+							}
+						}
+
+						if !keep {
 							break
 						}
-
-						keep = compareValues(resourceValue, filterValue, filter.Operator)
-						if filter.IsNegated {
-							keep = !keep
-						}
 					}
-
-					if !keep {
-						break
-					}
+				} else if extraFilter.Type == "SubMatch" {
+					subMatches = append(subMatches, extraFilter.SubMatch)
 				}
 			}
 
@@ -2124,11 +2140,45 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*KeyValue
 			}
 		}
 
-		// Cache the filtered results
+		for _, subMatch := range subMatches {
+			if subMatch.ReferenceNodeName != n.ResourceProperties.Name {
+				continue
+			}
+
+			// for each submatch, run checkSubMatch
+			subMatchResults, err := q.checkSubMatch(subMatch, n.ResourceProperties.Name)
+			if err != nil {
+				return fmt.Errorf("error checking submatch: %v", err)
+			}
+
+			// find the delta between subMatchResults and filtered
+			// if subMatch.IsNegated, discard the delta
+			// if not negated, keep the delta
+			var newFiltered []map[string]interface{}
+			// Get matched resources for this node if they exist
+			matchedResources, hasMatches := subMatchResults["_ref_"+n.ResourceProperties.Name]
+
+			for _, resource := range filtered {
+				isMatch := hasMatches && isResourceInList(resource, matchedResources)
+				// For negated patterns, keep resources that DON'T match
+				// For non-negated patterns, keep resources that DO match
+				if isMatch != subMatch.IsNegated {
+					newFiltered = append(newFiltered, resource)
+				}
+			}
+			filtered = newFiltered
+		}
+
+		// Lock for writing to both maps
+		resultMapMutex.Lock()
 		resultCache[cacheKey] = filtered
 		resultMap[n.ResourceProperties.Name] = filtered
+		resultMapMutex.Unlock()
 	} else {
-		resultMap[n.ResourceProperties.Name] = resultCache[cacheKey]
+		// If we found it in cache, just copy to resultMap
+		resultMapMutex.Lock()
+		resultMap[n.ResourceProperties.Name] = cachedResult
+		resultMapMutex.Unlock()
 	}
 
 	return nil
@@ -2292,7 +2342,7 @@ func prefixMatchClause(c *MatchClause, context string) *MatchClause {
 	modified := &MatchClause{
 		Nodes:         make([]*NodePattern, len(c.Nodes)),
 		Relationships: make([]*Relationship, len(c.Relationships)),
-		ExtraFilters:  make([]*KeyValuePair, len(c.ExtraFilters)),
+		ExtraFilters:  make([]*Filter, len(c.ExtraFilters)),
 	}
 
 	// Prefix node names
@@ -2332,15 +2382,21 @@ func prefixMatchClause(c *MatchClause, context string) *MatchClause {
 	}
 
 	// Prefix filter variables
-	for i, filter := range c.ExtraFilters {
-		parts := strings.Split(filter.Key, ".")
-		if len(parts) > 0 {
-			parts[0] = context + "_" + parts[0]
-		}
-		modified.ExtraFilters[i] = &KeyValuePair{
-			Key:      strings.Join(parts, "."),
-			Value:    filter.Value,
-			Operator: filter.Operator,
+	for i, extraFilter := range c.ExtraFilters {
+		if extraFilter.Type == "KeyValuePair" {
+			filter := extraFilter.KeyValuePair
+			parts := strings.Split(filter.Key, ".")
+			if len(parts) > 0 {
+				parts[0] = context + "_" + parts[0]
+			}
+			modified.ExtraFilters[i] = &Filter{
+				Type: "KeyValuePair",
+				KeyValuePair: &KeyValuePair{
+					Key:      strings.Join(parts, "."),
+					Value:    filter.Value,
+					Operator: filter.Operator,
+				},
+			}
 		}
 	}
 
@@ -2620,6 +2676,110 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
 	for _, node := range kindlessNodes {
 		if node.ResourceProperties.Name == nodeName {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName string) (map[string][]map[string]interface{}, error) {
+	// Create temporary results and filtered results maps
+	tempResults := QueryResult{
+		Data: make(map[string]interface{}),
+	}
+	filteredResults := make(map[string][]map[string]interface{})
+	resultMap := make(map[string][]map[string]interface{})
+
+	for _, node := range subMatch.Nodes {
+		if node.ResourceProperties.Name == referenceNodeName {
+			node.ResourceProperties.Name = "_ref_" + node.ResourceProperties.Name
+			break
+		}
+	}
+
+	// also rename this node in the relationships
+	for _, rel := range subMatch.Relationships {
+		if rel.LeftNode.ResourceProperties.Name == referenceNodeName {
+			rel.LeftNode.ResourceProperties.Name = "_ref_" + rel.LeftNode.ResourceProperties.Name
+		}
+		if rel.RightNode.ResourceProperties.Name == referenceNodeName {
+			rel.RightNode.ResourceProperties.Name = "_ref_" + rel.RightNode.ResourceProperties.Name
+		}
+	}
+
+	// Create a match clause for relationship processing
+	matchClause := &MatchClause{
+		Nodes:         subMatch.Nodes,
+		Relationships: subMatch.Relationships,
+	}
+
+	// Get resources for the reference node first
+	for _, node := range matchClause.Nodes {
+		if node.ResourceProperties.Name == "_ref_"+subMatch.ReferenceNodeName {
+			err := getNodeResources(node, q, nil)
+			if err != nil {
+				return nil, err
+			}
+			// Initialize filteredResults and resultMap with the reference node's resources
+			filteredResults[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
+			resultMap[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
+			break
+		}
+	}
+
+	// Process each relationship in the pattern, with multiple passes if needed
+	for i := 0; i < len(matchClause.Relationships)*2; i++ {
+		filteringOccurred := false
+
+		for _, rel := range matchClause.Relationships {
+			// Get resources for nodes that aren't the reference node
+			if rel.LeftNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
+				err := getNodeResources(rel.LeftNode, q, nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if rel.RightNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
+				err := getNodeResources(rel.RightNode, q, nil)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			// Process the relationship and update filteredResults
+			filtered, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults)
+			if err != nil {
+				return nil, err
+			}
+			filteringOccurred = filteringOccurred || filtered
+
+			// Check if either side of the relationship has no results
+			leftResults := filteredResults[rel.LeftNode.ResourceProperties.Name]
+			rightResults := filteredResults[rel.RightNode.ResourceProperties.Name]
+			if len(leftResults) == 0 || len(rightResults) == 0 {
+				// If any part of the chain has no results, the entire pattern doesn't match
+				return make(map[string][]map[string]interface{}), nil
+			}
+		}
+
+		if !filteringOccurred {
+			break
+		}
+
+		// Update resultMap with filtered results for the next pass
+		for k, v := range filteredResults {
+			resultMap[k] = v
+		}
+	}
+
+	return filteredResults, nil
+}
+
+func isResourceInList(resource map[string]interface{}, matchedResources []map[string]interface{}) bool {
+	resourceJSON, _ := json.Marshal(resource)
+	for _, matchedResource := range matchedResources {
+		matchedJSON, _ := json.Marshal(matchedResource)
+		if string(resourceJSON) == string(matchedJSON) {
 			return true
 		}
 	}

@@ -13,13 +13,17 @@ type Parser struct {
 	pos              int
 	inCreate         bool
 	anonymousCounter int
+	matchVariables   map[string]*NodePattern // Track variables defined in MATCH clause
+	matchNodes       []*NodePattern          // Track nodes from the current match clause
 }
 
-func NewRecursiveParser(input string) *Parser {
+func NewParser(input string) *Parser {
 	lexer := NewLexer(input)
 	return &Parser{
 		lexer:            lexer,
 		anonymousCounter: 0,
+		matchVariables:   make(map[string]*NodePattern),
+		matchNodes:       make([]*NodePattern, 0),
 	}
 }
 
@@ -61,7 +65,7 @@ func (p *Parser) Parse() (*Expression, error) {
 	if p.current.Type == WHERE {
 		if matchClause, ok := firstClause.(*MatchClause); ok {
 			p.advance()
-			filters, err := p.parseKeyValuePairs()
+			filters, err := p.parseFilters()
 			if err != nil {
 				return nil, fmt.Errorf("parsing WHERE clause: %w", err)
 			}
@@ -183,6 +187,12 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 		return nil, err
 	}
 
+	// Store nodes for later use in WHERE clause validation
+	p.matchNodes = nodeRels.Nodes
+
+	// Track variables from the MATCH clause
+	p.trackMatchVariables(nodeRels.Nodes)
+
 	// Validate that we don't have standalone anonymous nodes
 	if len(nodeRels.Nodes) == 1 && len(nodeRels.Relationships) == 0 {
 		node := nodeRels.Nodes[0]
@@ -191,10 +201,10 @@ func (p *Parser) parseMatchClause() (*MatchClause, error) {
 		}
 	}
 
-	var filters []*KeyValuePair
+	var filters []*Filter
 	if p.current.Type == WHERE {
 		p.advance()
-		filters, err = p.parseKeyValuePairs()
+		filters, err = p.parseFilters()
 		if err != nil {
 			return nil, err
 		}
@@ -531,12 +541,14 @@ func (p *Parser) parseSetClause() (*SetClause, error) {
 	}
 	p.advance()
 
-	pairs, err := p.parseKeyValuePairs()
+	filters, err := p.parseFilters()
 	if err != nil {
 		return nil, err
 	}
 
-	return &SetClause{KeyValuePairs: pairs}, nil
+	// Extract only KeyValuePairs for SET clause
+	kvPairs := extractKeyValuePairs(filters)
+	return &SetClause{KeyValuePairs: kvPairs}, nil
 }
 
 // parseDeleteClause parses: DELETE NodeIds
@@ -760,76 +772,117 @@ func (p *Parser) parseProperties() (*Properties, error) {
 	return &Properties{PropertyList: propertyList}, nil
 }
 
-// parseKeyValuePairs parses a list of key-value pairs with operators
-func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
-	var pairs []*KeyValuePair
+// parseFilters parses a list of either key-value pairs with operators or submatch patterns
+func (p *Parser) parseFilters() ([]*Filter, error) {
+	var filters []*Filter
 
 	for {
-		// Check for NOT token before the identifier
+		// Check for NOT token before the pattern
 		isNegated := false
 		if p.current.Type == NOT {
 			isNegated = true
 			p.advance()
 		}
 
-		if p.current.Type != IDENT {
-			return nil, fmt.Errorf("expected identifier, got \"%v\"", p.current.Literal)
-		}
-		var path strings.Builder
-		path.WriteString(p.current.Literal)
-		p.advance()
+		// Check if this is a submatch pattern
+		if p.current.Type == LPAREN {
+			// Check if there are any kindless nodes in the match clause
+			if hasKindlessNodes(p.matchNodes) {
+				return nil, fmt.Errorf("pattern-based filters in WHERE clause are not allowed when kindless nodes exist in the MATCH clause")
+			}
 
-		for {
-			if p.current.Type == DOT {
-				p.advance()
-				path.WriteString(".")
-				if p.current.Type != IDENT {
-					return nil, fmt.Errorf("expected identifier after dot, got \"%v\"", p.current.Literal)
+			nodeRels, err := p.parseNodeRelationshipList()
+			if err != nil {
+				return nil, err
+			}
+
+			// Validate the submatch pattern
+			err = p.validateSubmatchPattern(nodeRels.Nodes, nodeRels.Relationships)
+			if err != nil {
+				return nil, err
+			}
+
+			var referenceNodeName string
+			for _, node := range nodeRels.Nodes {
+				if !strings.Contains(node.ResourceProperties.Name, "_anon") {
+					referenceNodeName = node.ResourceProperties.Name
+					break
 				}
-				path.WriteString(p.current.Literal)
-				p.advance()
-			} else if p.current.Type == LBRACKET {
-				p.advance()
-				path.WriteString("[")
-				// Add support for wildcard
-				if p.current.Type == ILLEGAL && p.current.Literal == "*" {
-					path.WriteString("*")
+			}
+
+			filters = append(filters, &Filter{
+				Type: "SubMatch",
+				SubMatch: &SubMatch{
+					IsNegated:         isNegated,
+					Nodes:             nodeRels.Nodes,
+					Relationships:     nodeRels.Relationships,
+					ReferenceNodeName: referenceNodeName,
+				},
+			})
+		} else {
+			// Handle regular key-value pair
+			if p.current.Type != IDENT {
+				return nil, fmt.Errorf("expected identifier or pattern, got \"%v\"", p.current.Literal)
+			}
+			var path strings.Builder
+			path.WriteString(p.current.Literal)
+			p.advance()
+
+			for {
+				if p.current.Type == DOT {
 					p.advance()
-				} else if p.current.Type == NUMBER {
+					path.WriteString(".")
+					if p.current.Type != IDENT {
+						return nil, fmt.Errorf("expected identifier after dot, got \"%v\"", p.current.Literal)
+					}
 					path.WriteString(p.current.Literal)
 					p.advance()
+				} else if p.current.Type == LBRACKET {
+					p.advance()
+					path.WriteString("[")
+					// Add support for wildcard
+					if p.current.Type == ILLEGAL && p.current.Literal == "*" {
+						path.WriteString("*")
+						p.advance()
+					} else if p.current.Type == NUMBER {
+						path.WriteString(p.current.Literal)
+						p.advance()
+					} else {
+						return nil, fmt.Errorf("expected number or * in array index, got \"%v\"", p.current.Literal)
+					}
+					if p.current.Type != RBRACKET {
+						return nil, fmt.Errorf("expected closing bracket, got \"%v\"", p.current.Literal)
+					}
+					path.WriteString("]")
+					p.advance()
+					if p.current.Type == DOT {
+						continue
+					}
 				} else {
-					return nil, fmt.Errorf("expected number or * in array index, got \"%v\"", p.current.Literal)
+					break
 				}
-				if p.current.Type != RBRACKET {
-					return nil, fmt.Errorf("expected closing bracket, got \"%v\"", p.current.Literal)
-				}
-				path.WriteString("]")
-				p.advance()
-				if p.current.Type == DOT {
-					continue
-				}
-			} else {
-				break
 			}
-		}
 
-		operator, err := p.parseOperator()
-		if err != nil {
-			return nil, err
-		}
+			operator, err := p.parseOperator()
+			if err != nil {
+				return nil, err
+			}
 
-		value, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
+			value, err := p.parseValue()
+			if err != nil {
+				return nil, err
+			}
 
-		pairs = append(pairs, &KeyValuePair{
-			Key:       path.String(),
-			Value:     value,
-			Operator:  operator,
-			IsNegated: isNegated,
-		})
+			filters = append(filters, &Filter{
+				Type: "KeyValuePair",
+				KeyValuePair: &KeyValuePair{
+					Key:       path.String(),
+					Value:     value,
+					Operator:  operator,
+					IsNegated: isNegated,
+				},
+			})
+		}
 
 		if p.current.Type != COMMA && p.current.Type != AND {
 			break
@@ -837,7 +890,7 @@ func (p *Parser) parseKeyValuePairs() ([]*KeyValuePair, error) {
 		p.advance()
 	}
 
-	return pairs, nil
+	return filters, nil
 }
 
 // parseOperator parses comparison operators
@@ -978,7 +1031,7 @@ func (p *Parser) parseRelationshipProperties() (*ResourceProperties, error) {
 
 // ParseQuery is the main entry point for parsing Cyphernetes queries
 func ParseQuery(query string) (*Expression, error) {
-	parser := NewRecursiveParser(query)
+	parser := NewParser(query)
 	expr, err := parser.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("parse error: %w", err)
@@ -1015,4 +1068,81 @@ func ValidateAnonymousNode(node *NodePattern, relationships []*Relationship) err
 
 	// Node is anonymous and not used in any relationship
 	return fmt.Errorf("standalone anonymous node '()' is not allowed")
+}
+
+// Add after parseMatchClause
+func (p *Parser) trackMatchVariables(nodes []*NodePattern) {
+	for _, node := range nodes {
+		if !node.IsAnonymous && node.ResourceProperties != nil {
+			p.matchVariables[node.ResourceProperties.Name] = node
+		}
+	}
+}
+
+// Add new method to validate submatch patterns
+func (p *Parser) validateSubmatchPattern(nodes []*NodePattern, relationships []*Relationship) error {
+	referenceCount := 0
+	var referenceNode *NodePattern
+
+	// First pass: Find and validate reference nodes
+	for _, node := range nodes {
+		if !node.IsAnonymous {
+			if originalNode, exists := p.matchVariables[node.ResourceProperties.Name]; exists {
+				referenceCount++
+				referenceNode = node
+
+				// Validate reference node doesn't have kind or properties
+				if node.ResourceProperties.Kind != "" {
+					return fmt.Errorf("reference node cannot have a kind")
+				}
+				if node.ResourceProperties.Properties != nil {
+					return fmt.Errorf("reference node cannot have properties")
+				}
+
+				// Copy kind from original node for later use
+				node.ResourceProperties.Kind = originalNode.ResourceProperties.Kind
+			}
+		}
+	}
+
+	// Validate reference count
+	if referenceCount == 0 {
+		return fmt.Errorf("pattern must reference exactly one variable from the MATCH clause")
+	}
+	if referenceCount > 1 {
+		return fmt.Errorf("pattern must reference exactly one variable from the MATCH clause, found %d", referenceCount)
+	}
+
+	// Second pass: Validate other nodes
+	for _, node := range nodes {
+		if node != referenceNode && !node.IsAnonymous {
+			return fmt.Errorf("node '%s' in WHERE pattern must not specify a variable name", node.ResourceProperties.Name)
+		}
+	}
+
+	// TODO: Validate a relationship rule exists between the reference node and the other nodes
+	debugLog("relationhships in validateSubmatchPattern: %v", relationships)
+
+	return nil
+}
+
+// Add new method to extract KeyValuePairs from Filters
+func extractKeyValuePairs(filters []*Filter) []*KeyValuePair {
+	var kvPairs []*KeyValuePair
+	for _, filter := range filters {
+		if filter.Type == "KeyValuePair" {
+			kvPairs = append(kvPairs, filter.KeyValuePair)
+		}
+	}
+	return kvPairs
+}
+
+// Add helper function to check for kindless nodes
+func hasKindlessNodes(nodes []*NodePattern) bool {
+	for _, node := range nodes {
+		if node.ResourceProperties != nil && node.ResourceProperties.Kind == "" {
+			return true
+		}
+	}
+	return false
 }
