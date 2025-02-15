@@ -18,52 +18,44 @@ kubectl apply -f https://raw.githubusercontent.com/avitaltamir/cyphernetes/main/
 Or using Helm:
 
 ```bash
-helm repo add cyphernetes https://avitaltamir.github.io/cyphernetes/charts
-helm repo update
-helm install cyphernetes-operator cyphernetes/operator
+helm pull oci://ghcr.io/avitaltamir/cyphernetes/cyphernetes-operator
+tar -xvf cyphernetes-operator-*.tgz
+cd cyphernetes-operator
+helm upgrade --install cyphernetes-operator . --namespace cyphernetes-operator --create-namespace
 ```
 
 ## Custom Resources
 
-The operator introduces the following Custom Resource Definitions (CRDs):
+The operator introduces the following Custom Resource Definition (CRD):
 
 ### DynamicOperator
 
-The DynamicOperator CRD allows you to define Kubernetes automation using Cyphernetes queries:
+The DynamicOperator CRD allows you to define Kubernetes automation using Cyphernetes queries. It watches specified resources and executes queries in response to resource events:
 
 ```yaml
-apiVersion: cyphernetes.io/v1alpha1
+apiVersion: cyphernetes-operator.cyphernet.es/v1
 kind: DynamicOperator
 metadata:
   name: pod-cleaner
+  namespace: default
 spec:
-  query: |
-    MATCH (p:Pod)
+  resourceKind: pods
+  namespace: default
+  onUpdate: |
+    MATCH (p:Pod {metadata: {name: "{{$.metadata.name}}"}})
     WHERE p.status.phase = "Failed"
     DELETE p;
-  schedule: "*/5 * * * *"  # Cron schedule
-  dryRun: false  # Set to true to log actions without executing them
 ```
 
-### QueryMonitor
+The DynamicOperator spec supports the following fields:
+- `resourceKind` (required): The Kubernetes resource kind to watch
+- `namespace`: The namespace to watch (if empty, watches all namespaces)
+- `onCreate`: Query to execute when a resource is created
+- `onUpdate`: Query to execute when a resource is updated
+- `onDelete`: Query to execute when a resource is deleted
+- `finalizer`: Whether to register a finalizer on watched resources (defaults to false)
 
-The QueryMonitor CRD allows you to monitor cluster state using Cyphernetes queries:
-
-```yaml
-apiVersion: cyphernetes.io/v1alpha1
-kind: QueryMonitor
-metadata:
-  name: deployment-monitor
-spec:
-  query: |
-    MATCH (d:Deployment)
-    WHERE d.status.availableReplicas < d.spec.replicas
-    RETURN d.metadata.name, d.spec.replicas, d.status.availableReplicas;
-  interval: 60s  # Check every 60 seconds
-  alerting:
-    slack:
-      webhook: "https://hooks.slack.com/services/..."
-```
+At least one of `onCreate`, `onUpdate`, or `onDelete` must be specified.
 
 ## Common Use Cases
 
@@ -72,38 +64,38 @@ spec:
 Clean up resources based on conditions:
 
 ```yaml
-apiVersion: cyphernetes.io/v1alpha1
+apiVersion: cyphernetes-operator.cyphernet.es/v1
 kind: DynamicOperator
 metadata:
   name: cleanup-operator
+  namespace: default
 spec:
-  query: |
-    // Delete completed jobs older than 24 hours
-    MATCH (j:Job)
-    WHERE j.status.completionTime < datetime() - duration("P1D")
+  resourceKind: jobs
+  namespace: default
+  onUpdate: |
+    MATCH (j:Job {metadata: {name: "{{$.metadata.name}}"}})
+    WHERE j.status.completionTime != NULL
+      AND j.status.succeeded > 0
     DELETE j;
-  schedule: "0 * * * *"  # Run hourly
 ```
 
 ### Resource Validation
 
-Enforce cluster policies:
+Monitor and enforce cluster policies:
 
 ```yaml
-apiVersion: cyphernetes.io/v1alpha1
-kind: QueryMonitor
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
 metadata:
   name: resource-validator
+  namespace: default
 spec:
-  query: |
-    // Find pods without resource limits
-    MATCH (p:Pod)
+  resourceKind: pods
+  namespace: default
+  onCreate: |
+    MATCH (p:Pod {metadata: {name: "{{$.metadata.name}}"}})
     WHERE NOT EXISTS(p.spec.containers[0].resources.limits)
-    RETURN p.metadata.name, p.metadata.namespace;
-  interval: 300s
-  alerting:
-    email:
-      to: "platform-team@company.com"
+    DELETE p;
 ```
 
 ### Service Health Monitoring
@@ -111,20 +103,18 @@ spec:
 Monitor service health across the cluster:
 
 ```yaml
-apiVersion: cyphernetes.io/v1alpha1
-kind: QueryMonitor
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
 metadata:
   name: service-health
+  namespace: default
 spec:
-  query: |
-    // Find services with no healthy endpoints
-    MATCH (s:Service)-[:HAS_ENDPOINT]->(e:Endpoints)
-    WHERE size(e.subsets) = 0
-    RETURN s.metadata.name, s.metadata.namespace;
-  interval: 30s
-  alerting:
-    slack:
-      channel: "#platform-alerts"
+  resourceKind: services
+  namespace: default
+  onUpdate: |
+    MATCH (s:Service {metadata: {name: "{{$.metadata.name}}"}})
+    WHERE NOT (s)->(:core.Endpoints)
+    DELETE s;
 ```
 
 ## Configuration
@@ -185,7 +175,7 @@ Health and readiness probes are available at:
 
 ## Best Practices
 
-1. **Start with DryRun**: When creating new DynamicOperators, start with `dryRun: true`
+1. **Start with Dry Run**: Test your operators in a development environment first
 2. **Use Namespaces**: Scope operators to specific namespaces when possible
 3. **Resource Limits**: Set appropriate resource limits for the operator
 4. **Monitor Logs**: Keep track of operator logs for debugging
