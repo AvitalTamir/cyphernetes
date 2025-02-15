@@ -54,6 +54,10 @@ const config: Config = {
         hideable: true,
       },
     },
+    colorMode: {
+      defaultMode: "dark",
+      respectPrefersColorScheme: true,
+    },
     navbar: {
       title: "Cyphernetes",
       logo: {
@@ -65,12 +69,13 @@ const config: Config = {
           type: "docSidebar",
           sidebarId: "tutorialSidebar",
           position: "left",
-          label: "Docs",
+          label: "Documentation",
         },
         {
           href: "https://github.com/avitaltamir/cyphernetes",
-          label: "GitHub",
           position: "right",
+          className: "header-github-link",
+          "aria-label": "GitHub repository",
         },
       ],
     },
@@ -78,11 +83,15 @@ const config: Config = {
       style: "dark",
       links: [
         {
-          title: "Docs",
+          title: "Documentation",
           items: [
             {
-              label: "Documentation",
+              label: "Getting Started",
               to: "/docs/installation",
+            },
+            {
+              label: "Examples",
+              to: "/docs/examples",
             },
           ],
         },
@@ -90,17 +99,12 @@ const config: Config = {
           title: "Community",
           items: [
             {
-              label: "GitHub Discussions",
-              href: "https://github.com/avitaltamir/cyphernetes/discussions",
-            },
-          ],
-        },
-        {
-          title: "More",
-          items: [
-            {
               label: "GitHub",
               href: "https://github.com/avitaltamir/cyphernetes",
+            },
+            {
+              label: "Discussions",
+              href: "https://github.com/avitaltamir/cyphernetes/discussions",
             },
           ],
         },
@@ -108,13 +112,13 @@ const config: Config = {
           title: "Contact",
           items: [
             {
-              label: "Email",
+              label: "team@cyphernet.es",
               href: "mailto:team@cyphernet.es",
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Cyphernetes. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Cyphernetes`,
     },
     prism: {
       theme: prismThemes.vsDark,

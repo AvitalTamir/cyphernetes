@@ -6,32 +6,50 @@
 
 /* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #666666;
-  --ifm-color-primary-dark: #2563eb;
-  --ifm-color-primary-darker: #1d4ed8;
-  --ifm-color-primary-darkest: #1e40af;
-  --ifm-color-primary-light: #60a5fa;
-  --ifm-color-primary-lighter: #93c5fd;
-  --ifm-color-primary-lightest: #bfdbfe;
+  --ifm-color-primary: #4f46e5;
+  --ifm-color-primary-dark: #4338ca;
+  --ifm-color-primary-darker: #3730a3;
+  --ifm-color-primary-darkest: #312e81;
+  --ifm-color-primary-light: #6366f1;
+  --ifm-color-primary-lighter: #818cf8;
+  --ifm-color-primary-lightest: #a5b4fc;
   --ifm-code-font-size: 95%;
+  --ifm-font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ifm-navbar-height: 4rem;
+  --ifm-navbar-padding-vertical: 0.75rem;
+  --ifm-navbar-background-color: rgba(247, 248, 252, 0.8);
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-code-background: #f3f4f6;
+  --code-block-bg: #1e1e1e;
+  --code-block-color: #e5e7eb;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #8c52ff;
-  --ifm-color-primary-dark: #8c52ff;
-  --ifm-color-primary-darker: #8c52ff;
-  --ifm-color-primary-darkest: #8c52ff;
-  --ifm-color-primary-light: #8c52ff;
-  --ifm-color-primary-lighter: #8c52ff;
-  --ifm-color-primary-lightest: #8c52ff;
+  --ifm-color-primary: #8b5cf6;
+  --ifm-color-primary-dark: #7c3aed;
+  --ifm-color-primary-darker: #6d28d9;
+  --ifm-color-primary-darkest: #5b21b6;
+  --ifm-color-primary-light: #a78bfa;
+  --ifm-color-primary-lighter: #c4b5fd;
+  --ifm-color-primary-lightest: #ddd6fe;
+  --ifm-background-color: #0f172a;
+  --ifm-navbar-background-color: rgba(15, 23, 42, 0.8);
+  --ifm-footer-background-color: #1e293b;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --code-block-bg: #1a1a1a;
+  --code-block-color: #e5e7eb;
+}
+
+/* Navbar customization */
+.navbar {
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
 /* GitHub icon in navbar */
 .header-github-link:hover {
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 .header-github-link::before {
@@ -50,27 +68,92 @@
 
 /* Footer customization */
 .footer {
-  background-color: #f0f0f5;
+  padding: 2rem 0;
+  background-color: var(--ifm-navbar-background-color);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--ifm-toc-border-color);
 }
 
-.footer .footer__link-item {
+.footer__link-item {
+  font-weight: normal;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  transition: opacity 0.2s;
   color: var(--ifm-color-primary);
 }
 
-.footer .footer__title {
-  color: var(--ifm-color-primary);
+.footer__link-item:hover {
+  opacity: 1;
+  text-decoration: none;
+  color: var(--ifm-color-primary-dark);
 }
 
-.footer .footer__copyright {
-  color: var(--ifm-color-primary);
+.footer__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-color-primary-darker);
 }
 
-[data-theme='dark'] .footer {
-  background-color: #1a1333;
+[data-theme='dark'] .footer__title {
+  color: var(--ifm-color-primary-lighter);
 }
 
-[data-theme='dark'] .footer .footer__link-item,
-[data-theme='dark'] .footer .footer__title,
-[data-theme='dark'] .footer .footer__copyright {
-  color: var(--ifm-color-primary);
+[data-theme='dark'] .footer__link-item {
+  color: var(--ifm-color-primary-light);
+}
+
+[data-theme='dark'] .footer__link-item:hover {
+  color: var(--ifm-color-primary-lighter);
+}
+
+.footer__copyright {
+  font-size: 0.9rem;
+  margin-top: 2rem;
+  color: var(--ifm-color-primary-darker);
+}
+
+[data-theme='dark'] .footer__copyright {
+  color: #9ca3af;
+}
+
+/* General improvements */
+article {
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.markdown h1:first-child {
+  --ifm-h1-font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.markdown > h2 {
+  --ifm-h2-font-size: 1.8rem;
+}
+
+.theme-doc-markdown {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* Code block customization */
+div[class^='codeBlockContainer'] {
+  box-shadow: none;
+  background-color: var(--code-block-bg);
+}
+
+div[class^='codeBlockContent'] {
+  background-color: var(--code-block-bg);
+  color: var(--code-block-color);
+}
+
+.prism-code {
+  background-color: var(--code-block-bg) !important;
+  color: var(--code-block-color) !important;
+}
+
+:not(pre) > code {
+  background-color: var(--ifm-code-background);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
