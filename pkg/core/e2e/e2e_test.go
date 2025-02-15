@@ -626,7 +626,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			executor, err := core.NewQueryExecutor(provider)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Query to find pods owned by the deployment through a replicaset
+			// Query to find deployments that do not have a replicaset that has a pod
 			ast, err := core.ParseQuery(`
 				MATCH (d:Deployment)
 				WHERE NOT (d)->(:ReplicaSet)->(:Pod)
@@ -643,7 +643,7 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
 			Expect(deployments).To(HaveLen(1), "Expected a single deployment")
 
-			// Query to find pods owned by the deployment through a replicaset
+			// Query to find deployments that have a replicaset that has a pod
 			ast, err = core.ParseQuery(`
 				MATCH (d:Deployment)
 				WHERE (d)->(:ReplicaSet)->(:Pod)
