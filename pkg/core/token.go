@@ -11,6 +11,12 @@ const (
 	NULL
 	JSONDATA
 
+	// Temporal functions and operators
+	DATETIME
+	DURATION
+	PLUS
+	MINUS
+
 	// Keywords
 	MATCH
 	CREATE

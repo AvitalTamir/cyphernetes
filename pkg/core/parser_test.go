@@ -1660,3 +1660,69 @@ func TestParserErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestTemporalExpressions(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "simple datetime comparison",
+			input:   `MATCH (p:Pod) WHERE p.status.startTime < datetime() RETURN p.metadata.name`,
+			wantErr: false,
+		},
+		{
+			name:    "datetime with duration subtraction",
+			input:   `MATCH (p:Pod) WHERE p.status.startTime < datetime() - duration("PT1H") RETURN p.status.startTime`,
+			wantErr: false,
+		},
+		{
+			name:    "invalid duration format",
+			input:   `MATCH (p:Pod) WHERE p.status.startTime < datetime() - duration("1hour") RETURN p`,
+			wantErr: true,
+			errMsg:  "invalid ISO 8601 duration format",
+		},
+		{
+			name:    "invalid temporal operation",
+			input:   `MATCH (p:Pod) WHERE p.status.startTime < duration("PT1H") - datetime() RETURN p`,
+			wantErr: true,
+			errMsg:  "invalid temporal expression: duration cannot be subtracted from datetime",
+		},
+		{
+			name:    "complex temporal expression",
+			input:   `MATCH (p:Pod) WHERE p.status.phase = "Failed" AND p.status.startTime < datetime() - duration("PT1H") RETURN p`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser(tt.input)
+			expr, err := parser.Parse()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got no error", tt.errMsg)
+				} else if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			// Verify the AST contains temporal expressions
+			if expr == nil {
+				t.Error("expected non-nil expression")
+				return
+			}
+
+			// Additional AST validation can be added here
+		})
+	}
+}
