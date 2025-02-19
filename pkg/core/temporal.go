@@ -16,12 +16,23 @@ func NewTemporalHandler() *TemporalHandler {
 
 // EvaluateTemporalExpression evaluates a temporal expression and returns a time.Time
 func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (time.Time, error) {
-	fmt.Printf("Evaluating temporal expression: Function=%s, Operation=%s\n", expr.Function, expr.Operation)
+	fmt.Printf("Evaluating temporal expression: Function=%s, Operation=%s, Argument=%s\n", expr.Function, expr.Operation, expr.Argument)
 
 	switch expr.Function {
 	case "datetime":
-		// Get current time once and use it consistently
-		now := time.Now().UTC().Truncate(time.Second)
+		// Get current time or parse provided time
+		var now time.Time
+		if expr.Argument != "" {
+			var err error
+			now, err = time.Parse(time.RFC3339, expr.Argument)
+			if err != nil {
+				return time.Time{}, fmt.Errorf("invalid ISO 8601 datetime format: %v", err)
+			}
+		} else {
+			now = time.Now().UTC()
+		}
+		now = now.Truncate(time.Second)
+
 		if expr.Operation != "" {
 			if expr.RightExpr == nil {
 				return time.Time{}, fmt.Errorf("right expression required for datetime operation")
@@ -89,8 +100,17 @@ func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (
 
 // ParseISO8601Duration parses an ISO 8601 duration string and returns a time.Duration
 func (h *TemporalHandler) ParseISO8601Duration(durationStr string) (time.Duration, error) {
+	if durationStr == "" {
+		return 0, fmt.Errorf("empty duration string")
+	}
+
 	if !strings.HasPrefix(durationStr, "P") {
 		return 0, fmt.Errorf("invalid ISO 8601 duration format: must start with P")
+	}
+
+	// If string is just "P" or "PT", it's invalid
+	if durationStr == "P" || durationStr == "PT" {
+		return 0, fmt.Errorf("invalid ISO 8601 duration format: missing duration values")
 	}
 
 	var duration time.Duration

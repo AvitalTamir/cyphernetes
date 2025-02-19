@@ -91,9 +91,9 @@ func (l *Lexer) NextToken() Token {
 			case "NOT":
 				return Token{Type: NOT, Literal: lit}
 			case "DATETIME":
-				return Token{Type: DATETIME, Literal: lit}
+				return Token{Type: DATETIME, Literal: "datetime"}
 			case "DURATION":
-				return Token{Type: DURATION, Literal: lit}
+				return Token{Type: DURATION, Literal: "duration"}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
 				if !l.isInJsonPath {

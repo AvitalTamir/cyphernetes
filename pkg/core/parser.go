@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Parser struct {
@@ -986,6 +987,9 @@ func (p *Parser) parseValue() (interface{}, error) {
 // parseTemporalExpression parses datetime() and duration() functions and their operations
 func (p *Parser) parseTemporalExpression() (*TemporalExpression, error) {
 	// Save the function type
+	if p.current.Type != DATETIME && p.current.Type != DURATION {
+		return nil, fmt.Errorf("expected datetime or duration function, got \"%v\"", p.current.Literal)
+	}
 	function := p.current.Literal
 	p.advance()
 
@@ -996,17 +1000,23 @@ func (p *Parser) parseTemporalExpression() (*TemporalExpression, error) {
 	p.advance()
 
 	var argument string
-	// If this is a duration function, expect a string argument
-	if function == "duration" {
-		if p.current.Type != STRING {
-			return nil, fmt.Errorf("expected string argument for duration, got \"%v\"", p.current.Literal)
-		}
+	// Parse argument if present
+	if p.current.Type == STRING {
 		argument = strings.Trim(p.current.Literal, "\"")
-		// Validate ISO 8601 duration format
-		if !isValidISO8601Duration(argument) {
-			return nil, fmt.Errorf("invalid ISO 8601 duration format: \"%v\"", argument)
-		}
 		p.advance()
+
+		// Validate the argument format based on function type
+		if function == "duration" {
+			if !isValidISO8601Duration(argument) {
+				return nil, fmt.Errorf("invalid ISO 8601 duration format: \"%v\"", argument)
+			}
+		} else if function == "datetime" {
+			if _, err := time.Parse(time.RFC3339, argument); err != nil {
+				return nil, fmt.Errorf("invalid ISO 8601 datetime format: \"%v\"", argument)
+			}
+		}
+	} else if function == "duration" {
+		return nil, fmt.Errorf("duration function requires an ISO 8601 duration string argument")
 	}
 
 	// Expect closing parenthesis
