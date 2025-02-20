@@ -94,6 +94,18 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: DATETIME, Literal: "datetime"}
 			case "DURATION":
 				return Token{Type: DURATION, Literal: "duration"}
+			case "ORDER":
+				return Token{Type: ORDER, Literal: lit}
+			case "BY":
+				return Token{Type: BY, Literal: lit}
+			case "DESC":
+				return Token{Type: DESC, Literal: lit}
+			case "LIMIT":
+				return Token{Type: LIMIT, Literal: lit}
+			case "SKIP":
+				return Token{Type: SKIP, Literal: lit}
+			case "OFFSET":
+				return Token{Type: OFFSET, Literal: lit}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
 				if !l.isInJsonPath {

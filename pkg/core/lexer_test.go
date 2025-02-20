@@ -12,7 +12,7 @@ func TestLexer(t *testing.T) {
 	}{
 		{
 			name:  "keywords",
-			input: "MATCH CREATE WHERE SET DELETE RETURN IN AS COUNT SUM AND NOT",
+			input: "MATCH CREATE WHERE SET DELETE RETURN IN AS COUNT SUM AND NOT ORDER BY DESC LIMIT SKIP OFFSET",
 			expected: []Token{
 				{Type: MATCH, Literal: "MATCH"},
 				{Type: CREATE, Literal: "CREATE"},
@@ -26,6 +26,12 @@ func TestLexer(t *testing.T) {
 				{Type: SUM, Literal: "SUM"},
 				{Type: AND, Literal: "AND"},
 				{Type: NOT, Literal: "NOT"},
+				{Type: ORDER, Literal: "ORDER"},
+				{Type: BY, Literal: "BY"},
+				{Type: DESC, Literal: "DESC"},
+				{Type: LIMIT, Literal: "LIMIT"},
+				{Type: SKIP, Literal: "SKIP"},
+				{Type: OFFSET, Literal: "OFFSET"},
 				{Type: EOF, Literal: ""},
 			},
 		},

@@ -70,7 +70,10 @@ type DeleteClause struct {
 
 // ReturnClause represents a RETURN clause
 type ReturnClause struct {
-	Items []*ReturnItem
+	Items   []*ReturnItem
+	OrderBy []*OrderByItem
+	Limit   int
+	Skip    int
 }
 
 // ReturnItem represents an item in a RETURN clause
@@ -78,6 +81,12 @@ type ReturnItem struct {
 	JsonPath  string
 	Alias     string
 	Aggregate string
+}
+
+// OrderByItem represents an item in an ORDER BY clause
+type OrderByItem struct {
+	JsonPath string
+	Desc     bool
 }
 
 // NodePattern represents a node pattern in a query
