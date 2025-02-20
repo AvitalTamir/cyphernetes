@@ -1,0 +1,169 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #4f46e5;
+  --ifm-color-primary-dark: #4338ca;
+  --ifm-color-primary-darker: #3730a3;
+  --ifm-color-primary-darkest: #312e81;
+  --ifm-color-primary-light: #6366f1;
+  --ifm-color-primary-lighter: #818cf8;
+  --ifm-color-primary-lightest: #a5b4fc;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ifm-navbar-height: 4rem;
+  --ifm-navbar-padding-vertical: 0.75rem;
+  --ifm-navbar-background-color: rgba(247, 248, 252, 0.8);
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-code-background: #f3f4f6;
+  --code-block-bg: #1e1e1e;
+  --code-block-color: #e5e7eb;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #8b5cf6;
+  --ifm-color-primary-dark: #7c3aed;
+  --ifm-color-primary-darker: #6d28d9;
+  --ifm-color-primary-darkest: #5b21b6;
+  --ifm-color-primary-light: #a78bfa;
+  --ifm-color-primary-lighter: #c4b5fd;
+  --ifm-color-primary-lightest: #ddd6fe;
+  --ifm-background-color: #0f172a;
+  --ifm-navbar-background-color: rgba(15, 23, 42, 0.8);
+  --ifm-footer-background-color: #1e293b;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --code-block-bg: #1a1a1a;
+  --code-block-color: #e5e7eb;
+}
+
+/* Navbar customization */
+.navbar {
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+/* GitHub icon in navbar */
+.header-github-link:hover {
+  opacity: 0.7;
+}
+
+.header-github-link::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  display: flex;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E")
+    no-repeat;
+}
+
+[data-theme='dark'] .header-github-link::before {
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='white' d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E")
+    no-repeat;
+}
+
+/* Footer customization */
+.footer {
+  padding: 2rem 0;
+  background-color: var(--ifm-navbar-background-color);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--ifm-toc-border-color);
+}
+
+.footer__link-item {
+  font-weight: normal;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  color: var(--ifm-color-primary);
+}
+
+.footer__link-item:hover {
+  opacity: 1;
+  text-decoration: none;
+  color: var(--ifm-color-primary-dark);
+}
+
+.footer__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-color-primary-darker);
+}
+
+[data-theme='dark'] .footer__title {
+  color: var(--ifm-color-primary-lighter);
+}
+
+[data-theme='dark'] .footer__link-item {
+  color: var(--ifm-color-primary-light);
+}
+
+[data-theme='dark'] .footer__link-item:hover {
+  color: var(--ifm-color-primary-lighter);
+}
+
+.footer__copyright {
+  font-size: 0.9rem;
+  margin-top: 2rem;
+  color: var(--ifm-color-primary-darker);
+}
+
+[data-theme='dark'] .footer__copyright {
+  color: #9ca3af;
+}
+
+/* General improvements */
+article {
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.markdown h1:first-child {
+  --ifm-h1-font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.markdown > h2 {
+  --ifm-h2-font-size: 1.8rem;
+}
+
+.theme-doc-markdown {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* Code block customization */
+div[class^='codeBlockContainer'] {
+  box-shadow: none;
+  background-color: var(--code-block-bg);
+}
+
+div[class^='codeBlockContent'] {
+  background-color: var(--code-block-bg);
+  color: var(--code-block-color);
+  padding: 1rem;
+}
+
+.prism-code {
+  background-color: var(--code-block-bg) !important;
+  color: var(--code-block-color) !important;
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  padding: 1rem !important;
+}
+
+:not(pre) > code {
+  background-color: var(--ifm-code-background);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure code blocks in tabs have proper padding */
+.tabs-container .tabs-content .prism-code {
+  margin: 0;
+  padding: 1rem !important;
+}
