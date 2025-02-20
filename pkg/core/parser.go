@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Parser struct {
@@ -925,7 +926,7 @@ func (p *Parser) parseOperator() (string, error) {
 	}
 }
 
-// parseValue parses literal values (string, int, boolean, jsondata, or null)
+// parseValue parses literal values (string, int, boolean, jsondata, null, or temporal expressions)
 func (p *Parser) parseValue() (interface{}, error) {
 	switch p.current.Type {
 	case STRING:
@@ -952,6 +953,8 @@ func (p *Parser) parseValue() (interface{}, error) {
 	case NULL:
 		p.advance()
 		return nil, nil
+	case DATETIME, DURATION:
+		return p.parseTemporalExpression()
 	case LBRACE:
 		// Collect all tokens until matching }
 		var jsonBuilder strings.Builder
@@ -979,6 +982,133 @@ func (p *Parser) parseValue() (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("expected value, got \"%v\"", p.current.Literal)
 	}
+}
+
+// parseTemporalExpression parses datetime() and duration() functions and their operations
+func (p *Parser) parseTemporalExpression() (*TemporalExpression, error) {
+	// Save the function type
+	if p.current.Type != DATETIME && p.current.Type != DURATION {
+		return nil, fmt.Errorf("expected datetime or duration function, got \"%v\"", p.current.Literal)
+	}
+	function := p.current.Literal
+	p.advance()
+
+	// Expect opening parenthesis
+	if p.current.Type != LPAREN {
+		return nil, fmt.Errorf("expected (, got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	var argument string
+	// Parse argument if present
+	if p.current.Type == STRING {
+		argument = strings.Trim(p.current.Literal, "\"")
+		p.advance()
+
+		// Validate the argument format based on function type
+		if function == "duration" {
+			if !isValidISO8601Duration(argument) {
+				return nil, fmt.Errorf("invalid ISO 8601 duration format: \"%v\"", argument)
+			}
+		} else if function == "datetime" {
+			if _, err := time.Parse(time.RFC3339, argument); err != nil {
+				return nil, fmt.Errorf("invalid ISO 8601 datetime format: \"%v\"", argument)
+			}
+		}
+	} else if function == "duration" {
+		return nil, fmt.Errorf("duration function requires an ISO 8601 duration string argument")
+	}
+
+	// Expect closing parenthesis
+	if p.current.Type != RPAREN {
+		return nil, fmt.Errorf("expected ), got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	expr := &TemporalExpression{
+		Function: function,
+		Argument: argument,
+	}
+
+	// Check for temporal operations
+	if p.current.Type == PLUS || p.current.Type == MINUS {
+		operation := p.current.Literal
+		p.advance()
+
+		// Parse the right side of the operation
+		if p.current.Type != DATETIME && p.current.Type != DURATION {
+			return nil, fmt.Errorf("expected datetime or duration function, got \"%v\"", p.current.Literal)
+		}
+
+		rightExpr, err := p.parseTemporalExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		// Validate the operation
+		if function == "duration" && rightExpr.Function == "datetime" {
+			return nil, fmt.Errorf("invalid temporal expression: duration cannot be subtracted from datetime")
+		}
+
+		expr.Operation = operation
+		expr.RightExpr = rightExpr
+	}
+
+	return expr, nil
+}
+
+// isValidISO8601Duration validates that a string is a valid ISO 8601 duration
+func isValidISO8601Duration(duration string) bool {
+	// Basic validation - should start with P and contain at least one number and designator
+	if !strings.HasPrefix(duration, "P") {
+		return false
+	}
+
+	// Remove the P prefix
+	duration = duration[1:]
+
+	// Split into date and time parts if T is present
+	var datePart, timePart string
+	if idx := strings.Index(duration, "T"); idx != -1 {
+		datePart = duration[:idx]
+		timePart = duration[idx+1:]
+	} else {
+		datePart = duration
+	}
+
+	// Check date part
+	if datePart != "" {
+		if !validateDurationPart(datePart, "YMD") {
+			return false
+		}
+	}
+
+	// Check time part
+	if timePart != "" {
+		if !validateDurationPart(timePart, "HMS") {
+			return false
+		}
+	}
+
+	return true
+}
+
+// validateDurationPart validates a part of the duration string against allowed designators
+func validateDurationPart(part string, allowedDesignators string) bool {
+	var number strings.Builder
+	for _, c := range part {
+		if c >= '0' && c <= '9' {
+			number.WriteRune(c)
+		} else if strings.ContainsRune(allowedDesignators, c) {
+			if number.Len() == 0 {
+				return false // No number before designator
+			}
+			number.Reset()
+		} else {
+			return false // Invalid character
+		}
+	}
+	return number.Len() == 0 // Should end with a designator
 }
 
 // parseRelationshipProperties parses the properties of a relationship

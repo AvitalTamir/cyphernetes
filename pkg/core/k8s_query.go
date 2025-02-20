@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AvitalTamir/jsonpath"
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
@@ -2114,13 +2115,39 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 								break
 							}
 
-							resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-							if err != nil {
-								keep = false
-								break
+							// Check if the filter value is a temporal expression
+							if temporalExpr, ok := filter.Value.(*TemporalExpression); ok {
+								// Convert resource value to time.Time if it's a string
+								var resourceTime time.Time
+								if timeStr, ok := value.(string); ok {
+									resourceTime, err = time.Parse(time.RFC3339, timeStr)
+									if err != nil {
+										keep = false
+										break
+									}
+								} else {
+									keep = false
+									break
+								}
+
+								// Use temporal handler to compare values
+								temporalHandler := NewTemporalHandler()
+								keep, err = temporalHandler.CompareTemporalValues(resourceTime, temporalExpr, filter.Operator)
+								if err != nil {
+									keep = false
+									break
+								}
+							} else {
+								// Regular value comparison
+								resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+								if err != nil {
+									keep = false
+									break
+								}
+
+								keep = compareValues(resourceValue, filterValue, filter.Operator)
 							}
 
-							keep = compareValues(resourceValue, filterValue, filter.Operator)
 							if filter.IsNegated {
 								keep = !keep
 							}

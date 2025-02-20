@@ -113,6 +113,14 @@ type KeyValuePair struct {
 	IsNegated bool
 }
 
+// TemporalExpression represents a datetime operation (e.g., datetime() - duration("PT1H"))
+type TemporalExpression struct {
+	Function  string              // "datetime" or "duration"
+	Argument  string              // For duration function, the ISO 8601 duration string
+	Operation string              // "+" or "-" if this is part of an operation
+	RightExpr *TemporalExpression // Right side of the operation, if any
+}
+
 // Relationship represents a relationship between nodes
 type Relationship struct {
 	ResourceProperties *ResourceProperties
