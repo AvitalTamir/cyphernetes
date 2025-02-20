@@ -609,6 +609,28 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				c.Items = append(c.Items, &ReturnItem{JsonPath: metadataNamePath, Alias: "name"})
 			}
 
+			// Convert to tabular format if we have ORDER BY, LIMIT, or SKIP
+			if len(c.OrderBy) > 0 || c.Limit > 0 || c.Skip > 0 {
+				tabular, err := DocumentToTabular(results, c)
+				if err != nil {
+					return *results, fmt.Errorf("error converting to tabular format: %v", err)
+				}
+
+				// Apply ORDER BY if present
+				if len(c.OrderBy) > 0 {
+					if err := tabular.ApplyOrderBy(c.OrderBy); err != nil {
+						return *results, fmt.Errorf("error applying ORDER BY: %v", err)
+					}
+				}
+
+				// Apply LIMIT and SKIP
+				tabular.ApplyLimitAndSkip(c.Limit, c.Skip)
+
+				// Convert back to document format
+				*results = *TabularToDocument(tabular)
+			}
+
+			// Process return items and aggregations
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if resultMap[nodeId] == nil {
