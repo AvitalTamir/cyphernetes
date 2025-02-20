@@ -98,6 +98,8 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: ORDER, Literal: lit}
 			case "BY":
 				return Token{Type: BY, Literal: lit}
+			case "DESC":
+				return Token{Type: DESC, Literal: lit}
 			case "LIMIT":
 				return Token{Type: LIMIT, Literal: lit}
 			case "SKIP":

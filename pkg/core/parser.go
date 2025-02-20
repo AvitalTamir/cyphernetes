@@ -1381,7 +1381,7 @@ func (p *Parser) parseOrderByItems() ([]*OrderByItem, error) {
 
 		// Check for DESC modifier
 		desc := false
-		if p.current.Type == IDENT && strings.ToUpper(p.current.Literal) == "DESC" {
+		if p.current.Type == DESC {
 			desc = true
 			p.advance()
 		}

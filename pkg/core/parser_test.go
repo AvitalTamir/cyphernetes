@@ -1562,20 +1562,25 @@ func TestParser(t *testing.T) {
 		},
 		{
 			name:  "match with order by desc",
-			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.name DESC`,
+			input: `MATCH (pod:Pod) RETURN pod.metadata.name ORDER BY pod.metadata.name DESC`,
 			want: &Expression{
 				Clauses: []Clause{
 					&MatchClause{
 						Nodes: []*NodePattern{
-							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "pod",
+									Kind: "Pod",
+								},
+							},
 						},
 					},
 					&ReturnClause{
 						Items: []*ReturnItem{
-							{JsonPath: "p.metadata.name"},
+							{JsonPath: "pod.metadata.name"},
 						},
 						OrderBy: []*OrderByItem{
-							{JsonPath: "p.metadata.name", Desc: true},
+							{JsonPath: "pod.metadata.name", Desc: true},
 						},
 					},
 				},
@@ -1702,6 +1707,34 @@ func TestParser(t *testing.T) {
 						},
 						Limit: 10,
 						Skip:  5,
+					},
+				},
+			},
+		},
+		{
+			name:  "match with multiple order by and desc",
+			input: `MATCH (pod:Pod) RETURN pod.metadata.name, pod.status.phase ORDER BY pod.status.phase, pod.metadata.name DESC`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "pod",
+									Kind: "Pod",
+								},
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "pod.metadata.name"},
+							{JsonPath: "pod.status.phase"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "pod.status.phase", Desc: false},
+							{JsonPath: "pod.metadata.name", Desc: true},
+						},
 					},
 				},
 			},

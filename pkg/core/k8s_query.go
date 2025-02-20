@@ -609,28 +609,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				c.Items = append(c.Items, &ReturnItem{JsonPath: metadataNamePath, Alias: "name"})
 			}
 
-			// Convert to tabular format if we have ORDER BY, LIMIT, or SKIP
-			if len(c.OrderBy) > 0 || c.Limit > 0 || c.Skip > 0 {
-				tabular, err := DocumentToTabular(results, c)
-				if err != nil {
-					return *results, fmt.Errorf("error converting to tabular format: %v", err)
-				}
-
-				// Apply ORDER BY if present
-				if len(c.OrderBy) > 0 {
-					if err := tabular.ApplyOrderBy(c.OrderBy); err != nil {
-						return *results, fmt.Errorf("error applying ORDER BY: %v", err)
-					}
-				}
-
-				// Apply LIMIT and SKIP
-				tabular.ApplyLimitAndSkip(c.Limit, c.Skip)
-
-				// Convert back to document format
-				*results = *TabularToDocument(tabular)
-			}
-
-			// Process return items and aggregations
+			// Process return items and aggregations first
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
 				if resultMap[nodeId] == nil {
@@ -671,70 +650,6 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					if err != nil {
 						logDebug("Path not found:", item.JsonPath)
 						result = nil
-					}
-
-					switch strings.ToUpper(item.Aggregate) {
-					case "COUNT":
-						if aggregateResult == nil {
-							aggregateResult = 0
-						}
-						aggregateResult = aggregateResult.(int) + 1
-					case "SUM":
-						if result != nil {
-							if aggregateResult == nil {
-								aggregateResult = reflect.ValueOf(result).Interface()
-							} else {
-								v1 := reflect.ValueOf(aggregateResult)
-								v2 := reflect.ValueOf(result)
-								v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
-								if v1.Kind() == reflect.Ptr {
-									v1 = v1.Elem()
-								}
-								if v2.Kind() == reflect.Ptr {
-									v2 = v2.Elem()
-								}
-
-								isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
-								isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
-
-								switch v1.Kind() {
-								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-									aggregateResult = v1.Int() + v2.Int()
-								case reflect.Float32, reflect.Float64:
-									aggregateResult = v1.Float() + v2.Float()
-								case reflect.String:
-									if isCPUResource {
-										// Convert CPU strings to millicores
-										cpu1, err := convertToMilliCPU(v1.String())
-										if err != nil {
-											return *results, err
-										}
-										cpu2, err := convertToMilliCPU(v2.String())
-										if err != nil {
-											return *results, err
-										}
-										aggregateResult = convertMilliCPUToStandard(cpu1 + cpu2)
-									} else if isMemoryResource {
-										// Convert memory strings to bytes
-										mem1, err := convertMemoryToBytes(v1.String())
-										if err != nil {
-											return *results, err
-										}
-										mem2, err := convertMemoryToBytes(v2.String())
-										if err != nil {
-											return *results, err
-										}
-										aggregateResult = convertBytesToMemory(mem1 + mem2)
-									} else {
-										// Handle unsupported types or error out
-										return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
-									}
-								default:
-									// Handle unsupported types or error out
-									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
-								}
-							}
-						}
 					}
 
 					if item.Aggregate == "" {
@@ -800,8 +715,74 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 							}
 						}
 						currentMap[key] = result
+					} else {
+						// Handle aggregation
+						switch strings.ToUpper(item.Aggregate) {
+						case "COUNT":
+							if aggregateResult == nil {
+								aggregateResult = 0
+							}
+							aggregateResult = aggregateResult.(int) + 1
+						case "SUM":
+							if result != nil {
+								if aggregateResult == nil {
+									aggregateResult = reflect.ValueOf(result).Interface()
+								} else {
+									v1 := reflect.ValueOf(aggregateResult)
+									v2 := reflect.ValueOf(result)
+									v1 = reflect.ValueOf(v1.Interface()).Convert(v1.Type())
+									if v1.Kind() == reflect.Ptr {
+										v1 = v1.Elem()
+									}
+									if v2.Kind() == reflect.Ptr {
+										v2 = v2.Elem()
+									}
+
+									isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
+									isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
+
+									switch v1.Kind() {
+									case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+										aggregateResult = v1.Int() + v2.Int()
+									case reflect.Float32, reflect.Float64:
+										aggregateResult = v1.Float() + v2.Float()
+									case reflect.String:
+										if isCPUResource {
+											// Convert CPU strings to millicores
+											cpu1, err := convertToMilliCPU(v1.String())
+											if err != nil {
+												return *results, err
+											}
+											cpu2, err := convertToMilliCPU(v2.String())
+											if err != nil {
+												return *results, err
+											}
+											aggregateResult = convertMilliCPUToStandard(cpu1 + cpu2)
+										} else if isMemoryResource {
+											// Convert memory strings to bytes
+											mem1, err := convertMemoryToBytes(v1.String())
+											if err != nil {
+												return *results, err
+											}
+											mem2, err := convertMemoryToBytes(v2.String())
+											if err != nil {
+												return *results, err
+											}
+											aggregateResult = convertBytesToMemory(mem1 + mem2)
+										} else {
+											// Handle unsupported types or error out
+											return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+										}
+									default:
+										// Handle unsupported types or error out
+										return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+									}
+								}
+							}
+						}
 					}
 				}
+
 				if item.Aggregate != "" {
 					if results.Data["aggregate"] == nil {
 						results.Data["aggregate"] = make(map[string]interface{})
@@ -820,6 +801,27 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					}
 					aggregateMap[key] = aggregateResult
 				}
+			}
+
+			// Now that we have populated the data, convert to tabular format if we have ORDER BY, LIMIT, or SKIP
+			if len(c.OrderBy) > 0 || c.Limit > 0 || c.Skip > 0 {
+				tabular, err := DocumentToTabular(results, c)
+				if err != nil {
+					return *results, fmt.Errorf("error converting to tabular format: %v", err)
+				}
+
+				// Apply ORDER BY if present
+				if len(c.OrderBy) > 0 {
+					if err := tabular.ApplyOrderBy(c.OrderBy); err != nil {
+						return *results, fmt.Errorf("error applying ORDER BY: %v", err)
+					}
+				}
+
+				// Apply LIMIT and SKIP
+				tabular.ApplyLimitAndSkip(c.Limit, c.Skip)
+
+				// Convert back to document format
+				*results = *TabularToDocument(tabular)
 			}
 
 		default:

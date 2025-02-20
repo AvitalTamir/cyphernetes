@@ -27,6 +27,9 @@ func NewTabularResult() *TabularResult {
 func DocumentToTabular(result *QueryResult, returnClause *ReturnClause) (*TabularResult, error) {
 	tabular := NewTabularResult()
 
+	fmt.Printf("Converting to tabular format. Input result: %+v\n", result)
+	fmt.Printf("Return clause: %+v\n", returnClause)
+
 	// First, collect all columns from return items
 	for _, item := range returnClause.Items {
 		colName := item.Alias
@@ -36,6 +39,8 @@ func DocumentToTabular(result *QueryResult, returnClause *ReturnClause) (*Tabula
 		tabular.Columns = append(tabular.Columns, colName)
 	}
 
+	fmt.Printf("Collected columns: %v\n", tabular.Columns)
+
 	// Create rows from the document data
 	nodeIds := make([]string, 0)
 	for nodeId := range result.Data {
@@ -44,17 +49,23 @@ func DocumentToTabular(result *QueryResult, returnClause *ReturnClause) (*Tabula
 		}
 	}
 
+	fmt.Printf("Found node IDs: %v\n", nodeIds)
+
 	// For each node's data array
 	for _, nodeId := range nodeIds {
 		dataArray, ok := result.Data[nodeId].([]interface{})
 		if !ok {
+			fmt.Printf("Warning: Data for nodeId %s is not an array: %v\n", nodeId, result.Data[nodeId])
 			continue
 		}
+
+		fmt.Printf("Processing data array for node %s: %+v\n", nodeId, dataArray)
 
 		// For each item in the data array
 		for _, data := range dataArray {
 			dataMap, ok := data.(map[string]interface{})
 			if !ok {
+				fmt.Printf("Warning: Data item is not a map: %v\n", data)
 				continue
 			}
 
@@ -71,6 +82,7 @@ func DocumentToTabular(result *QueryResult, returnClause *ReturnClause) (*Tabula
 					// Get the nested value using the path
 					value := getNestedValue(dataMap, strings.TrimPrefix(item.JsonPath, nodeId+"."))
 					row[colName] = value
+					fmt.Printf("Added value to row: column=%s value=%v\n", colName, value)
 				}
 			}
 
@@ -82,6 +94,9 @@ func DocumentToTabular(result *QueryResult, returnClause *ReturnClause) (*Tabula
 			tabular.NodeMap[nodeId] = append(tabular.NodeMap[nodeId], len(tabular.Rows)-1)
 		}
 	}
+
+	fmt.Printf("Final tabular result: Columns=%v Rows=%+v NodeMap=%v\n",
+		tabular.Columns, tabular.Rows, tabular.NodeMap)
 
 	return tabular, nil
 }
@@ -131,31 +146,71 @@ func (t *TabularResult) ApplyOrderBy(orderBy []*OrderByItem) error {
 		return nil
 	}
 
+	fmt.Printf("\n=== ApplyOrderBy ===\n")
+	fmt.Printf("Initial rows before sorting: %+v\n", t.Rows)
+	fmt.Printf("OrderBy items details:\n")
+	for i, item := range orderBy {
+		fmt.Printf("  Item %d: JsonPath=%s Desc=%v\n", i, item.JsonPath, item.Desc)
+	}
+	fmt.Printf("Columns in tabular result: %v\n", t.Columns)
+	fmt.Printf("NodeMap: %v\n", t.NodeMap)
+
+	// Validate that all ORDER BY fields exist in at least one row
+	for _, item := range orderBy {
+		fieldExists := false
+		for _, row := range t.Rows {
+			if value := row[item.JsonPath]; value != nil {
+				fieldExists = true
+				break
+			}
+		}
+		if !fieldExists {
+			return fmt.Errorf("undefined variable in ORDER BY: %s", item.JsonPath)
+		}
+	}
+
 	sort.SliceStable(t.Rows, func(i, j int) bool {
 		for _, item := range orderBy {
 			colName := item.JsonPath
 			v1 := t.Rows[i][colName]
 			v2 := t.Rows[j][colName]
 
+			fmt.Printf("Comparing rows[%d][%s]=%v with rows[%d][%s]=%v (DESC=%v)\n",
+				i, colName, v1, j, colName, v2, item.Desc)
+
 			// Handle nil values
 			if v1 == nil && v2 == nil {
+				fmt.Printf("Both values nil, continuing to next orderBy item\n")
 				continue
 			}
 			if v1 == nil {
-				return !item.Desc
+				fmt.Printf("v1 is nil, returning %v\n", !item.Desc)
+				return !item.Desc // nil values go first in ASC, last in DESC
 			}
 			if v2 == nil {
-				return item.Desc
+				fmt.Printf("v2 is nil, returning %v\n", item.Desc)
+				return item.Desc // nil values go first in ASC, last in DESC
 			}
 
 			// Compare values based on their type
 			cmp := compareForSort(v1, v2)
+			fmt.Printf("compareForSort result: %d\n", cmp)
+
 			if cmp != 0 {
-				return (cmp < 0) != item.Desc
+				result := false
+				if item.Desc {
+					result = cmp > 0 // For DESC order, we want larger values first
+				} else {
+					result = cmp < 0 // For ASC order, we want smaller values first
+				}
+				fmt.Printf("Comparison result: %v\n", result)
+				return result
 			}
 		}
 		return false
 	})
+
+	fmt.Printf("Final rows after sorting: %+v\n", t.Rows)
 
 	// Update NodeMap indices after sorting
 	for nodeId := range t.NodeMap {
@@ -260,10 +315,13 @@ func compareForSort(v1, v2 interface{}) int {
 	t1 := reflect.TypeOf(v1)
 	t2 := reflect.TypeOf(v2)
 
+	fmt.Printf("compareForSort: comparing %v (%T) with %v (%T)\n", v1, v1, v2, v2)
+
 	// If types are different, convert to string and compare
 	if t1 != t2 {
 		s1 := fmt.Sprintf("%v", v1)
 		s2 := fmt.Sprintf("%v", v2)
+		fmt.Printf("Different types, comparing as strings: '%s' vs '%s'\n", s1, s2)
 		if s1 < s2 {
 			return -1
 		}
@@ -278,6 +336,7 @@ func compareForSort(v1, v2 interface{}) int {
 	case string:
 		s1 := v1.(string)
 		s2 := v2.(string)
+		fmt.Printf("Comparing strings: '%s' vs '%s'\n", s1, s2)
 		if s1 < s2 {
 			return -1
 		}
@@ -288,6 +347,7 @@ func compareForSort(v1, v2 interface{}) int {
 	case int:
 		i1 := v1.(int)
 		i2 := v2.(int)
+		fmt.Printf("Comparing ints: %d vs %d\n", i1, i2)
 		if i1 < i2 {
 			return -1
 		}
@@ -298,6 +358,7 @@ func compareForSort(v1, v2 interface{}) int {
 	case float64:
 		f1 := v1.(float64)
 		f2 := v2.(float64)
+		fmt.Printf("Comparing floats: %f vs %f\n", f1, f2)
 		if f1 < f2 {
 			return -1
 		}
@@ -309,6 +370,7 @@ func compareForSort(v1, v2 interface{}) int {
 		// For unsupported types, convert to string and compare
 		s1 := fmt.Sprintf("%v", v1)
 		s2 := fmt.Sprintf("%v", v2)
+		fmt.Printf("Comparing unsupported types as strings: '%s' vs '%s'\n", s1, s2)
 		if s1 < s2 {
 			return -1
 		}

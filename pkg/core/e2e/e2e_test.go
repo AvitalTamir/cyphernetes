@@ -792,6 +792,238 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(k8sClient.Delete(ctx, oldPod)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, newPod)).Should(Succeed())
 		})
+
+		It("Should execute ORDER BY, LIMIT, and SKIP queries correctly", func() {
+			By("Cleaning up any existing resources")
+			// Delete all pods in the test namespace
+			Expect(k8sClient.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(testNamespace))).Should(Succeed())
+			// Delete all deployments in the test namespace
+			Expect(k8sClient.DeleteAllOf(ctx, &appsv1.Deployment{}, client.InNamespace(testNamespace))).Should(Succeed())
+
+			// Wait for all resources to be deleted
+			Eventually(func() bool {
+				podList := &corev1.PodList{}
+				err := k8sClient.List(ctx, podList, client.InNamespace(testNamespace))
+				if err != nil || len(podList.Items) > 0 {
+					return false
+				}
+
+				deployList := &appsv1.DeploymentList{}
+				err = k8sClient.List(ctx, deployList, client.InNamespace(testNamespace))
+				if err != nil || len(deployList.Items) > 0 {
+					return false
+				}
+
+				return true
+			}, timeout, interval).Should(BeTrue(), "Failed to clean up existing resources")
+
+			By("Creating test resources")
+			testPods := []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod-1",
+						Namespace: testNamespace,
+						Labels: map[string]string{
+							"app": "test",
+						},
+						Annotations: map[string]string{
+							"phase": "Running",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod-2",
+						Namespace: testNamespace,
+						Labels: map[string]string{
+							"app": "test",
+						},
+						Annotations: map[string]string{
+							"phase": "Pending",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod-3",
+						Namespace: testNamespace,
+						Labels: map[string]string{
+							"app": "test",
+						},
+						Annotations: map[string]string{
+							"phase": "Running",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			}
+
+			for _, pod := range testPods {
+				Expect(k8sClient.Create(ctx, pod)).Should(Succeed())
+			}
+
+			// Wait for all pods to be ready
+			for _, pod := range testPods {
+				Eventually(func() error {
+					return k8sClient.Get(ctx, client.ObjectKey{
+						Namespace: testNamespace,
+						Name:      pod.Name,
+					}, &corev1.Pod{})
+				}, timeout, interval).Should(Succeed())
+			}
+
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Testing ORDER BY ascending")
+			ast, err := core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				ORDER BY p.metadata.name
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods := result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(3))
+			Expect(pods[0].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-1"))
+			Expect(pods[1].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-2"))
+			Expect(pods[2].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-3"))
+
+			By("Testing ORDER BY descending")
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				ORDER BY p.metadata.name DESC
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods = result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(3))
+			Expect(pods[0].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-3"))
+			Expect(pods[1].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-2"))
+			Expect(pods[2].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-1"))
+
+			By("Testing ORDER BY multiple fields")
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name, p.metadata.annotations.phase
+				ORDER BY p.metadata.annotations.phase, p.metadata.name
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods = result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(3))
+			// First should be Pending, then Running in name order
+			Expect(pods[0].(map[string]interface{})["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["phase"]).To(Equal("Pending"))
+			Expect(pods[1].(map[string]interface{})["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["phase"]).To(Equal("Running"))
+			Expect(pods[1].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-1"))
+			Expect(pods[2].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-3"))
+
+			By("Testing LIMIT")
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				LIMIT 2
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods = result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(2))
+
+			By("Testing SKIP")
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				ORDER BY p.metadata.name
+				SKIP 1
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods = result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(2))
+			Expect(pods[0].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-2"))
+			Expect(pods[1].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-3"))
+
+			By("Testing LIMIT and SKIP together")
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				ORDER BY p.metadata.name
+				LIMIT 1 SKIP 1
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Data).To(HaveKey("p"))
+
+			pods = result.Data["p"].([]interface{})
+			Expect(pods).To(HaveLen(1))
+			Expect(pods[0].(map[string]interface{})["metadata"].(map[string]interface{})["name"]).To(Equal("test-pod-2"))
+
+			By("Testing error cases")
+			// Test invalid ORDER BY field
+			ast, err = core.ParseQuery(`
+				MATCH (p:Pod)
+				RETURN p.metadata.name
+				ORDER BY p.nonexistent
+			`)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = executor.Execute(ast, testNamespace)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("undefined variable in ORDER BY"))
+
+			By("Cleaning up")
+			for _, pod := range testPods {
+				Expect(k8sClient.Delete(ctx, pod)).Should(Succeed())
+			}
+		})
 	})
 
 	Context("Label Update Operations", func() {

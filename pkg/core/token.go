@@ -34,6 +34,7 @@ const (
 	// Order, limit and skip tokens
 	ORDER
 	BY
+	DESC
 	LIMIT
 	SKIP
 	OFFSET
