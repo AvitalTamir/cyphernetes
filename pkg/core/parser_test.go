@@ -1539,6 +1539,173 @@ func TestParser(t *testing.T) {
 			input:   `MATCH (s:Service) WHERE NOT (x)->(:Endpoints) RETURN s.metadata.name`,
 			wantErr: true,
 		},
+		{
+			name:  "match with order by",
+			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.name`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "p.metadata.name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with order by desc",
+			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.name DESC`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "p.metadata.name", Desc: true},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with order by multiple fields",
+			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.namespace, p.metadata.name DESC`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "p.metadata.namespace"},
+							{JsonPath: "p.metadata.name", Desc: true},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "match with limit",
+			input: `MATCH (p:Pod) RETURN p.metadata.name LIMIT 10`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						Limit: 10,
+					},
+				},
+			},
+		},
+		{
+			name:  "match with skip",
+			input: `MATCH (p:Pod) RETURN p.metadata.name SKIP 5`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						Skip: 5,
+					},
+				},
+			},
+		},
+		{
+			name:  "match with offset",
+			input: `MATCH (p:Pod) RETURN p.metadata.name OFFSET 5`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						Skip: 5,
+					},
+				},
+			},
+		},
+		{
+			name:  "match with order by, limit and skip",
+			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.name DESC LIMIT 10 SKIP 5`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "p.metadata.name", Desc: true},
+						},
+						Limit: 10,
+						Skip:  5,
+					},
+				},
+			},
+		},
+		{
+			name:  "match with order by, limit and offset",
+			input: `MATCH (p:Pod) RETURN p.metadata.name ORDER BY p.metadata.name DESC LIMIT 10 OFFSET 5`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{ResourceProperties: &ResourceProperties{Name: "p", Kind: "Pod"}},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name"},
+						},
+						OrderBy: []*OrderByItem{
+							{JsonPath: "p.metadata.name", Desc: true},
+						},
+						Limit: 10,
+						Skip:  5,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1640,6 +1807,41 @@ func TestParserErrors(t *testing.T) {
 			name:     "invalid array index in SET",
 			input:    `MATCH (d:Deployment) SET d.spec.containers[a].image = "nginx" RETURN d`,
 			contains: "expected number or * in array index",
+		},
+		{
+			name:     "invalid order by without field",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name ORDER BY`,
+			contains: "expected identifier after ORDER BY",
+		},
+		{
+			name:     "invalid limit without number",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name LIMIT`,
+			contains: "expected number after LIMIT",
+		},
+		{
+			name:     "invalid skip without number",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name SKIP`,
+			contains: "expected number after SKIP",
+		},
+		{
+			name:     "invalid offset without number",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name OFFSET`,
+			contains: "expected number after OFFSET",
+		},
+		{
+			name:     "invalid order by with non-existent field",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name ORDER BY x.metadata.name`,
+			contains: "undefined variable in ORDER BY: x",
+		},
+		{
+			name:     "invalid negative limit",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name LIMIT -1`,
+			contains: "LIMIT must be a positive number",
+		},
+		{
+			name:     "invalid negative skip",
+			input:    `MATCH (p:Pod) RETURN p.metadata.name SKIP -1`,
+			contains: "SKIP must be a positive number",
 		},
 	}
 

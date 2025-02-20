@@ -576,7 +576,7 @@ func (p *Parser) parseDeleteClause() (*DeleteClause, error) {
 	return &DeleteClause{NodeIds: nodeIds}, nil
 }
 
-// parseReturnClause parses: RETURN ReturnItems
+// parseReturnClause parses: RETURN ReturnItems (ORDER BY OrderByItems)? (LIMIT Number)? ((SKIP | OFFSET) Number)?
 func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 	if p.current.Type != RETURN {
 		return nil, fmt.Errorf("expected RETURN, got \"%v\"", p.current.Literal)
@@ -588,7 +588,77 @@ func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 		return nil, err
 	}
 
-	return &ReturnClause{Items: items}, nil
+	returnClause := &ReturnClause{
+		Items: items,
+	}
+
+	// Parse optional ORDER BY clause
+	if p.current.Type == ORDER {
+		p.advance()
+		if p.current.Type != BY {
+			return nil, fmt.Errorf("expected BY after ORDER, got \"%v\"", p.current.Literal)
+		}
+		p.advance()
+
+		orderByItems, err := p.parseOrderByItems()
+		if err != nil {
+			return nil, err
+		}
+		returnClause.OrderBy = orderByItems
+	}
+
+	// Parse optional LIMIT clause
+	if p.current.Type == LIMIT {
+		p.advance()
+		limit, err := p.parseNumber("LIMIT")
+		if err != nil {
+			return nil, err
+		}
+		returnClause.Limit = limit
+	}
+
+	// Parse optional SKIP/OFFSET clause
+	if p.current.Type == SKIP || p.current.Type == OFFSET {
+		keyword := p.current.Literal
+		p.advance()
+		skip, err := p.parseNumber(keyword)
+		if err != nil {
+			return nil, err
+		}
+		returnClause.Skip = skip
+	}
+
+	return returnClause, nil
+}
+
+// parseNumber parses a potentially signed number and validates it's positive
+func (p *Parser) parseNumber(keyword string) (int, error) {
+	// Handle negative sign
+	isNegative := false
+	if p.current.Type == MINUS {
+		isNegative = true
+		p.advance()
+	}
+
+	if p.current.Type != NUMBER {
+		return 0, fmt.Errorf("expected number after %s, got \"%v\"", keyword, p.current.Literal)
+	}
+
+	num, err := strconv.Atoi(p.current.Literal)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value: %v", keyword, err)
+	}
+
+	if isNegative {
+		num = -num
+	}
+
+	if num < 0 {
+		return 0, fmt.Errorf("%s must be a positive number", keyword)
+	}
+
+	p.advance()
+	return num, nil
 }
 
 // parseReturnItems parses a list of return items
@@ -1275,4 +1345,57 @@ func hasKindlessNodes(nodes []*NodePattern) bool {
 		}
 	}
 	return false
+}
+
+// parseOrderByItems parses a list of ORDER BY items
+func (p *Parser) parseOrderByItems() ([]*OrderByItem, error) {
+	var items []*OrderByItem
+
+	for {
+		// Parse the json path
+		if p.current.Type != IDENT {
+			return nil, fmt.Errorf("expected identifier after ORDER BY, got \"%v\"", p.current.Literal)
+		}
+
+		// Build the json path
+		var path strings.Builder
+		path.WriteString(p.current.Literal)
+		p.advance()
+
+		// Check if the variable exists in the match clause
+		varName := strings.Split(path.String(), ".")[0]
+		if _, exists := p.matchVariables[varName]; !exists {
+			return nil, fmt.Errorf("undefined variable in ORDER BY: %s", varName)
+		}
+
+		// Parse the rest of the path if any
+		for p.current.Type == DOT {
+			p.advance()
+			if p.current.Type != IDENT {
+				return nil, fmt.Errorf("expected identifier after dot, got \"%v\"", p.current.Literal)
+			}
+			path.WriteString(".")
+			path.WriteString(p.current.Literal)
+			p.advance()
+		}
+
+		// Check for DESC modifier
+		desc := false
+		if p.current.Type == IDENT && strings.ToUpper(p.current.Literal) == "DESC" {
+			desc = true
+			p.advance()
+		}
+
+		items = append(items, &OrderByItem{
+			JsonPath: path.String(),
+			Desc:     desc,
+		})
+
+		if p.current.Type != COMMA {
+			break
+		}
+		p.advance()
+	}
+
+	return items, nil
 }

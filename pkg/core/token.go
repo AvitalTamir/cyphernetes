@@ -31,6 +31,13 @@ const (
 	AND
 	NOT
 
+	// Order, limit and skip tokens
+	ORDER
+	BY
+	LIMIT
+	SKIP
+	OFFSET
+
 	// Operators
 	EQUALS
 	NOT_EQUALS
