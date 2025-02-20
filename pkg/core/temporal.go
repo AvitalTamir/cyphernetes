@@ -16,7 +16,7 @@ func NewTemporalHandler() *TemporalHandler {
 
 // EvaluateTemporalExpression evaluates a temporal expression and returns a time.Time
 func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (time.Time, error) {
-	fmt.Printf("Evaluating temporal expression: Function=%s, Operation=%s, Argument=%s\n", expr.Function, expr.Operation, expr.Argument)
+	logDebug("Evaluating temporal expression: Function=%s, Operation=%s, Argument=%s\n", expr.Function, expr.Operation, expr.Argument)
 
 	switch expr.Function {
 	case "datetime":
@@ -56,7 +56,7 @@ func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (
 			default:
 				return time.Time{}, fmt.Errorf("unsupported temporal operation: %s", expr.Operation)
 			}
-			fmt.Printf("Datetime operation result: %v (now=%v, duration=%v)\n", result, now, duration)
+			logDebug("Datetime operation result: %v (now=%v, duration=%v)\n", result, now, duration)
 			return result, nil
 		}
 		return now, nil
@@ -66,7 +66,7 @@ func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (
 		if err != nil {
 			return time.Time{}, err
 		}
-		fmt.Printf("Parsed duration: %v\n", duration)
+		logDebug("Parsed duration: %v\n", duration)
 
 		// If there's an operation, apply it to the right expression
 		if expr.Operation != "" {
@@ -84,14 +84,14 @@ func (h *TemporalHandler) EvaluateTemporalExpression(expr *TemporalExpression) (
 			default:
 				return time.Time{}, fmt.Errorf("unsupported temporal operation: %s", expr.Operation)
 			}
-			fmt.Printf("Duration operation result: %v\n", result)
+			logDebug("Duration operation result: %v\n", result)
 			return result, nil
 		}
 
 		// If no operation, just return current time minus duration
 		now := time.Now().UTC().Truncate(time.Second)
 		result := now.Add(-duration)
-		fmt.Printf("Simple duration result: %v\n", result)
+		logDebug("Simple duration result: %v\n", result)
 		return result, nil
 	default:
 		return time.Time{}, fmt.Errorf("unsupported temporal function: %s", expr.Function)
@@ -191,7 +191,7 @@ func (h *TemporalHandler) CompareTemporalValues(resourceTime time.Time, expr *Te
 	resourceTime = resourceTime.Truncate(time.Second)
 	compareTime = compareTime.Truncate(time.Second)
 
-	fmt.Printf("Temporal comparison: Resource time: %v, Compare time: %v, Operator: %s\n", resourceTime, compareTime, operator)
+	logDebug("Temporal comparison: Resource time: %v, Compare time: %v, Operator: %s\n", resourceTime, compareTime, operator)
 
 	// Note: The comparison is resourceTime <operator> compareTime
 	// For example: creationTimestamp < datetime() - duration("PT1H")
