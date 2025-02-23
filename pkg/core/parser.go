@@ -31,7 +31,7 @@ func NewParser(input string) *Parser {
 // Parse is the entry point for parsing a Cyphernetes query
 func (p *Parser) Parse() (*Expression, error) {
 	p.advance() // Get first token
-	debugLog("Starting parse with token: %v", p.current)
+	//debugLog("Starting parse with token: %v", p.current)
 
 	var contexts []string
 	var clauses []Clause
@@ -133,12 +133,12 @@ func (p *Parser) Parse() (*Expression, error) {
 
 	// Check for invalid tokens first
 	if p.current.Type == '<' {
-		debugLog("Found invalid token '<' before EOF")
+		//debugLog("Found invalid token '<' before EOF")
 		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
 	// Then check for EOF
-	debugLog("Checking for EOF, current token: %v", p.current)
+	//debugLog("Checking for EOF, current token: %v", p.current)
 	if p.current.Type != EOF {
 		if p.current.Type == ILLEGAL && strings.HasPrefix(p.current.Literal, "<") {
 			return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
@@ -240,7 +240,7 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 	var nodes []*NodePattern
 	var relationships []*Relationship
 
-	debugLog("Parsing node relationship list, current token: %v", p.current.Literal)
+	//debugLog("Parsing node relationship list, current token: %v", p.current.Literal)
 
 	// Parse first node
 	node, err := p.parseNodePattern()
@@ -251,13 +251,13 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 
 	// Check for invalid relationship tokens before entering the loop
 	if p.current.Type == '<' || (p.current.Type == '<' && p.lexer.Peek() == '<') {
-		debugLog("Found invalid relationship token: \"%v\"", p.current.Literal)
+		//debugLog("Found invalid relationship token: \"%v\"", p.current.Literal)
 		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
 	// Parse subsequent relationships and nodes
 	for {
-		debugLog("In relationship loop, current token: %v", p.current.Literal)
+		//debugLog("In relationship loop, current token: %v", p.current.Literal)
 
 		if isRelationshipStart(p.current.Type) {
 			rel, rightNode, err := p.parseRelationshipAndNode()
@@ -292,7 +292,7 @@ func (p *Parser) parseNodeRelationshipList() (*NodeRelationshipList, error) {
 
 // parseNodePattern parses: LPAREN ResourceProperties RPAREN | LPAREN IDENT RPAREN
 func (p *Parser) parseNodePattern() (*NodePattern, error) {
-	debugLog("Parsing node pattern, current token: \"%v\"", p.current.Literal)
+	//debugLog("Parsing node pattern, current token: \"%v\"", p.current.Literal)
 	if p.current.Type != LPAREN {
 		return nil, fmt.Errorf("expected (, got \"%v\"", p.current.Literal)
 	}
@@ -361,9 +361,9 @@ func (p *Parser) parseNodePattern() (*NodePattern, error) {
 	p.advance()
 
 	// Check for invalid relationship tokens immediately after closing parenthesis
-	debugLog("After node pattern, checking next token: \"%v\"", p.current.Literal)
+	//debugLog("After node pattern, checking next token: \"%v\"", p.current.Literal)
 	if p.current.Type == '<' {
-		debugLog("Found invalid relationship token after node pattern")
+		//debugLog("Found invalid relationship token after node pattern")
 		return nil, fmt.Errorf("unexpected relationship token: \"%v\"", p.current.Literal)
 	}
 
@@ -806,7 +806,7 @@ func (p *Parser) parseProperties() (*Properties, error) {
 	var propertyList []*Property
 
 	for {
-		debugLog("Parsing property, current token: type=%v literal='%s'", p.current.Type, p.current.Literal)
+		//debugLog("Parsing property, current token: type=%v literal='%s'", p.current.Type, p.current.Literal)
 
 		if p.current.Type != IDENT && p.current.Type != STRING {
 			return nil, fmt.Errorf("expected property key, got \"%v\"", p.current.Literal)
@@ -814,7 +814,7 @@ func (p *Parser) parseProperties() (*Properties, error) {
 
 		// Always trim quotes from property keys
 		key := strings.Trim(p.current.Literal, "\"")
-		debugLog("Property key after trim: '%s'", key)
+		//debugLog("Property key after trim: '%s'", key)
 
 		p.advance()
 
@@ -832,7 +832,7 @@ func (p *Parser) parseProperties() (*Properties, error) {
 			Key:   key,
 			Value: value,
 		})
-		debugLog("Added property: key='%s' value='%v'", key, value)
+		//debugLog("Added property: key='%s' value='%v'", key, value)
 
 		if p.current.Type != COMMA {
 			break
@@ -1321,7 +1321,7 @@ func (p *Parser) validateSubmatchPattern(nodes []*NodePattern, relationships []*
 	}
 
 	// TODO: Validate a relationship rule exists between the reference node and the other nodes
-	debugLog("relationhships in validateSubmatchPattern: %v", relationships)
+	//debugLog("relationhships in validateSubmatchPattern: %v", relationships)
 
 	return nil
 }

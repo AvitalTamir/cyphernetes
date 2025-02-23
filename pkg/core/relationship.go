@@ -419,7 +419,7 @@ func GetRelationships() map[string][]string {
 // FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
 func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string, error) {
 	sourceKind = strings.ToLower(sourceKind)
-	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
+	//debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
 
 	// Get the plural form using FindGVR
 	gvr, err := tryResolveGVR(provider, sourceKind)
@@ -439,40 +439,40 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string
 	potentialKindsMutex.RLock()
 	if kinds, exists := potentialKindsCache[sourceKindFull]; exists {
 		potentialKindsMutex.RUnlock()
-		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
+		//debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
 		return kinds, nil
 	}
 	potentialKindsMutex.RUnlock()
 
 	// If not in cache, fall back to scanning rules (this should be rare)
-	debugLog("FindPotentialKinds: cache miss for %s, falling back to rule scan", sourceKind)
+	//debugLog("FindPotentialKinds: cache miss for %s, falling back to rule scan", sourceKind)
 	potentialKinds := make(map[string]bool)
 	rules := GetRelationshipRules()
-	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
+	//debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
 
 	for _, rule := range rules {
 		// Get proper plural forms using FindGVR
 		gvrA, err := provider.FindGVR(rule.KindA)
 		if err != nil {
-			debugLog("Error getting GVR for %s: %v", rule.KindA, err)
+			//debugLog("Error getting GVR for %s: %v", rule.KindA, err)
 			continue
 		}
 		gvrB, err := provider.FindGVR(rule.KindB)
 		if err != nil {
-			debugLog("Error getting GVR for %s: %v", rule.KindB, err)
+			//debugLog("Error getting GVR for %s: %v", rule.KindB, err)
 			continue
 		}
 
 		ruleKindA := strings.ToLower(gvrA.Resource)
 		ruleKindB := strings.ToLower(gvrB.Resource)
 
-		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", ruleKindA, ruleKindB, rule.Relationship)
+		//debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", ruleKindA, ruleKindB, rule.Relationship)
 		if ruleKindB == sourceKind {
-			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", ruleKindA)
+			//debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", ruleKindA)
 			potentialKinds[ruleKindA] = true
 		}
 		if ruleKindA == sourceKind {
-			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", ruleKindB)
+			//debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", ruleKindB)
 			potentialKinds[ruleKindB] = true
 		}
 	}
@@ -488,7 +488,7 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string
 	potentialKindsCache[sourceKind] = result
 	potentialKindsMutex.Unlock()
 
-	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
+	//debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
 	return result, nil
 }
 
@@ -496,7 +496,7 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string
 func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) ([]string, error) {
 	logDebug("FindPotentialKindsIntersection: Starting with relationships:", relationships)
 	if len(relationships) == 0 {
-		debugLog("FindPotentialKindsIntersection: no relationships provided")
+		//debugLog("FindPotentialKindsIntersection: no relationships provided")
 		return []string{}, nil
 	}
 
@@ -511,7 +511,7 @@ func FindPotentialKindsIntersection(relationships []*Relationship, provider prov
 
 	// If all kinds are known, return empty slice
 	if !hasUnknownKind {
-		debugLog("FindPotentialKindsIntersection: all kinds are known")
+		//debugLog("FindPotentialKindsIntersection: all kinds are known")
 		return []string{}, nil
 	}
 

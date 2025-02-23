@@ -57,7 +57,7 @@ func (l *Lexer) NextToken() Token {
 
 	case scanner.Ident:
 		lit := l.s.TokenText()
-		debugLog("Lexer got IDENT token: '%s'", lit)
+		//debugLog("Lexer got IDENT token: '%s'", lit)
 		if !l.inNodeLabel {
 			switch strings.ToUpper(lit) {
 			case "MATCH":
@@ -107,7 +107,7 @@ func (l *Lexer) NextToken() Token {
 			case "OFFSET":
 				return Token{Type: OFFSET, Literal: lit}
 			default:
-				debugLog("Returning IDENT token: '%s'", lit)
+				//debugLog("Returning IDENT token: '%s'", lit)
 				if !l.isInJsonPath {
 					return Token{Type: IDENT, Literal: lit}
 				}
@@ -156,7 +156,7 @@ func (l *Lexer) NextToken() Token {
 						}
 						fullLit.WriteString(l.s.TokenText())
 					}
-					debugLog("Built escaped identifier: '%s'", fullLit.String())
+					//debugLog("Built escaped identifier: '%s'", fullLit.String())
 					resultTok := Token{Type: IDENT, Literal: fullLit.String()}
 					l.lastToken = resultTok
 					return resultTok
@@ -166,11 +166,11 @@ func (l *Lexer) NextToken() Token {
 			}
 
 			next := l.s.Next()
-			debugLog("Lexer peeked: '%c'", next)
+			//debugLog("Lexer peeked: '%c'", next)
 			if next == '"' {
 				// Include quotes in the identifier
 				fullLit.WriteRune('"')
-				debugLog("Added quote to identifier: '%s'", fullLit.String())
+				//debugLog("Added quote to identifier: '%s'", fullLit.String())
 				continue
 			}
 
@@ -197,7 +197,7 @@ func (l *Lexer) NextToken() Token {
 			}
 
 			// For JSON paths, return separate tokens
-			debugLog("Final identifier: '%s'", fullLit.String())
+			//debugLog("Final identifier: '%s'", fullLit.String())
 			l.buf.hasNext = true
 			l.buf.tok = DOT
 			l.buf.lit = "."
@@ -205,19 +205,19 @@ func (l *Lexer) NextToken() Token {
 			l.lastToken = tok
 			return tok
 		}
-		debugLog("Final identifier: '%s'", fullLit.String())
+		//debugLog("Final identifier: '%s'", fullLit.String())
 		tok := Token{Type: IDENT, Literal: fullLit.String()}
 		l.lastToken = tok
 		return tok
 
 	case scanner.Int:
-		debugLog("Got number: '%s'", l.s.TokenText())
+		//debugLog("Got number: '%s'", l.s.TokenText())
 		tok := Token{Type: NUMBER, Literal: l.s.TokenText()}
 		l.lastToken = tok
 		return tok
 
 	case scanner.String:
-		debugLog("Got string: '%s'", l.s.TokenText())
+		//debugLog("Got string: '%s'", l.s.TokenText())
 		lit := l.s.TokenText()
 		var tok Token
 		if l.inNodeLabel && l.inPropertyKey && !l.inJsonData {

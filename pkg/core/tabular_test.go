@@ -25,6 +25,7 @@ func TestDocumentToTabular(t *testing.T) {
 							"status": map[string]interface{}{
 								"phase": "Running",
 							},
+							"name": "pod1",
 						},
 						map[string]interface{}{
 							"metadata": map[string]interface{}{
@@ -33,8 +34,13 @@ func TestDocumentToTabular(t *testing.T) {
 							"status": map[string]interface{}{
 								"phase": "Pending",
 							},
+							"name": "pod2",
 						},
 					},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 			returnClause: &ReturnClause{
@@ -49,14 +55,20 @@ func TestDocumentToTabular(t *testing.T) {
 					{
 						"p.metadata.name": "pod1",
 						"status":          "Running",
+						"p.__name":        "pod1",
 					},
 					{
 						"p.metadata.name": "pod2",
 						"status":          "Pending",
+						"p.__name":        "pod2",
 					},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -69,6 +81,7 @@ func TestDocumentToTabular(t *testing.T) {
 							"metadata": map[string]interface{}{
 								"name": "pod1",
 							},
+							"name": "pod1",
 						},
 					},
 					"s": []interface{}{
@@ -76,8 +89,13 @@ func TestDocumentToTabular(t *testing.T) {
 							"metadata": map[string]interface{}{
 								"name": "svc1",
 							},
+							"name": "svc1",
 						},
 					},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 			returnClause: &ReturnClause{
@@ -90,15 +108,21 @@ func TestDocumentToTabular(t *testing.T) {
 				Columns: []string{"pod", "service"},
 				Rows: []map[string]interface{}{
 					{
-						"pod": "pod1",
+						"pod":      "pod1",
+						"p.__name": "pod1",
 					},
 					{
-						"service": "svc1",
+						"service":  "svc1",
+						"s.__name": "svc1",
 					},
 				},
 				NodeMap: map[string][]int{
 					"p": {0},
 					"s": {1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -132,14 +156,20 @@ func TestTabularToDocument(t *testing.T) {
 					{
 						"p.metadata.name": "pod1",
 						"status":          "Running",
+						"p.__name":        "pod1",
 					},
 					{
 						"p.metadata.name": "pod2",
 						"status":          "Pending",
+						"p.__name":        "pod2",
 					},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 			want: &QueryResult{
@@ -149,13 +179,19 @@ func TestTabularToDocument(t *testing.T) {
 							"metadata": map[string]interface{}{
 								"name": "pod1",
 							},
+							"name": "pod1",
 						},
 						map[string]interface{}{
 							"metadata": map[string]interface{}{
 								"name": "pod2",
 							},
+							"name": "pod2",
 						},
 					},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -331,9 +367,9 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			tabular: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod1"},
-					{"p.metadata.name": "pod2"},
-					{"p.metadata.name": "pod3"},
+					{"p.metadata.name": "pod1", "p.__name": "pod1"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
+					{"p.metadata.name": "pod3", "p.__name": "pod3"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1, 2},
@@ -344,11 +380,15 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			want: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod1"},
-					{"p.metadata.name": "pod2"},
+					{"p.metadata.name": "pod1", "p.__name": "pod1"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -357,9 +397,9 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			tabular: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod1"},
-					{"p.metadata.name": "pod2"},
-					{"p.metadata.name": "pod3"},
+					{"p.metadata.name": "pod1", "p.__name": "pod1"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
+					{"p.metadata.name": "pod3", "p.__name": "pod3"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1, 2},
@@ -370,11 +410,15 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			want: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod2"},
-					{"p.metadata.name": "pod3"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
+					{"p.metadata.name": "pod3", "p.__name": "pod3"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -383,10 +427,10 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			tabular: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod1"},
-					{"p.metadata.name": "pod2"},
-					{"p.metadata.name": "pod3"},
-					{"p.metadata.name": "pod4"},
+					{"p.metadata.name": "pod1", "p.__name": "pod1"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
+					{"p.metadata.name": "pod3", "p.__name": "pod3"},
+					{"p.metadata.name": "pod4", "p.__name": "pod4"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1, 2, 3},
@@ -397,11 +441,15 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			want: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod2"},
-					{"p.metadata.name": "pod3"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
+					{"p.metadata.name": "pod3", "p.__name": "pod3"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
+				},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
 				},
 			},
 		},
@@ -410,8 +458,8 @@ func TestApplyLimitAndSkip(t *testing.T) {
 			tabular: &TabularResult{
 				Columns: []string{"p.metadata.name"},
 				Rows: []map[string]interface{}{
-					{"p.metadata.name": "pod1"},
-					{"p.metadata.name": "pod2"},
+					{"p.metadata.name": "pod1", "p.__name": "pod1"},
+					{"p.metadata.name": "pod2", "p.__name": "pod2"},
 				},
 				NodeMap: map[string][]int{
 					"p": {0, 1},
@@ -423,6 +471,10 @@ func TestApplyLimitAndSkip(t *testing.T) {
 				Columns: []string{"p.metadata.name"},
 				Rows:    nil,
 				NodeMap: map[string][]int{},
+				Graph: Graph{
+					Nodes: make([]Node, 0),
+					Edges: make([]Edge, 0),
+				},
 			},
 		},
 	}
@@ -449,6 +501,7 @@ func TestFullRoundTrip(t *testing.T) {
 					"status": map[string]interface{}{
 						"phase": "Running",
 					},
+					"name": "pod3",
 				},
 				map[string]interface{}{
 					"metadata": map[string]interface{}{
@@ -457,6 +510,7 @@ func TestFullRoundTrip(t *testing.T) {
 					"status": map[string]interface{}{
 						"phase": "Running",
 					},
+					"name": "pod1",
 				},
 				map[string]interface{}{
 					"metadata": map[string]interface{}{
@@ -465,8 +519,13 @@ func TestFullRoundTrip(t *testing.T) {
 					"status": map[string]interface{}{
 						"phase": "Pending",
 					},
+					"name": "pod2",
 				},
 			},
+		},
+		Graph: Graph{
+			Nodes: make([]Node, 0),
+			Edges: make([]Edge, 0),
 		},
 	}
 
@@ -505,13 +564,19 @@ func TestFullRoundTrip(t *testing.T) {
 					"metadata": map[string]interface{}{
 						"name": "pod2",
 					},
+					"name": "pod2",
 				},
 				map[string]interface{}{
 					"metadata": map[string]interface{}{
 						"name": "pod3",
 					},
+					"name": "pod3",
 				},
 			},
+		},
+		Graph: Graph{
+			Nodes: make([]Node, 0),
+			Edges: make([]Edge, 0),
 		},
 	}
 

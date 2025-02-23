@@ -803,7 +803,10 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 			}
 
-			// Now that we have populated the data, convert to tabular format if we have ORDER BY, LIMIT, or SKIP
+			// Build the graph before tabular conversion
+			q.buildGraph(results)
+
+			// Now that we have populated the data and graph, convert to tabular format if we have ORDER BY, LIMIT, or SKIP
 			if len(c.OrderBy) > 0 || c.Limit > 0 || c.Skip > 0 {
 				tabular, err := DocumentToTabular(results, c)
 				if err != nil {
@@ -820,8 +823,10 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				// Apply LIMIT and SKIP
 				tabular.ApplyLimitAndSkip(c.Limit, c.Skip)
 
-				// Convert back to document format
-				*results = *TabularToDocument(tabular)
+				// Convert back to document format, preserving the graph
+				docResult := TabularToDocument(tabular)
+				results.Data = docResult.Data
+				results.Graph = docResult.Graph // Assign the filtered graph back to results
 			}
 
 		default:
@@ -1420,9 +1425,6 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 }
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
-	logDebug(fmt.Sprintln("Building graph"))
-	logDebug(fmt.Sprintf("Initial nodes: %+v\n", result.Graph.Nodes))
-
 	// Process nodes from result data
 	for key, resources := range result.Data {
 		resourcesSlice, ok := resources.([]interface{})
@@ -1454,7 +1456,6 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 			if node.Kind != "Namespace" {
 				node.Namespace = getNamespaceName(metadata)
 			}
-			logDebug(fmt.Sprintf("Adding node from result data: %+v\n", node))
 			result.Graph.Nodes = append(result.Graph.Nodes, node)
 		}
 	}
@@ -1465,7 +1466,6 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	for _, edge := range result.Graph.Edges {
 		edgeKey := fmt.Sprintf("%s-%s-%s", edge.From, edge.To, edge.Type)
 		reverseEdgeKey := fmt.Sprintf("%s-%s-%s", edge.To, edge.From, edge.Type)
-
 		if !edgeMap[edgeKey] && !edgeMap[reverseEdgeKey] {
 			edges = append(edges, edge)
 			edgeMap[edgeKey] = true
