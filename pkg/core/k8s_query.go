@@ -1546,7 +1546,7 @@ func toFloat64(v interface{}) (float64, error) {
 }
 
 func createCompatiblePatch(path []string, value interface{}) []interface{} {
-	fmt.Printf("Creating patch for path: %v with value: %v\n", path, value)
+	logDebug("Creating patch for path: %v with value: %v\n", path, value)
 
 	// For any path that ends with a key that might contain dots (like labels or annotations),
 	// we need to handle it specially to ensure we only update that specific key
@@ -1556,7 +1556,7 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 		// which would indicate it's a key in a map
 		lastPart := path[len(path)-1]
 		if strings.Contains(lastPart, ".") || strings.Contains(lastPart, "/") {
-			fmt.Printf("Detected path with dots in last part: %s\n", lastPart)
+			logDebug("Detected path with dots in last part: %s\n", lastPart)
 			// This is likely a key in a map, so we should create a patch that only updates this key
 			// Extract the map path (everything except the last part)
 			mapPath := path[:len(path)-1]
@@ -1566,7 +1566,7 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 			re := regexp.MustCompile(`\[(\d+)\]`)
 			jsonMapPath = re.ReplaceAllString(jsonMapPath, "/$1")
 
-			fmt.Printf("Map path: %s\n", jsonMapPath)
+			logDebug("Map path: %s\n", jsonMapPath)
 
 			// Create a patch that uses the "test" operation to check if the map exists
 			// If it doesn't, this will fail and we'll need to create it
@@ -1582,7 +1582,7 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 			escapedKey := strings.ReplaceAll(lastPart, "~", "~0")
 			escapedKey = strings.ReplaceAll(escapedKey, "/", "~1")
 			// Do NOT escape dots - they are valid in JSON Patch paths
-			fmt.Printf("Escaped key: %s\n", escapedKey)
+			logDebug("Escaped key: %s\n", escapedKey)
 
 			addPatch := map[string]interface{}{
 				"op":    "add",
@@ -1590,8 +1590,8 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 				"value": value,
 			}
 
-			fmt.Printf("Created test patch: %+v\n", testPatch)
-			fmt.Printf("Created add patch: %+v\n", addPatch)
+			logDebug("Created test patch: %+v\n", testPatch)
+			logDebug("Created add patch: %+v\n", addPatch)
 
 			return []interface{}{testPatch, addPatch}
 		}
@@ -1623,8 +1623,8 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 					"value": value,
 				}
 
-				fmt.Printf("Created test patch: %+v\n", testPatch)
-				fmt.Printf("Created add patch: %+v\n", addPatch)
+				logDebug("Created test patch: %+v\n", testPatch)
+				logDebug("Created add patch: %+v\n", addPatch)
 
 				return []interface{}{testPatch, addPatch}
 			}
@@ -1675,8 +1675,8 @@ func createCompatiblePatch(path []string, value interface{}) []interface{} {
 						"value": value,
 					}
 
-					fmt.Printf("Created special container patch: %+v\n", specialPatch)
-					fmt.Printf("Created add patch: %+v\n", addPatch)
+					logDebug("Created special container patch: %+v\n", specialPatch)
+					logDebug("Created add patch: %+v\n", addPatch)
 
 					return []interface{}{specialPatch, addPatch}
 				}
@@ -1693,7 +1693,7 @@ DEFAULT_CASE:
 	re := regexp.MustCompile(`\[(\d+)\]`)
 	jsonPath = re.ReplaceAllString(jsonPath, "/$1")
 
-	fmt.Printf("Regular path: %s\n", jsonPath)
+	logDebug("Regular path: %s\n", jsonPath)
 
 	patch := map[string]interface{}{
 		"op":    "add",
@@ -1701,7 +1701,7 @@ DEFAULT_CASE:
 		"value": value,
 	}
 
-	fmt.Printf("Created regular patch: %+v\n", patch)
+	logDebug("Created regular patch: %+v\n", patch)
 
 	return []interface{}{patch}
 }
@@ -2721,111 +2721,101 @@ func evaluateWildcardPath(resource interface{}, path string, filterValue interfa
 
 // Update the SET clause handling to support wildcards
 func (q *QueryExecutor) handleSetClause(c *SetClause) error {
-	fmt.Printf("\n==== handleSetClause ====\n")
-	fmt.Printf("Processing %d key-value pairs\n", len(c.KeyValuePairs))
+	logDebug("Processing %d key-value pairs\n", len(c.KeyValuePairs))
 
 	for i, kvp := range c.KeyValuePairs {
-		fmt.Printf("\nProcessing key-value pair %d: %s = %v\n", i, kvp.Key, kvp.Value)
+		logDebug("Processing key-value pair %d: %s = %v", i, kvp.Key, kvp.Value)
 
 		// Extract the resource name (first part before any dot)
 		parts := strings.SplitN(kvp.Key, ".", 2)
 		resultMapKey := parts[0]
-		fmt.Printf("Resource name: %s\n", resultMapKey)
+		logDebug("Resource name: %s", resultMapKey)
 
 		resources, ok := resultMap[resultMapKey].([]map[string]interface{})
 		if !ok {
-			fmt.Printf("Error: resultMap[%s] is not a slice of maps\n", resultMapKey)
 			return fmt.Errorf("could not find resources for node %s in MATCH clause", resultMapKey)
 		}
-		fmt.Printf("Found %d resources for node %s\n", len(resources), resultMapKey)
+		logDebug("Found %d resources for node %s", len(resources), resultMapKey)
 
 		// Find the matching node from the stored match nodes
 		var nodeKind string
 		for _, node := range q.matchNodes {
 			if node.ResourceProperties.Name == resultMapKey {
 				nodeKind = node.ResourceProperties.Kind
-				fmt.Printf("Found kind %s for node %s\n", nodeKind, resultMapKey)
+				logDebug("Found kind %s for node %s", nodeKind, resultMapKey)
 				break
 			}
 		}
 		if nodeKind == "" {
-			fmt.Printf("Error: could not find kind for node %s\n", resultMapKey)
 			return fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
 		}
 
 		for j, resource := range resources {
-			fmt.Printf("\nProcessing resource %d of %d\n", j+1, len(resources))
+			logDebug("Processing resource %d of %d", j+1, len(resources))
 
 			if strings.Contains(kvp.Key, "[*]") {
-				fmt.Printf("Detected wildcard path: %s\n", kvp.Key)
+				logDebug("Detected wildcard path: %s", kvp.Key)
 				// Handle wildcard updates
 				err := applyWildcardUpdate(resource, kvp.Key, kvp.Value)
 				if err != nil {
 					fmt.Printf("Error applying wildcard update: %v\n", err)
 					return err
 				}
-				fmt.Printf("Successfully applied wildcard update\n")
+				logDebug("Successfully applied wildcard update")
 			} else {
-				fmt.Printf("Processing regular path update\n")
+				logDebug("Processing regular path update")
 				// Regular path update
 				// First remove the resource name prefix (e.g., "d.")
 				remainingPath := ""
 				if len(parts) > 1 {
 					remainingPath = parts[1]
 				}
-				fmt.Printf("Remaining path after removing resource prefix: %s\n", remainingPath)
+				logDebug("Remaining path after removing resource prefix: %s", remainingPath)
 
 				// Split the path handling escaped dots
 				pathParts := splitEscapedPath(remainingPath)
-				fmt.Printf("Path parts after splitting escaped dots: %v\n", pathParts)
+				logDebug("Path parts after splitting escaped dots: %v", pathParts)
 
 				patches := createCompatiblePatch(pathParts, kvp.Value)
 				patchJSON, err := json.Marshal(patches)
 				if err != nil {
-					fmt.Printf("Error marshalling patches: %v\n", err)
 					return fmt.Errorf("error marshalling patches: %s", err)
 				}
-				fmt.Printf("Created patch JSON: %s\n", string(patchJSON))
+				logDebug("Created patch JSON: %s", string(patchJSON))
 
 				metadata, ok := resource["metadata"].(map[string]interface{})
 				if !ok {
-					fmt.Printf("Error: resource metadata is not a map\n")
 					return fmt.Errorf("resource metadata is not a map")
 				}
 
 				name, ok := metadata["name"].(string)
 				if !ok {
-					fmt.Printf("Error: resource name is not a string\n")
 					return fmt.Errorf("resource name is not a string")
 				}
 
 				namespace := getNamespaceName(metadata)
-				fmt.Printf("Resource: %s/%s in namespace %s\n", nodeKind, name, namespace)
+				logDebug("Resource: %s/%s in namespace %s", nodeKind, name, namespace)
 
-				fmt.Printf("Applying patch to resource %s/%s in namespace %s\n", nodeKind, name, namespace)
+				logDebug("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
 				logDebug("Patch JSON: %s", string(patchJSON))
 				logDebug("Current resource state: %+v", resource)
 
 				err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
 				if err != nil {
-					fmt.Printf("Error patching resource: %v\n", err)
 					return fmt.Errorf("error patching resource: %s", err)
 				}
-				fmt.Printf("Successfully applied patch\n")
+				logDebug("Successfully applied patch")
 
 				// Verify the patch was applied
-				fmt.Printf("Verifying patch was applied\n")
+				logDebug("Verifying patch was applied")
 				updatedResource, err := q.provider.GetK8sResources(nodeKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
 				if err != nil {
-					fmt.Printf("Error verifying patch: %v\n", err)
 					return fmt.Errorf("error verifying patch: %s", err)
 				}
-				fmt.Printf("Successfully verified patch\n")
 				logDebug("Updated resource: %+v", updatedResource)
 			}
 		}
 	}
-	fmt.Printf("\n==== handleSetClause completed successfully ====\n")
 	return nil
 }
 

@@ -337,15 +337,15 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
-				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
+
 			} else {
-				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+
 			}
 		}
 	} else {
 		deleteErr = p.dynamicClient.Resource(gvr).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
-			fmt.Printf("Deleted %s/%s\n", strings.ToLower(kind), name)
+
 		}
 	}
 
@@ -387,15 +387,15 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
 			if p.dryRun {
-				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
+
 			} else {
-				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
+
 			}
 		}
 	} else {
 		_, err = p.dynamicClient.Resource(gvr).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
-			fmt.Printf("\nCreated %s/%s", strings.ToLower(kind), name)
+
 		}
 	}
 
@@ -403,26 +403,18 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 }
 
 func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
-	fmt.Printf("\n==== PatchK8sResource ====\n")
-	fmt.Printf("Kind: %s, Name: %s, Namespace: %s\n", kind, name, namespace)
-	fmt.Printf("Patch JSON: %s\n", string(patchJSON))
-
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
-		fmt.Printf("Error finding GVR: %v\n", err)
+
 		return err
 	}
-
-	fmt.Printf("Found GVR: %+v\n", gvr)
 
 	// Parse the patch to handle errors better
 	var patches []interface{}
 	if err := json.Unmarshal(patchJSON, &patches); err != nil {
-		fmt.Printf("Error unmarshalling patch JSON: %v\n", err)
+
 		return fmt.Errorf("invalid patch JSON: %v", err)
 	}
-
-	fmt.Printf("Parsed %d patch operations\n", len(patches))
 
 	// Check if this is a patch for metadata.annotations or metadata.labels
 	// If so, we'll use a strategic merge patch instead of JSON Patch
@@ -439,8 +431,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 			// Check for container resources patch
 			if testOk && addOk && testPath == "/spec/template/spec/containers" &&
 				strings.HasPrefix(addPath, "/spec/template/spec/containers/") {
-
-				fmt.Printf("Detected container patch, using strategic merge patch\n")
 
 				// Extract the container index and property path
 				containerPathPattern := regexp.MustCompile(`/spec/template/spec/containers/(\d+)(/.*)?`)
@@ -496,34 +486,34 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					// Get the actual container name from the resource
 					resource, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 					if err != nil {
-						fmt.Printf("Error getting resource: %v\n", err)
+
 						return fmt.Errorf("error getting resource: %v", err)
 					}
 
 					// Extract the container name from the resource
 					containers, found, err := unstructured.NestedSlice(resource.Object, "spec", "template", "spec", "containers")
 					if err != nil || !found || len(containers) <= 0 {
-						fmt.Printf("Error getting containers: %v\n", err)
+
 						return fmt.Errorf("error getting containers: %v", err)
 					}
 
 					// Check if the container index is valid
 					containerIdx, err := strconv.Atoi(containerIndex)
 					if err != nil || containerIdx >= len(containers) {
-						fmt.Printf("Invalid container index: %s\n", containerIndex)
+
 						return fmt.Errorf("invalid container index: %s", containerIndex)
 					}
 
 					// Get the container name
 					container, ok := containers[containerIdx].(map[string]interface{})
 					if !ok {
-						fmt.Printf("Container is not a map: %v\n", containers[containerIdx])
+
 						return fmt.Errorf("container is not a map: %v", containers[containerIdx])
 					}
 
 					containerName, ok := container["name"].(string)
 					if !ok {
-						fmt.Printf("Container name is not a string: %v\n", container["name"])
+
 						return fmt.Errorf("container name is not a string: %v", container["name"])
 					}
 
@@ -533,11 +523,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					// Marshal the merge patch
 					mergePatchJSON, err := json.Marshal(mergePatch)
 					if err != nil {
-						fmt.Printf("Error marshalling merge patch: %v\n", err)
+
 						return fmt.Errorf("error marshalling merge patch: %v", err)
 					}
-
-					fmt.Printf("Applying container merge patch: %s\n", string(mergePatchJSON))
 
 					// Apply the strategic merge patch
 					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
@@ -549,13 +537,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-						fmt.Printf("Error applying container merge patch: %v\n", err)
+
 						return fmt.Errorf("error applying container merge patch: %v", err)
 					} else {
-						fmt.Printf("Successfully applied container merge patch\n")
+
 					}
 
-					fmt.Printf("==== PatchK8sResource completed successfully ====\n\n")
 					return nil
 				}
 			}
@@ -565,7 +552,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				strings.HasPrefix(addPath, testPath+"/") {
 
 				// This is a patch for annotations or labels
-				fmt.Printf("Detected patch for %s, using strategic merge patch\n", testPath)
 
 				// Extract the key from the add path
 				key := strings.TrimPrefix(addPath, testPath+"/")
@@ -574,8 +560,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				key = strings.ReplaceAll(key, "~0", "~")
 
 				value := addPatch["value"]
-
-				fmt.Printf("Key: %s, Value: %v\n", key, value)
 
 				// Create a strategic merge patch
 				var mergePatch map[string]interface{}
@@ -600,11 +584,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 
 				mergePatchJSON, err := json.Marshal(mergePatch)
 				if err != nil {
-					fmt.Printf("Error marshalling merge patch: %v\n", err)
+
 					return fmt.Errorf("error marshalling merge patch: %v", err)
 				}
-
-				fmt.Printf("Applying merge patch: %s\n", string(mergePatchJSON))
 
 				_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 					context.TODO(),
@@ -615,13 +597,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				)
 
 				if err != nil {
-					fmt.Printf("Error applying merge patch: %v\n", err)
+
 					return fmt.Errorf("error applying merge patch: %v", err)
 				} else {
-					fmt.Printf("Successfully applied merge patch\n")
+
 				}
 
-				fmt.Printf("==== PatchK8sResource completed successfully ====\n\n")
 				return nil
 			}
 		}
@@ -632,39 +613,32 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		patch := patches[i]
 		patchMap, ok := patch.(map[string]interface{})
 		if !ok {
-			fmt.Printf("Patch %d is not a map, skipping\n", i)
+
 			continue
 		}
 
 		op, _ := patchMap["op"].(string)
 		path, _ := patchMap["path"].(string)
 
-		fmt.Printf("Processing patch %d: op=%s, path=%s\n", i, op, path)
-
 		// If this is a "test" operation followed by an "add" operation for a map key
 		if op == "test" && i+1 < len(patches) {
 			nextPatch, ok := patches[i+1].(map[string]interface{})
 			if !ok {
-				fmt.Printf("Next patch is not a map, skipping test handling\n")
+
 				continue
 			}
 			nextOp, _ := nextPatch["op"].(string)
 			nextPath, _ := nextPatch["path"].(string)
 
-			fmt.Printf("Next patch: op=%s, path=%s\n", nextOp, nextPath)
-
 			// If the next operation is "add" and the path is a child of the test path
 			if nextOp == "add" && strings.HasPrefix(nextPath, path+"/") {
-				fmt.Printf("Detected test+add pattern for map key\n")
 
 				// Try to apply just the test patch to see if the map exists
 				testPatchData, err := json.Marshal([]interface{}{patch})
 				if err != nil {
-					fmt.Printf("Error marshalling test patch: %v\n", err)
+
 					return fmt.Errorf("error marshalling test patch: %v", err)
 				}
-
-				fmt.Printf("Applying test patch: %s\n", string(testPatchData))
 
 				_, testErr := p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 					context.TODO(),
@@ -676,8 +650,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 
 				// If the test fails, the map doesn't exist, so we need to create it
 				if testErr != nil {
-					fmt.Printf("Test patch failed: %v\n", testErr)
-					fmt.Printf("Creating map at path: %s\n", path)
 
 					// Create a patch to add the empty map
 					createMapPatch := []interface{}{
@@ -690,11 +662,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 
 					createMapPatchJSON, err := json.Marshal(createMapPatch)
 					if err != nil {
-						fmt.Printf("Error marshalling create map patch: %v\n", err)
+
 						return fmt.Errorf("error marshalling create map patch: %v", err)
 					}
-
-					fmt.Printf("Applying create map patch: %s\n", string(createMapPatchJSON))
 
 					// Apply the patch to create the map
 					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
@@ -706,23 +676,20 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-						fmt.Printf("Error creating map at %s: %v\n", path, err)
+
 						return fmt.Errorf("error creating map at %s: %v", path, err)
 					} else {
-						fmt.Printf("Successfully created map at %s\n", path)
+
 					}
 
 					// Skip the test patch and directly apply the add operation
-					fmt.Printf("Skipping test patch, directly applying add patch\n")
 
 					// Apply just the add operation
 					addPatchData, err := json.Marshal([]interface{}{nextPatch})
 					if err != nil {
-						fmt.Printf("Error marshalling add patch: %v\n", err)
+
 						return fmt.Errorf("error marshalling add patch: %v", err)
 					}
-
-					fmt.Printf("Applying add patch: %s\n", string(addPatchData))
 
 					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 						context.TODO(),
@@ -733,17 +700,17 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-						fmt.Printf("Error applying add patch: %v\n", err)
+
 						return fmt.Errorf("error applying add patch: %v", err)
 					} else {
-						fmt.Printf("Successfully applied add patch\n")
+
 					}
 
 					// Skip both patches since we've handled them
 					i++
 					continue
 				} else {
-					fmt.Printf("Test patch succeeded, map exists\n")
+
 				}
 			}
 		}
@@ -751,11 +718,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		// Apply the current patch
 		patchData, err := json.Marshal([]interface{}{patch})
 		if err != nil {
-			fmt.Printf("Error marshalling patch: %v\n", err)
+
 			return fmt.Errorf("error marshalling patch: %v", err)
 		}
-
-		fmt.Printf("Applying patch: %s\n", string(patchData))
 
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
 			context.TODO(),
@@ -766,22 +731,21 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		)
 
 		if err != nil {
-			fmt.Printf("Error applying patch: %v\n", err)
+
 			return fmt.Errorf("error applying patch: %v", err)
 		} else {
-			fmt.Printf("Successfully applied patch\n")
+
 		}
 
 		// Get state after patch
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			fmt.Printf("Error getting updated state: %v\n", err)
+
 		} else {
-			fmt.Printf("Successfully retrieved updated state\n")
+
 		}
 	}
 
-	fmt.Printf("==== PatchK8sResource completed successfully ====\n\n")
 	return nil
 }
 
@@ -849,8 +813,6 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			fmt.Print("\n🧠 Resolving schemas [")
 			for range progressChan {
 				processed++
-				progress := (processed * 100) / len(pathSlice)
-				fmt.Printf("\r🧠 Resolving schemas [%-25s] %d%%", strings.Repeat("=", progress/4), progress)
 			}
 			fmt.Print("\r")
 		}()
@@ -865,12 +827,9 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 					time.Sleep(10 * time.Millisecond) // Add small delay between requests
 					schemaBytes, err := work.path.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
 
-					// Get the schema name from the path
-					pathStr := fmt.Sprintf("%v", work.path)
-
 					if err != nil {
 						if !strings.Contains(err.Error(), "the backend attempted to redirect this request") {
-							fmt.Printf("\nError getting schema %s: %v\n", pathStr, err)
+
 						}
 						progressChan <- 1
 						continue
@@ -958,7 +917,6 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			processed++
 		}
 	}
-	fmt.Printf("\r ✔️ Resolving schemas (%v processed)                    \n", processed)
 
 	return specs, nil
 }
