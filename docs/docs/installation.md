@@ -19,6 +19,11 @@ brew install cyphernetes
 ```
 
 </TabItem>
+<TabItem value="goGet" label="Using go get">
+```bash
+   go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
+```
+</TabItem>
 <TabItem value="binary" label="Binary Download">
 
 You can download the pre-compiled binary for your operating system:
