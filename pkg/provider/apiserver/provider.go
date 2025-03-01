@@ -712,7 +712,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		// Get state after patch
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			fmt.Printf("Error getting resource after patch: %v\n", err)
+			fmt.Printf("Error getting updated state: %v\n", err)
 		}
 	}
 
