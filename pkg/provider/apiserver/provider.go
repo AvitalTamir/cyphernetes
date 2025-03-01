@@ -485,14 +485,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					// Get the actual container name from the resource
 					resource, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 					if err != nil {
-
 						return fmt.Errorf("error getting resource: %v", err)
 					}
 
 					// Extract the container name from the resource
 					containers, found, err := unstructured.NestedSlice(resource.Object, "spec", "template", "spec", "containers")
 					if err != nil || !found || len(containers) <= 0 {
-
 						return fmt.Errorf("error getting containers: %v", err)
 					}
 
@@ -522,7 +520,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					// Marshal the merge patch
 					mergePatchJSON, err := json.Marshal(mergePatch)
 					if err != nil {
-
 						return fmt.Errorf("error marshalling merge patch: %v", err)
 					}
 
@@ -536,10 +533,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-
 						return fmt.Errorf("error applying container merge patch: %v", err)
-					} else {
-
 					}
 
 					return nil
@@ -596,10 +590,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				)
 
 				if err != nil {
-
 					return fmt.Errorf("error applying merge patch: %v", err)
-				} else {
-
 				}
 
 				return nil
@@ -612,7 +603,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		patch := patches[i]
 		patchMap, ok := patch.(map[string]interface{})
 		if !ok {
-
 			continue
 		}
 
@@ -623,7 +613,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		if op == "test" && i+1 < len(patches) {
 			nextPatch, ok := patches[i+1].(map[string]interface{})
 			if !ok {
-
 				continue
 			}
 			nextOp, _ := nextPatch["op"].(string)
@@ -635,7 +624,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				// Try to apply just the test patch to see if the map exists
 				testPatchData, err := json.Marshal([]interface{}{patch})
 				if err != nil {
-
 					return fmt.Errorf("error marshalling test patch: %v", err)
 				}
 
@@ -661,7 +649,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 
 					createMapPatchJSON, err := json.Marshal(createMapPatch)
 					if err != nil {
-
 						return fmt.Errorf("error marshalling create map patch: %v", err)
 					}
 
@@ -675,18 +662,13 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-
 						return fmt.Errorf("error creating map at %s: %v", path, err)
-					} else {
-
 					}
 
 					// Skip the test patch and directly apply the add operation
-
 					// Apply just the add operation
 					addPatchData, err := json.Marshal([]interface{}{nextPatch})
 					if err != nil {
-
 						return fmt.Errorf("error marshalling add patch: %v", err)
 					}
 
@@ -699,17 +681,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					)
 
 					if err != nil {
-
 						return fmt.Errorf("error applying add patch: %v", err)
-					} else {
-
 					}
 
 					// Skip both patches since we've handled them
 					i++
 					continue
-				} else {
-
 				}
 			}
 		}
@@ -717,7 +694,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		// Apply the current patch
 		patchData, err := json.Marshal([]interface{}{patch})
 		if err != nil {
-
 			return fmt.Errorf("error marshalling patch: %v", err)
 		}
 
@@ -730,18 +706,13 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		)
 
 		if err != nil {
-
 			return fmt.Errorf("error applying patch: %v", err)
-		} else {
-
 		}
 
 		// Get state after patch
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-
-		} else {
-
+			fmt.Printf("Error getting resource after patch: %v\n", err)
 		}
 	}
 
