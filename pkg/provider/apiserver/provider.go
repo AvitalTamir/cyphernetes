@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -409,17 +411,287 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 	// Parse the patch to handle errors better
 	var patches []interface{}
 	if err := json.Unmarshal(patchJSON, &patches); err != nil {
+
 		return fmt.Errorf("invalid patch JSON: %v", err)
 	}
 
-	// Get current state
-	_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		fmt.Printf("Error getting current state: %v\n", err)
+	// Check if this is a patch for metadata.annotations or metadata.labels
+	// If so, we'll use a strategic merge patch instead of JSON Patch
+	if len(patches) == 2 {
+		testPatch, ok1 := patches[0].(map[string]interface{})
+		addPatch, ok2 := patches[1].(map[string]interface{})
+
+		if ok1 && ok2 &&
+			testPatch["op"] == "test" && addPatch["op"] == "add" {
+
+			testPath, testOk := testPatch["path"].(string)
+			addPath, addOk := addPatch["path"].(string)
+
+			// Check for container resources patch
+			if testOk && addOk && testPath == "/spec/template/spec/containers" &&
+				strings.HasPrefix(addPath, "/spec/template/spec/containers/") {
+
+				// Extract the container index and property path
+				containerPathPattern := regexp.MustCompile(`/spec/template/spec/containers/(\d+)(/.*)?`)
+				matches := containerPathPattern.FindStringSubmatch(addPath)
+
+				if len(matches) >= 2 {
+					containerIndex := matches[1]
+					propertyPath := ""
+					if len(matches) >= 3 {
+						propertyPath = matches[2]
+					}
+
+					// Build a strategic merge patch for the container
+					mergePatch := map[string]interface{}{
+						"spec": map[string]interface{}{
+							"template": map[string]interface{}{
+								"spec": map[string]interface{}{
+									"containers": []interface{}{
+										map[string]interface{}{
+											"name": fmt.Sprintf("container-%s", containerIndex), // Placeholder name
+										},
+									},
+								},
+							},
+						},
+					}
+
+					// Set the value at the property path
+					if propertyPath != "" {
+						// Remove the leading slash
+						propertyPath = strings.TrimPrefix(propertyPath, "/")
+
+						// Split the property path into parts
+						parts := strings.Split(propertyPath, "/")
+
+						// Navigate to the container in the merge patch
+						container := mergePatch["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})[0].(map[string]interface{})
+
+						// Build the nested structure for the property
+						current := container
+						for i := 0; i < len(parts)-1; i++ {
+							part := parts[i]
+							if _, ok := current[part]; !ok {
+								current[part] = make(map[string]interface{})
+							}
+							current = current[part].(map[string]interface{})
+						}
+
+						// Set the value at the final part
+						current[parts[len(parts)-1]] = addPatch["value"]
+					}
+
+					// Get the actual container name from the resource
+					resource, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+					if err != nil {
+						return fmt.Errorf("error getting resource: %v", err)
+					}
+
+					// Extract the container name from the resource
+					containers, found, err := unstructured.NestedSlice(resource.Object, "spec", "template", "spec", "containers")
+					if err != nil || !found || len(containers) <= 0 {
+						return fmt.Errorf("error getting containers: %v", err)
+					}
+
+					// Check if the container index is valid
+					containerIdx, err := strconv.Atoi(containerIndex)
+					if err != nil || containerIdx >= len(containers) {
+
+						return fmt.Errorf("invalid container index: %s", containerIndex)
+					}
+
+					// Get the container name
+					container, ok := containers[containerIdx].(map[string]interface{})
+					if !ok {
+
+						return fmt.Errorf("container is not a map: %v", containers[containerIdx])
+					}
+
+					containerName, ok := container["name"].(string)
+					if !ok {
+
+						return fmt.Errorf("container name is not a string: %v", container["name"])
+					}
+
+					// Update the container name in the merge patch
+					mergePatch["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"].(map[string]interface{})["containers"].([]interface{})[0].(map[string]interface{})["name"] = containerName
+
+					// Marshal the merge patch
+					mergePatchJSON, err := json.Marshal(mergePatch)
+					if err != nil {
+						return fmt.Errorf("error marshalling merge patch: %v", err)
+					}
+
+					// Apply the strategic merge patch
+					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
+						context.TODO(),
+						name,
+						types.StrategicMergePatchType,
+						mergePatchJSON,
+						metav1.PatchOptions{},
+					)
+
+					if err != nil {
+						return fmt.Errorf("error applying container merge patch: %v", err)
+					}
+
+					return nil
+				}
+			}
+
+			if testOk && addOk &&
+				(testPath == "/metadata/annotations" || testPath == "/metadata/labels") &&
+				strings.HasPrefix(addPath, testPath+"/") {
+
+				// This is a patch for annotations or labels
+
+				// Extract the key from the add path
+				key := strings.TrimPrefix(addPath, testPath+"/")
+				// Unescape the key according to JSON Patch spec
+				key = strings.ReplaceAll(key, "~1", "/")
+				key = strings.ReplaceAll(key, "~0", "~")
+
+				value := addPatch["value"]
+
+				// Create a strategic merge patch
+				var mergePatch map[string]interface{}
+
+				if testPath == "/metadata/annotations" {
+					mergePatch = map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"annotations": map[string]interface{}{
+								key: value,
+							},
+						},
+					}
+				} else { // labels
+					mergePatch = map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"labels": map[string]interface{}{
+								key: value,
+							},
+						},
+					}
+				}
+
+				mergePatchJSON, err := json.Marshal(mergePatch)
+				if err != nil {
+
+					return fmt.Errorf("error marshalling merge patch: %v", err)
+				}
+
+				_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
+					context.TODO(),
+					name,
+					types.MergePatchType,
+					mergePatchJSON,
+					metav1.PatchOptions{},
+				)
+
+				if err != nil {
+					return fmt.Errorf("error applying merge patch: %v", err)
+				}
+
+				return nil
+			}
+		}
 	}
 
 	// Apply each patch operation
-	for _, patch := range patches {
+	for i := 0; i < len(patches); i++ {
+		patch := patches[i]
+		patchMap, ok := patch.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		op, _ := patchMap["op"].(string)
+		path, _ := patchMap["path"].(string)
+
+		// If this is a "test" operation followed by an "add" operation for a map key
+		if op == "test" && i+1 < len(patches) {
+			nextPatch, ok := patches[i+1].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			nextOp, _ := nextPatch["op"].(string)
+			nextPath, _ := nextPatch["path"].(string)
+
+			// If the next operation is "add" and the path is a child of the test path
+			if nextOp == "add" && strings.HasPrefix(nextPath, path+"/") {
+
+				// Try to apply just the test patch to see if the map exists
+				testPatchData, err := json.Marshal([]interface{}{patch})
+				if err != nil {
+					return fmt.Errorf("error marshalling test patch: %v", err)
+				}
+
+				_, testErr := p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
+					context.TODO(),
+					name,
+					types.JSONPatchType,
+					testPatchData,
+					metav1.PatchOptions{},
+				)
+
+				// If the test fails, the map doesn't exist, so we need to create it
+				if testErr != nil {
+
+					// Create a patch to add the empty map
+					createMapPatch := []interface{}{
+						map[string]interface{}{
+							"op":    "add",
+							"path":  path,
+							"value": map[string]interface{}{},
+						},
+					}
+
+					createMapPatchJSON, err := json.Marshal(createMapPatch)
+					if err != nil {
+						return fmt.Errorf("error marshalling create map patch: %v", err)
+					}
+
+					// Apply the patch to create the map
+					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
+						context.TODO(),
+						name,
+						types.JSONPatchType,
+						createMapPatchJSON,
+						metav1.PatchOptions{},
+					)
+
+					if err != nil {
+						return fmt.Errorf("error creating map at %s: %v", path, err)
+					}
+
+					// Skip the test patch and directly apply the add operation
+					// Apply just the add operation
+					addPatchData, err := json.Marshal([]interface{}{nextPatch})
+					if err != nil {
+						return fmt.Errorf("error marshalling add patch: %v", err)
+					}
+
+					_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Patch(
+						context.TODO(),
+						name,
+						types.JSONPatchType,
+						addPatchData,
+						metav1.PatchOptions{},
+					)
+
+					if err != nil {
+						return fmt.Errorf("error applying add patch: %v", err)
+					}
+
+					// Skip both patches since we've handled them
+					i++
+					continue
+				}
+			}
+		}
+
+		// Apply the current patch
 		patchData, err := json.Marshal([]interface{}{patch})
 		if err != nil {
 			return fmt.Errorf("error marshalling patch: %v", err)
@@ -434,7 +706,6 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		)
 
 		if err != nil {
-			fmt.Printf("Error applying patch: %v\n", err)
 			return fmt.Errorf("error applying patch: %v", err)
 		}
 

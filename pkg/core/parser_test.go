@@ -1117,6 +1117,38 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			name:  "match with escaped dots in SET clause",
+			input: `MATCH (d:Deployment) SET d.metadata.annotations.meta\.cyphernet\.es/foo = "test" RETURN d`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+								},
+							},
+						},
+					},
+					&SetClause{
+						KeyValuePairs: []*KeyValuePair{
+							{
+								Key:      "d.metadata.annotations.meta\\.cyphernet\\.es/foo",
+								Value:    "test",
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d"},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:  "partial node patterns with anonymous vars",
 			input: "MATCH (p:pod)->(:service)->(x) RETURN x.metadata.name",
 			want: &Expression{
