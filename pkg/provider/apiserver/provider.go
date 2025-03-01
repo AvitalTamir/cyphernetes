@@ -337,15 +337,15 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
-
+				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
 			} else {
-
+				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 			}
 		}
 	} else {
 		deleteErr = p.dynamicClient.Resource(gvr).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
-
+			fmt.Printf("Deleted %s/%s\n", strings.ToLower(kind), name)
 		}
 	}
 
@@ -387,15 +387,15 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
 			if p.dryRun {
-
+				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
 			} else {
-
+				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
 			}
 		}
 	} else {
 		_, err = p.dynamicClient.Resource(gvr).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
-
+			fmt.Printf("\nCreated %s/%s", strings.ToLower(kind), name)
 		}
 	}
 
@@ -405,7 +405,6 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
 	gvr, err := p.FindGVR(kind)
 	if err != nil {
-
 		return err
 	}
 
@@ -813,6 +812,8 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			fmt.Print("\n🧠 Resolving schemas [")
 			for range progressChan {
 				processed++
+				progress := (processed * 100) / len(pathSlice)
+				fmt.Printf("\r🧠 Resolving schemas [%-25s] %d%%", strings.Repeat("=", progress/4), progress)
 			}
 			fmt.Print("\r")
 		}()
@@ -827,9 +828,12 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 					time.Sleep(10 * time.Millisecond) // Add small delay between requests
 					schemaBytes, err := work.path.Schema("application/com.github.proto-openapi.spec.v3@v1.0+protobuf")
 
+					// Get the schema name from the path
+					pathStr := fmt.Sprintf("%v", work.path)
+
 					if err != nil {
 						if !strings.Contains(err.Error(), "the backend attempted to redirect this request") {
-
+							fmt.Printf("\nError getting schema %s: %v\n", pathStr, err)
 						}
 						progressChan <- 1
 						continue
@@ -917,6 +921,7 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			processed++
 		}
 	}
+	fmt.Printf("\r ✔️ Resolving schemas (%v processed)                    \n", processed)
 
 	return specs, nil
 }

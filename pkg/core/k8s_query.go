@@ -2758,7 +2758,6 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				// Handle wildcard updates
 				err := applyWildcardUpdate(resource, kvp.Key, kvp.Value)
 				if err != nil {
-					fmt.Printf("Error applying wildcard update: %v\n", err)
 					return err
 				}
 				logDebug("Successfully applied wildcard update")
@@ -2796,7 +2795,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				namespace := getNamespaceName(metadata)
 				logDebug("Resource: %s/%s in namespace %s", nodeKind, name, namespace)
 
-				logDebug("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
+				fmt.Printf("Applying patch to resource %s/%s in namespace %s", nodeKind, name, namespace)
 				logDebug("Patch JSON: %s", string(patchJSON))
 				logDebug("Current resource state: %+v", resource)
 
