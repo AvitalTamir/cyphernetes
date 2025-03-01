@@ -1,9 +1,10 @@
 ---
 sidebar_position: 2
-hide_table_of_contents: true
 ---
 
 # Installation
+
+
 
 Cyphernetes can be installed in multiple ways depending on your operating system and preferences.
 
@@ -29,7 +30,7 @@ brew install cyphernetes
 
 You can download the pre-compiled binary for your operating system:
 
-### Linux
+<h3>Linux</h3>
 ```bash
 # For AMD64
 curl -LO https://github.com/avitaltamir/cyphernetes/releases/latest/download/cyphernetes-linux-amd64
@@ -42,7 +43,7 @@ chmod +x cyphernetes-linux-arm64
 sudo mv cyphernetes-linux-arm64 /usr/local/bin/cyphernetes
 ```
 
-### macOS
+<h3>macOS</h3>
 ```bash
 # For AMD64
 curl -LO https://github.com/avitaltamir/cyphernetes/releases/latest/download/cyphernetes-darwin-amd64
@@ -55,7 +56,7 @@ chmod +x cyphernetes-darwin-arm64
 sudo mv cyphernetes-darwin-arm64 /usr/local/bin/cyphernetes
 ```
 
-### Windows
+<h3>Windows</h3>
 Download the latest Windows binary from our [releases page](https://github.com/avitaltamir/cyphernetes/releases/latest).
 
 </TabItem>
