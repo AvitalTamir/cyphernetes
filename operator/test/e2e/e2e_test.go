@@ -113,6 +113,10 @@ func (m *MockProvider) CreateProviderForContext(context string) (provider.Provid
 	return m, nil
 }
 
+func (m *MockProvider) ToggleDryRun() {
+	// do nothing
+}
+
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 

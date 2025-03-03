@@ -34,6 +34,9 @@ func setupAPIRoutes(router *gin.Engine) {
 		api.GET("/convert-resource-name", handleConvertResourceName)
 		api.GET("/context", handleGetContext)
 		api.GET("/health", handleHealth)
+
+		api.GET("/config", handleGetConfig)
+		api.POST("/config", handleSetConfig)
 	}
 }
 
@@ -179,5 +182,33 @@ func handleGetContext(c *gin.Context) {
 	c.JSON(http.StatusOK, ContextInfo{
 		Context:   currentContext,
 		Namespace: core.Namespace,
+	})
+}
+
+func handleSetConfig(c *gin.Context) {
+	var config struct {
+		DryRun *bool `json:"dryRun"`
+	}
+
+	if err := c.BindJSON(&config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
+		return
+	}
+
+	// Update dry run mode if provided
+	if config.DryRun != nil {
+		DryRun = *config.DryRun
+		executor.Provider().ToggleDryRun()
+	}
+
+	// Return the updated configuration
+	c.JSON(http.StatusOK, gin.H{
+		"dryRun": DryRun,
+	})
+}
+
+func handleGetConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"dryRun": DryRun,
 	})
 }

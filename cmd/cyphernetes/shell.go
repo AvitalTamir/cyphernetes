@@ -479,6 +479,11 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			} else {
 				fmt.Println("Graph layout: Top to Bottom")
 			}
+		} else if input == "\\dr" {
+			// Toggle dry-run mode
+			executor.Provider().ToggleDryRun()
+			DryRun = !DryRun
+			fmt.Printf("Dry-run mode: %t\n\n", DryRun)
 		} else if input == "help" {
 			printHelp()
 		} else if input != "" {
@@ -787,6 +792,7 @@ func printHelp() {
 %s
 %s
 %s
+%s
 
 %s
 %s
@@ -812,6 +818,7 @@ func printHelp() {
 		formatCmd("\\gl, \\graph-layout", "Toggle graph layout direction"),
 		formatCmd("\\m, \\multiline", "Toggle multiline input mode"),
 		formatCmd("\\r, \\raw", "Toggle raw JSON output"),
+		formatCmd("\\dr, \\dry-run", "Toggle dry-run mode"),
 
 		formatSection("\nQuery syntax:"),
 		wrapInColor("  MATCH (n:Pod) RETURN n;", descColor),

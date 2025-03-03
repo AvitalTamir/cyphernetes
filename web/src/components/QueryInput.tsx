@@ -44,6 +44,8 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
+  const [isDryRunMode, setIsDryRunMode] = useState(false);
+
   useEffect(() => {
     const savedHistory = localStorage.getItem('queryHistory');
     if (savedHistory) {
@@ -205,9 +207,48 @@ const QueryInput: React.FC<QueryInputProps> = ({
     }
   }, []);
 
+  const fetchDryRunState = useCallback(async () => {
+    try {
+      // Use the new config endpoint
+      const response = await fetch('/api/config');
+      if (!response.ok) {
+        throw new Error('Failed to fetch configuration');
+      }
+      const data = await response.json();
+      setIsDryRunMode(data.dryRun);
+    } catch (error) {
+      console.error('Failed to fetch configuration:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchContextInfo();
-  }, [fetchContextInfo]);
+    fetchDryRunState(); // Fetch the initial configuration
+  }, [fetchContextInfo, fetchDryRunState]);
+
+  const toggleDryRunMode = (e: React.MouseEvent) => {
+    // Prevent the button from submitting the form
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Use the new config endpoint with the updated value
+    fetch('/api/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        dryRun: !isDryRunMode,
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        setIsDryRunMode(data.dryRun);
+      })
+      .catch(error => {
+        console.error('Error updating configuration:', error);
+      });
+  };
 
   return (
     <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
@@ -218,6 +259,14 @@ const QueryInput: React.FC<QueryInputProps> = ({
             {contextInfo.namespace && (
               <>
                 ns: <span className="namespace">{contextInfo.namespace}</span>
+                <button 
+                  type="button"
+                  className={`dry-run-toggle ${isDryRunMode ? 'active' : ''}`}
+                  onClick={toggleDryRunMode}
+                  title="Toggle dry-run mode"
+                >
+                  {isDryRunMode ? 'Dry Run: ON' : 'Dry Run: OFF'}
+                </button>
               </>
             )}
           </div>

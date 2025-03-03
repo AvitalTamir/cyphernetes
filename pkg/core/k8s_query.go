@@ -2794,10 +2794,6 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 
 				namespace := getNamespaceName(metadata)
 				logDebug("Resource: %s/%s in namespace %s", nodeKind, name, namespace)
-
-				if !CleanOutput {
-					fmt.Printf("Applying patch to resource %s/%s in namespace %s\n", nodeKind, name, namespace)
-				}
 				logDebug("Patch JSON: %s", string(patchJSON))
 				logDebug("Current resource state: %+v", resource)
 
