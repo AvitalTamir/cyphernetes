@@ -185,6 +185,7 @@ func (r *DynamicOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 		Clientset:     clientset,
 		DynamicClient: dynamicClient,
+		QuietMode:     true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
