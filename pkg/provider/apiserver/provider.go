@@ -344,13 +344,9 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
-				if !p.quietMode {
-					fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
-				}
+				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
 			} else {
-				if !p.quietMode {
-					fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
-				}
+				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 			}
 		}
 	} else {
@@ -400,13 +396,9 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
 			if p.dryRun {
-				if !p.quietMode {
-					fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
-				}
+				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
 			} else {
-				if !p.quietMode {
-					fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
-				}
+				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
 			}
 		}
 	} else {
@@ -561,9 +553,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 						return fmt.Errorf("error applying container merge patch: %v", err)
 					}
 
-					if p.dryRun && !p.quietMode {
+					if p.dryRun {
 						fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
-					} else if !p.quietMode {
+					} else {
 						fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 					}
 
@@ -624,9 +616,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					return fmt.Errorf("error applying merge patch: %v", err)
 				}
 
-				if p.dryRun && !p.quietMode {
+				if p.dryRun {
 					fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
-				} else if !p.quietMode {
+				} else {
 					fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 				}
 
@@ -755,9 +747,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		}
 	}
 
-	if p.dryRun && !p.quietMode {
+	if p.dryRun {
 		fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
-	} else if !p.quietMode {
+	} else {
 		fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 	}
 
