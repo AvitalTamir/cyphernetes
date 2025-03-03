@@ -106,6 +106,10 @@ func (m *MockProvider) GetDiscoveryClient() (discovery.DiscoveryInterface, error
 	return m.clientset.Discovery(), nil
 }
 
+func (m *MockProvider) ToggleDryRun() {
+	// do nothing
+}
+
 var _ = Describe("DynamicOperator Controller", func() {
 	BeforeEach(func() {
 		// remove the test dynamicoperator if it already exists

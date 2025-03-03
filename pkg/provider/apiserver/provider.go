@@ -434,6 +434,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		return fmt.Errorf("invalid patch JSON: %v", err)
 	}
 
+	// Create patch options with dry run if needed
+	patchOpts := metav1.PatchOptions{}
+	if p.dryRun {
+		patchOpts.DryRun = []string{metav1.DryRunAll}
+	}
+
 	// Check if this is a patch for metadata.annotations or metadata.labels
 	// If so, we'll use a strategic merge patch instead of JSON Patch
 	if len(patches) == 2 {
@@ -548,11 +554,17 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 						name,
 						types.StrategicMergePatchType,
 						mergePatchJSON,
-						metav1.PatchOptions{},
+						patchOpts,
 					)
 
 					if err != nil {
 						return fmt.Errorf("error applying container merge patch: %v", err)
+					}
+
+					if p.dryRun && !p.quietMode {
+						fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+					} else if !p.quietMode {
+						fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 					}
 
 					return nil
@@ -605,11 +617,17 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					name,
 					types.MergePatchType,
 					mergePatchJSON,
-					metav1.PatchOptions{},
+					patchOpts,
 				)
 
 				if err != nil {
 					return fmt.Errorf("error applying merge patch: %v", err)
+				}
+
+				if p.dryRun && !p.quietMode {
+					fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+				} else if !p.quietMode {
+					fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 				}
 
 				return nil
@@ -651,7 +669,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					name,
 					types.JSONPatchType,
 					testPatchData,
-					metav1.PatchOptions{},
+					patchOpts,
 				)
 
 				// If the test fails, the map doesn't exist, so we need to create it
@@ -677,7 +695,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 						name,
 						types.JSONPatchType,
 						createMapPatchJSON,
-						metav1.PatchOptions{},
+						patchOpts,
 					)
 
 					if err != nil {
@@ -696,7 +714,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 						name,
 						types.JSONPatchType,
 						addPatchData,
-						metav1.PatchOptions{},
+						patchOpts,
 					)
 
 					if err != nil {
@@ -721,7 +739,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 			name,
 			types.JSONPatchType,
 			patchData,
-			metav1.PatchOptions{},
+			patchOpts,
 		)
 
 		if err != nil {
@@ -735,6 +753,12 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 				fmt.Printf("Error getting updated state: %v\n", err)
 			}
 		}
+	}
+
+	if p.dryRun && !p.quietMode {
+		fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+	} else if !p.quietMode {
+		fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 	}
 
 	return nil
@@ -1256,4 +1280,8 @@ func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource
 	}
 
 	return false, fmt.Errorf("resource %q not found", gvr.Resource)
+}
+
+func (p *APIServerProvider) ToggleDryRun() {
+	p.dryRun = !p.dryRun
 }
