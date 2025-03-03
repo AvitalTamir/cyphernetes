@@ -32,6 +32,7 @@ type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
 	DryRun        bool
+	QuietMode     bool
 }
 
 type APIServerProvider struct {
@@ -44,6 +45,7 @@ type APIServerProvider struct {
 	semaphore       chan struct{}
 	resourceMutex   sync.RWMutex
 	dryRun          bool
+	quietMode       bool
 	namespacedCache map[string]bool
 	namespacedMutex sync.RWMutex
 }
@@ -62,7 +64,9 @@ type apiResponse struct {
 }
 
 func NewAPIServerProvider() (provider.Provider, error) {
-	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{})
+	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{
+		QuietMode: false,
+	})
 }
 
 func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.Provider, error) {
@@ -108,11 +112,14 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		requestChannel:  make(chan *apiRequest),
 		semaphore:       make(chan struct{}, 1),
 		dryRun:          config.DryRun,
+		quietMode:       config.QuietMode,
 		namespacedCache: make(map[string]bool),
 	}
 
 	if config.DryRun {
-		fmt.Println("Provider initialized in dry-run mode")
+		if !config.QuietMode {
+			fmt.Println("Provider initialized in dry-run mode")
+		}
 	}
 
 	// Start the request processor
@@ -337,15 +344,21 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
 			if p.dryRun {
-				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
+				if !p.quietMode {
+					fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
+				}
 			} else {
-				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+				if !p.quietMode {
+					fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
+				}
 			}
 		}
 	} else {
 		deleteErr = p.dynamicClient.Resource(gvr).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
-			fmt.Printf("Deleted %s/%s\n", strings.ToLower(kind), name)
+			if !p.quietMode {
+				fmt.Printf("Deleted %s/%s\n", strings.ToLower(kind), name)
+			}
 		}
 	}
 
@@ -387,15 +400,21 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
 			if p.dryRun {
-				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
+				if !p.quietMode {
+					fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
+				}
 			} else {
-				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
+				if !p.quietMode {
+					fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
+				}
 			}
 		}
 	} else {
 		_, err = p.dynamicClient.Resource(gvr).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
-			fmt.Printf("\nCreated %s/%s", strings.ToLower(kind), name)
+			if !p.quietMode {
+				fmt.Printf("\nCreated %s/%s", strings.ToLower(kind), name)
+			}
 		}
 	}
 
@@ -712,7 +731,9 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		// Get state after patch
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			fmt.Printf("Error getting updated state: %v\n", err)
+			if !p.quietMode {
+				fmt.Printf("Error getting updated state: %v\n", err)
+			}
 		}
 	}
 
@@ -780,13 +801,19 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 		// Progress tracking goroutine
 		go func() {
 			processed := 0
-			fmt.Print("\n🧠 Resolving schemas [")
+			if !p.quietMode {
+				fmt.Print("\n🧠 Resolving schemas [")
+			}
 			for range progressChan {
 				processed++
 				progress := (processed * 100) / len(pathSlice)
-				fmt.Printf("\r🧠 Resolving schemas [%-25s] %d%%", strings.Repeat("=", progress/4), progress)
+				if !p.quietMode {
+					fmt.Printf("\r🧠 Resolving schemas [%-25s] %d%%", strings.Repeat("=", progress/4), progress)
+				}
 			}
-			fmt.Print("\r")
+			if !p.quietMode {
+				fmt.Print("\r")
+			}
 		}()
 
 		// Create worker pool
@@ -804,7 +831,9 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 
 					if err != nil {
 						if !strings.Contains(err.Error(), "the backend attempted to redirect this request") {
-							fmt.Printf("\nError getting schema %s: %v\n", pathStr, err)
+							if !p.quietMode {
+								fmt.Printf("\nError getting schema %s: %v\n", pathStr, err)
+							}
 						}
 						progressChan <- 1
 						continue
@@ -892,7 +921,9 @@ func (p *APIServerProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 			processed++
 		}
 	}
-	fmt.Printf("\r ✔️ Resolving schemas (%v processed)                    \n", processed)
+	if !p.quietMode {
+		fmt.Printf("\r ✔️ Resolving schemas (%v processed)                    \n", processed)
+	}
 
 	return specs, nil
 }
@@ -1097,6 +1128,7 @@ func (p *APIServerProvider) CreateProviderForContext(context string) (provider.P
 		Clientset:     clientset,
 		DynamicClient: dynamicClient,
 		DryRun:        p.dryRun,
+		QuietMode:     p.quietMode,
 	})
 }
 
