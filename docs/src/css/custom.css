@@ -66,6 +66,10 @@
 
 /* For desktop only, apply backdrop filter to footer */
 @media (min-width: 997px) {
+  .navbar {
+    backdrop-filter: blur(10px);
+  }
+
   .footer {
     backdrop-filter: blur(10px);
   }
