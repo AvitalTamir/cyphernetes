@@ -43,8 +43,14 @@
 
 /* Navbar customization */
 .navbar {
-  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+/* For desktop only, apply backdrop filter */
+@media (min-width: 997px) {
+  .navbar {
+    backdrop-filter: blur(10px);
+  }
 }
 
 /* GitHub icon in navbar */
@@ -70,8 +76,14 @@
 .footer {
   padding: 2rem 0;
   background-color: var(--ifm-navbar-background-color);
-  backdrop-filter: blur(10px);
   border-top: 1px solid var(--ifm-toc-border-color);
+}
+
+/* For desktop only, apply backdrop filter to footer */
+@media (min-width: 997px) {
+  .footer {
+    backdrop-filter: blur(10px);
+  }
 }
 
 .footer__link-item {
@@ -166,4 +178,74 @@ div[class^='codeBlockContent'] {
 .tabs-container .tabs-content .prism-code {
   margin: 0;
   padding: 1rem !important;
+}
+
+/* Mobile navbar fixes */
+@media (max-width: 996px) {
+  /* Remove backdrop filter from all elements in mobile view */
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Light mode specific styles */
+  html[data-theme='light'] .navbar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  /* Dark mode specific styles */
+  html[data-theme='dark'] .navbar {
+    background-color: #0f172a;
+    border-bottom: 1px solid #4b5563;
+  }
+
+  html[data-theme='dark'] .navbar-sidebar__brand {
+    border-bottom: 1px solid #4b5563;
+  }
+
+  html[data-theme='light'] .navbar-sidebar__brand {
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .navbar__items--left > button.navbar__toggle::before {
+    content: '☰';
+    color: var(--ifm-navbar-link-color);
+  }
+
+  /* Fix for the toggle button and logo alignment */
+  .navbar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  /* Ensure the mobile menu appears properly without backdrop filter */
+  .navbar-sidebar {
+    height: 100vh;
+    padding: 1rem;
+  }
+
+  /* Light mode specific styles */
+  html[data-theme='light'] .navbar-sidebar {
+    background-color: #ffffff;
+    color: #1e293b;
+  }
+
+  /* Dark mode specific styles */
+  html[data-theme='dark'] .navbar-sidebar {
+    background-color: #0f172a;
+    color: #e5e7eb;
+  }
+
+  /* Ensure sidebar links are visible in both modes */
+  .navbar-sidebar .navbar__link {
+    color: var(--ifm-navbar-link-color);
+  }
+
+  /* Style the sidebar close button */
+  .navbar-sidebar__close {
+    color: var(--ifm-navbar-link-color);
+  }
 }
