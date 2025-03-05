@@ -1117,6 +1117,38 @@ func TestParser(t *testing.T) {
 			},
 		},
 		{
+			name:  "match with escaped dots in SET clause",
+			input: `MATCH (d:Deployment) SET d.metadata.annotations.meta\.cyphernet\.es/foo = "test" RETURN d`,
+			want: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "d",
+									Kind: "Deployment",
+								},
+							},
+						},
+					},
+					&SetClause{
+						KeyValuePairs: []*KeyValuePair{
+							{
+								Key:      "d.metadata.annotations.meta\\.cyphernet\\.es/foo",
+								Value:    "test",
+								Operator: "EQUALS",
+							},
+						},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "d"},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:  "partial node patterns with anonymous vars",
 			input: "MATCH (p:pod)->(:service)->(x) RETURN x.metadata.name",
 			want: &Expression{
@@ -1656,6 +1688,94 @@ func TestParserErrors(t *testing.T) {
 			t.Logf("Got error: %v", err)
 			if !strings.Contains(err.Error(), tt.contains) {
 				t.Errorf("ParseQuery() error = %v, want error containing %q", err, tt.contains)
+			}
+		})
+	}
+}
+
+func TestTemporalExpressions(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *TemporalExpression
+		wantErr  bool
+	}{
+		{
+			name:  "simple datetime",
+			input: "datetime()",
+			expected: &TemporalExpression{
+				Function: "datetime",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "datetime with ISO string",
+			input: `datetime("2024-02-19T10:00:00Z")`,
+			expected: &TemporalExpression{
+				Function: "datetime",
+				Argument: "2024-02-19T10:00:00Z",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "simple duration",
+			input: `duration("PT1H")`,
+			expected: &TemporalExpression{
+				Function: "duration",
+				Argument: "PT1H",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "datetime minus duration",
+			input: `datetime() - duration("PT1H")`,
+			expected: &TemporalExpression{
+				Function:  "datetime",
+				Operation: "-",
+				RightExpr: &TemporalExpression{
+					Function: "duration",
+					Argument: "PT1H",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "datetime with ISO string minus duration",
+			input: `datetime("2024-02-19T10:00:00Z") - duration("PT1H")`,
+			expected: &TemporalExpression{
+				Function:  "datetime",
+				Argument:  "2024-02-19T10:00:00Z",
+				Operation: "-",
+				RightExpr: &TemporalExpression{
+					Function: "duration",
+					Argument: "PT1H",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid ISO format",
+			input:   `datetime("not-a-date")`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid duration format",
+			input:   `duration("not-a-duration")`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser(tt.input)
+			parser.advance() // Get first token
+			got, err := parser.parseTemporalExpression()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseTemporalExpression() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("parseTemporalExpression() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

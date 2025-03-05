@@ -103,8 +103,17 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 }
 
 func InitializeRelationships(resourceSpecs map[string][]string, provider provider.Provider) {
-	logDebug("Starting relationship initialization with", len(resourceSpecs), "resource specs")
-	fmt.Print("🧠 Initializing relationships")
+	if CleanOutput {
+		logDebug("Running relationship initialization in query mode (suppressing output)")
+	} else {
+		logDebug("Starting relationship initialization with", len(resourceSpecs), "resource specs")
+	}
+
+	// Only show progress bar if not in clean output mode
+	if !CleanOutput {
+		fmt.Print("🧠 Initializing relationships")
+	}
+
 	relationshipCount := 0
 	totalKinds := len(resourceSpecs)
 	processed := 0
@@ -139,9 +148,11 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		// Update progress bar
 		progress := (processed * 100) / totalKinds
 		if progress > lastProgress {
-			fmt.Printf("\033[K\r🧠 Initializing relationships [%-25s] %d%%",
-				strings.Repeat("=", progress/4),
-				progress)
+			if !CleanOutput {
+				fmt.Printf("\033[K\r🧠 Initializing relationships [%-25s] %d%%",
+					strings.Repeat("=", progress/4),
+					progress)
+			}
 			lastProgress = progress
 		}
 
@@ -307,7 +318,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	potentialKindsMutex.Unlock()
 
 	customRelationshipsCount, err := loadCustomRelationships()
-	if err != nil {
+	if err != nil && !CleanOutput {
 		fmt.Println("\nError loading custom relationships:", err)
 	}
 
@@ -317,7 +328,10 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	}
 
 	logDebug("Relationship initialization complete. Found", relationshipCount, "internal relationships and", customRelationshipsCount, "custom relationships")
-	fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
+
+	if !CleanOutput {
+		fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
+	}
 }
 
 // Helper function to try resolving GVR with core prefix if ambiguous

@@ -703,6 +703,95 @@ var _ = Describe("Cyphernetes E2E", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("reference node cannot have properties"))
 		})
+
+		It("Should execute temporal queries correctly", func() {
+			By("Creating test resources")
+			// Use a fixed reference time
+			referenceTime := time.Now().UTC()
+			fmt.Printf("Reference time: %v\n", referenceTime)
+
+			oldPodTime := referenceTime.Add(-2 * time.Hour)
+			newPodTime := referenceTime.Add(-30 * time.Minute)
+			fmt.Printf("Old pod time: %v (2h ago)\n", oldPodTime)
+			fmt.Printf("New pod time: %v (30m ago)\n", newPodTime)
+
+			oldPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "old-test-pod",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"test": "temporal",
+					},
+					Annotations: map[string]string{
+						"test.timestamp": oldPodTime.Format(time.RFC3339),
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, oldPod)).Should(Succeed())
+
+			newPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "new-test-pod",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"test": "temporal",
+					},
+					Annotations: map[string]string{
+						"test.timestamp": newPodTime.Format(time.RFC3339),
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, newPod)).Should(Succeed())
+
+			// Sleep briefly to ensure pods are created and indexed
+			time.Sleep(500 * time.Millisecond)
+
+			By("Executing a temporal query")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Query for pods older than 1 hour
+			ast, err := core.ParseQuery(`
+				MATCH (p:Pod)
+				WHERE p.metadata.labels.test = "temporal"
+				AND p.metadata.annotations.test\.timestamp < datetime() - duration("PT1H")
+				RETURN p.metadata.name
+			`)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Data).To(HaveKey("p"))
+			pods, ok := result.Data["p"].([]interface{})
+			Expect(ok).To(BeTrue(), "Expected result to be a slice")
+			Expect(pods).To(HaveLen(1), "Expected exactly one pod older than 1 hour")
+			metadata := pods[0].(map[string]interface{})
+			Expect(metadata["name"]).To(Equal("old-test-pod"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, oldPod)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, newPod)).Should(Succeed())
+		})
 	})
 
 	Context("Label Update Operations", func() {
@@ -775,6 +864,80 @@ var _ = Describe("Cyphernetes E2E", func() {
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 		})
+
+		It("Should correctly handle SET items with escaped dots", func() {
+			By("Creating test resources")
+			testDeployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-deployment-31",
+					Namespace: testNamespace,
+					Labels: map[string]string{
+						"app.kubernetes.io/name": "test",
+						"pre-existing-label":     "should-be-preserved",
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app.kubernetes.io/name": "test",
+						},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app.kubernetes.io/name": "test",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "nginx",
+									Image: "nginx:1.19",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, testDeployment)).Should(Succeed())
+
+			By("Executing a SET query to update labels")
+			provider, err := apiserver.NewAPIServerProvider()
+			Expect(err).NotTo(HaveOccurred())
+
+			executor, err := core.NewQueryExecutor(provider)
+			Expect(err).NotTo(HaveOccurred())
+
+			ast, err := core.ParseQuery(`
+					MATCH (d:Deployment {name: "test-deployment-31"})
+					SET d.metadata.labels.app\.kubernetes\.io/name = "test-updated"
+					RETURN d
+				`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = executor.Execute(ast, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the label update in the cluster")
+			var updatedDeployment appsv1.Deployment
+
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, client.ObjectKey{
+					Namespace: testNamespace,
+					Name:      "test-deployment-31",
+				}, &updatedDeployment)
+				if err != nil {
+					return ""
+				}
+				return updatedDeployment.Labels["app.kubernetes.io/name"]
+			}, timeout*4, interval).Should(Equal("test-updated"))
+
+			Expect(updatedDeployment.Labels["pre-existing-label"]).Should(Equal("should-be-preserved"))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
+		})
+
 	})
 
 	Context("Multiple Field Update Operations", func() {

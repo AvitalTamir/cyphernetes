@@ -24,6 +24,9 @@ var queryCmd = &cobra.Command{
 	Long:  `Use the 'query' subcommand to execute a single Cypher-inspired query against your Kubernetes resources.`,
 	Args:  cobra.ExactArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// Set CleanOutput to true before validating format
+		core.CleanOutput = true
+
 		// Validate format flag
 		f := cmd.Flag("format").Value.String()
 		if f != "yaml" && f != "json" {
@@ -33,7 +36,9 @@ var queryCmd = &cobra.Command{
 		return initializeKubernetes()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		provider, err := apiserver.NewAPIServerProvider()
+		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+			QuietMode: true,
+		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error creating provider: ", err)
 			os.Exit(1)
@@ -42,7 +47,7 @@ var queryCmd = &cobra.Command{
 		if executor == nil {
 			os.Exit(1)
 		}
-		core.CleanOutput = true
+
 		if err := core.InitResourceSpecs(executor.Provider()); err != nil {
 			fmt.Printf("Error initializing resource specs: %v\n", err)
 		}
@@ -53,7 +58,8 @@ var queryCmd = &cobra.Command{
 func runQuery(args []string, w io.Writer) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
-		DryRun: DryRun,
+		DryRun:    DryRun,
+		QuietMode: true,
 	})
 	if err != nil {
 		fmt.Fprintln(w, "Error creating provider: ", err)

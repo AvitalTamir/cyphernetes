@@ -45,7 +45,7 @@ func (l *Lexer) NextToken() Token {
 
 	// Check if we're in a property access context (after a dot in a WHERE or RETURN clause)
 	// or if we're in a WHERE clause and the last token was a comma or AND
-	if (l.lastToken.Type == DOT || l.lastToken.Type == COMMA || l.lastToken.Type == AND || l.lastToken.Type == WHERE) && !l.inJsonData && !l.inPropertyKey {
+	if (l.lastToken.Type == DOT || l.lastToken.Type == COMMA || l.lastToken.Type == AND || l.lastToken.Type == WHERE || l.lastToken.Type == SET) && !l.inJsonData && !l.inPropertyKey {
 		l.isInJsonPath = true
 	}
 
@@ -90,6 +90,10 @@ func (l *Lexer) NextToken() Token {
 				return Token{Type: NULL, Literal: lit}
 			case "NOT":
 				return Token{Type: NOT, Literal: lit}
+			case "DATETIME":
+				return Token{Type: DATETIME, Literal: "datetime"}
+			case "DURATION":
+				return Token{Type: DURATION, Literal: "duration"}
 			default:
 				debugLog("Returning IDENT token: '%s'", lit)
 				if !l.isInJsonPath {
@@ -263,7 +267,9 @@ func (l *Lexer) NextToken() Token {
 			l.s.Next() // consume '~'
 			return Token{Type: REGEX_COMPARE, Literal: "=~"}
 		}
-		return Token{Type: EQUALS, Literal: "="}
+		tok := Token{Type: EQUALS, Literal: "="}
+		l.lastToken = tok
+		return tok
 
 	case '!':
 		if l.s.Peek() == '=' {
@@ -287,8 +293,11 @@ func (l *Lexer) NextToken() Token {
 			if l.inContexts {
 				return Token{Type: IDENT, Literal: "-"}
 			}
-			return Token{Type: ILLEGAL, Literal: "-"}
+			return Token{Type: MINUS, Literal: "-"}
 		}
+
+	case '+':
+		return Token{Type: PLUS, Literal: "+"}
 
 	case '<':
 		switch l.s.Peek() {

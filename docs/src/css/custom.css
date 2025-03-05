@@ -43,6 +43,7 @@
 
 /* Navbar customization */
 .navbar {
+<<<<<<< HEAD
   border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
@@ -53,6 +54,12 @@
   }
 }
 
+=======
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+>>>>>>> 5ab65a01cb07de27f54e857804bfdee5d791c7a8
 /* GitHub icon in navbar */
 .header-github-link:hover {
   opacity: 0.7;
@@ -76,6 +83,7 @@
 .footer {
   padding: 2rem 0;
   background-color: var(--ifm-navbar-background-color);
+<<<<<<< HEAD
   border-top: 1px solid var(--ifm-toc-border-color);
 }
 
@@ -86,6 +94,12 @@
   }
 }
 
+=======
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--ifm-toc-border-color);
+}
+
+>>>>>>> 5ab65a01cb07de27f54e857804bfdee5d791c7a8
 .footer__link-item {
   font-weight: normal;
   font-size: 0.9rem;

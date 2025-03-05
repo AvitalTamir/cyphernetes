@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AvitalTamir/jsonpath"
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
@@ -1545,42 +1546,162 @@ func toFloat64(v interface{}) (float64, error) {
 }
 
 func createCompatiblePatch(path []string, value interface{}) []interface{} {
-	// Special handling for metadata fields
-	if path[0] == "metadata" {
-		if len(path) > 1 && (path[1] == "annotations" || path[1] == "labels") {
-			// For annotations and labels, we need to ensure the map exists first
-			patches := make([]interface{}, 0)
+	logDebug("Creating patch for path: %v with value: %v\n", path, value)
 
-			// Add map with the specific key-value pair
-			addPatch := map[string]interface{}{
-				"op":   "add",
-				"path": "/metadata/" + path[1],
-				"value": map[string]interface{}{
-					path[len(path)-1]: value,
-				},
+	// For any path that ends with a key that might contain dots (like labels or annotations),
+	// we need to handle it specially to ensure we only update that specific key
+	if len(path) >= 2 {
+		// Check if we're updating a map field (like labels, annotations, or any other map)
+		// We'll detect this by checking if the last part of the path contains dots or slashes
+		// which would indicate it's a key in a map
+		lastPart := path[len(path)-1]
+		if strings.Contains(lastPart, ".") || strings.Contains(lastPart, "/") {
+			logDebug("Detected path with dots in last part: %s\n", lastPart)
+			// This is likely a key in a map, so we should create a patch that only updates this key
+			// Extract the map path (everything except the last part)
+			mapPath := path[:len(path)-1]
+			jsonMapPath := "/" + strings.Join(mapPath, "/")
+
+			// For array indices, convert [n] to /n
+			re := regexp.MustCompile(`\[(\d+)\]`)
+			jsonMapPath = re.ReplaceAllString(jsonMapPath, "/$1")
+
+			logDebug("Map path: %s\n", jsonMapPath)
+
+			// Create a patch that uses the "test" operation to check if the map exists
+			// If it doesn't, this will fail and we'll need to create it
+			testPatch := map[string]interface{}{
+				"op":    "test",
+				"path":  jsonMapPath,
+				"value": map[string]interface{}{},
 			}
 
-			patches = append(patches, addPatch)
-			return patches
+			// Create a patch that adds just the specific key-value pair to the map
+			// Properly escape the key according to JSON Patch spec:
+			// '~' is escaped as '~0' and '/' is escaped as '~1'
+			escapedKey := strings.ReplaceAll(lastPart, "~", "~0")
+			escapedKey = strings.ReplaceAll(escapedKey, "/", "~1")
+			// Do NOT escape dots - they are valid in JSON Patch paths
+			logDebug("Escaped key: %s\n", escapedKey)
+
+			addPatch := map[string]interface{}{
+				"op":    "add",
+				"path":  jsonMapPath + "/" + escapedKey,
+				"value": value,
+			}
+
+			logDebug("Created test patch: %+v\n", testPatch)
+			logDebug("Created add patch: %+v\n", addPatch)
+
+			return []interface{}{testPatch, addPatch}
 		}
 	}
 
-	// For spec fields, ensure the path is properly formatted
+	// For regular paths, we need to ensure all parent paths exist
+	// Special handling for common paths that need to be created as empty objects
+	// This is a more targeted approach than trying to build every possible path
+	if len(path) >= 2 {
+		// Check for common paths that might need to be created first
+		if path[0] == "metadata" {
+			if len(path) >= 3 && (path[1] == "annotations" || path[1] == "labels") {
+				// For metadata.labels or metadata.annotations, we need to use a test patch
+				// followed by an add patch to trigger the strategic merge patch in the provider
+				mapPath := fmt.Sprintf("/metadata/%s", path[1])
+
+				// Create a test patch to check if the map exists
+				testPatch := map[string]interface{}{
+					"op":    "test",
+					"path":  mapPath,
+					"value": map[string]interface{}{},
+				}
+
+				// Create an add patch for the specific key
+				keyPath := fmt.Sprintf("%s/%s", mapPath, path[2])
+				addPatch := map[string]interface{}{
+					"op":    "add",
+					"path":  keyPath,
+					"value": value,
+				}
+
+				logDebug("Created test patch: %+v\n", testPatch)
+				logDebug("Created add patch: %+v\n", addPatch)
+
+				return []interface{}{testPatch, addPatch}
+			}
+		} else if path[0] == "spec" && len(path) >= 3 {
+			if path[1] == "template" && path[2] == "spec" {
+				// Handle pod spec paths like spec.template.spec.containers[0].resources
+				if len(path) >= 5 && strings.HasPrefix(path[3], "containers[") {
+					// Extract the container index
+					containerIndexMatch := regexp.MustCompile(`\[(\d+)\]`).FindStringSubmatch(path[3])
+					if len(containerIndexMatch) < 2 {
+						// If we can't extract the index, fall back to regular patching
+						goto DEFAULT_CASE
+					}
+
+					containerIndex := containerIndexMatch[1]
+
+					// For container resources, we'll use a special approach
+					// Create a single strategic merge patch instead of multiple JSON patches
+					// This is more reliable for container resources
+
+					// Create a special patch that signals to the provider to use a strategic merge patch
+					specialPatch := map[string]interface{}{
+						"op":    "test",
+						"path":  "/spec/template/spec/containers",
+						"value": []interface{}{},
+					}
+
+					// Create a patch that adds the specific property
+					// We'll use a special format that the provider will recognize
+					// and convert to a strategic merge patch
+					containerPath := fmt.Sprintf("/spec/template/spec/containers/%s", containerIndex)
+
+					// Build the path to the specific property
+					propertyPath := containerPath
+					for i := 4; i < len(path); i++ {
+						part := path[i]
+						// Handle array indices in the path
+						if strings.Contains(part, "[") && strings.Contains(part, "]") {
+							part = regexp.MustCompile(`\[(\d+)\]`).ReplaceAllString(part, "/$1")
+						}
+						propertyPath += "/" + part
+					}
+
+					// Create the add patch
+					addPatch := map[string]interface{}{
+						"op":    "add",
+						"path":  propertyPath,
+						"value": value,
+					}
+
+					logDebug("Created special container patch: %+v\n", specialPatch)
+					logDebug("Created add patch: %+v\n", addPatch)
+
+					return []interface{}{specialPatch, addPatch}
+				}
+			}
+		}
+	}
+
+DEFAULT_CASE:
+	// For all other paths, use a simple add operation
+	// This will work if the parent path already exists
 	jsonPath := "/" + strings.Join(path, "/")
 
 	// For array indices, convert [n] to /n
 	re := regexp.MustCompile(`\[(\d+)\]`)
 	jsonPath = re.ReplaceAllString(jsonPath, "/$1")
 
-	// Create the patch operation
+	logDebug("Regular path: %s\n", jsonPath)
+
 	patch := map[string]interface{}{
-		"op":    "replace",
+		"op":    "add",
 		"path":  jsonPath,
 		"value": value,
 	}
 
-	// For debugging
-	logDebug("Created patch: %+v", patch)
+	logDebug("Created regular patch: %+v\n", patch)
 
 	return []interface{}{patch}
 }
@@ -2114,13 +2235,39 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 								break
 							}
 
-							resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
-							if err != nil {
-								keep = false
-								break
+							// Check if the filter value is a temporal expression
+							if temporalExpr, ok := filter.Value.(*TemporalExpression); ok {
+								// Convert resource value to time.Time if it's a string
+								var resourceTime time.Time
+								if timeStr, ok := value.(string); ok {
+									resourceTime, err = time.Parse(time.RFC3339, timeStr)
+									if err != nil {
+										keep = false
+										break
+									}
+								} else {
+									keep = false
+									break
+								}
+
+								// Use temporal handler to compare values
+								temporalHandler := NewTemporalHandler()
+								keep, err = temporalHandler.CompareTemporalValues(resourceTime, temporalExpr, filter.Operator)
+								if err != nil {
+									keep = false
+									break
+								}
+							} else {
+								// Regular value comparison
+								resourceValue, filterValue, err := convertToComparableTypes(value, filter.Value)
+								if err != nil {
+									keep = false
+									break
+								}
+
+								keep = compareValues(resourceValue, filterValue, filter.Operator)
 							}
 
-							keep = compareValues(resourceValue, filterValue, filter.Operator)
 							if filter.IsNegated {
 								keep = !keep
 							}
@@ -2574,15 +2721,28 @@ func evaluateWildcardPath(resource interface{}, path string, filterValue interfa
 
 // Update the SET clause handling to support wildcards
 func (q *QueryExecutor) handleSetClause(c *SetClause) error {
-	for _, kvp := range c.KeyValuePairs {
-		resultMapKey := strings.Split(kvp.Key, ".")[0]
-		resources := resultMap[resultMapKey].([]map[string]interface{})
+	logDebug("Processing %d key-value pairs\n", len(c.KeyValuePairs))
+
+	for i, kvp := range c.KeyValuePairs {
+		logDebug("Processing key-value pair %d: %s = %v", i, kvp.Key, kvp.Value)
+
+		// Extract the resource name (first part before any dot)
+		parts := strings.SplitN(kvp.Key, ".", 2)
+		resultMapKey := parts[0]
+		logDebug("Resource name: %s", resultMapKey)
+
+		resources, ok := resultMap[resultMapKey].([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("could not find resources for node %s in MATCH clause", resultMapKey)
+		}
+		logDebug("Found %d resources for node %s", len(resources), resultMapKey)
 
 		// Find the matching node from the stored match nodes
 		var nodeKind string
 		for _, node := range q.matchNodes {
 			if node.ResourceProperties.Name == resultMapKey {
 				nodeKind = node.ResourceProperties.Kind
+				logDebug("Found kind %s for node %s", nodeKind, resultMapKey)
 				break
 			}
 		}
@@ -2590,26 +2750,54 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 			return fmt.Errorf("could not find kind for node %s in MATCH clause", resultMapKey)
 		}
 
-		for _, resource := range resources {
+		for j, resource := range resources {
+			logDebug("Processing resource %d of %d", j+1, len(resources))
+
 			if strings.Contains(kvp.Key, "[*]") {
+				logDebug("Detected wildcard path: %s", kvp.Key)
 				// Handle wildcard updates
 				err := applyWildcardUpdate(resource, kvp.Key, kvp.Value)
 				if err != nil {
 					return err
 				}
+				logDebug("Successfully applied wildcard update")
 			} else {
+				logDebug("Processing regular path update")
 				// Regular path update
-				patches := createCompatiblePatch(strings.Split(kvp.Key, ".")[1:], kvp.Value)
+				// First remove the resource name prefix (e.g., "d.")
+				remainingPath := ""
+				if len(parts) > 1 {
+					remainingPath = parts[1]
+				}
+				logDebug("Remaining path after removing resource prefix: %s", remainingPath)
+
+				// Split the path handling escaped dots
+				pathParts := splitEscapedPath(remainingPath)
+				logDebug("Path parts after splitting escaped dots: %v", pathParts)
+
+				patches := createCompatiblePatch(pathParts, kvp.Value)
 				patchJSON, err := json.Marshal(patches)
 				if err != nil {
 					return fmt.Errorf("error marshalling patches: %s", err)
 				}
+				logDebug("Created patch JSON: %s", string(patchJSON))
 
-				metadata := resource["metadata"].(map[string]interface{})
-				name := metadata["name"].(string)
+				metadata, ok := resource["metadata"].(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("resource metadata is not a map")
+				}
+
+				name, ok := metadata["name"].(string)
+				if !ok {
+					return fmt.Errorf("resource name is not a string")
+				}
+
 				namespace := getNamespaceName(metadata)
+				logDebug("Resource: %s/%s in namespace %s", nodeKind, name, namespace)
 
-				fmt.Printf("Applying patch to resource %s/%s in namespace %s\n", nodeKind, name, namespace)
+				if !CleanOutput {
+					fmt.Printf("Applying patch to resource %s/%s in namespace %s\n", nodeKind, name, namespace)
+				}
 				logDebug("Patch JSON: %s", string(patchJSON))
 				logDebug("Current resource state: %+v", resource)
 
@@ -2617,69 +2805,57 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				if err != nil {
 					return fmt.Errorf("error patching resource: %s", err)
 				}
+				logDebug("Successfully applied patch")
 
 				// Verify the patch was applied
+				logDebug("Verifying patch was applied")
 				updatedResource, err := q.provider.GetK8sResources(nodeKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
 				if err != nil {
-					logDebug("Error getting updated resource: %v", err)
-				} else {
-					logDebug("Updated resource state: %+v", updatedResource)
+					return fmt.Errorf("error verifying patch: %s", err)
 				}
+				logDebug("Updated resource: %+v", updatedResource)
 			}
 		}
 	}
 	return nil
 }
 
-// Add this new function to handle wildcard updates
-func applyWildcardUpdate(resource interface{}, path string, value interface{}) error {
-	parts := strings.Split(path, "[*]")
-	return applyWildcardUpdateRecursive(resource, parts, 0, value)
-}
+// splitEscapedPath splits a path by dots, but preserves escaped dots
+func splitEscapedPath(path string) []string {
+	var result []string
+	var current strings.Builder
+	escaped := false
 
-func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, value interface{}) error {
-	if depth == len(parts)-1 {
-		// Last part - set the value
-		return setValueAtPath(data, parts[depth], value)
-	}
-
-	// Get the array at current level
-	currentPath := parts[depth]
-	if !strings.HasSuffix(currentPath, ".") {
-		currentPath += "."
-	}
-	array, err := jsonpath.JsonPathLookup(data, currentPath)
-	if err != nil {
-		return err
-	}
-
-	// Update all elements in the array
-	switch arr := array.(type) {
-	case []interface{}:
-		for _, item := range arr {
-			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
-				return err
+	for i := 0; i < len(path); i++ {
+		if escaped {
+			// If we're in escaped mode and see a dot, add it to current
+			if path[i] == '.' {
+				current.WriteByte('.')
+			} else {
+				// Otherwise, write both the backslash and the current character
+				current.WriteByte('\\')
+				current.WriteByte(path[i])
 			}
-		}
-	case []map[string]interface{}:
-		for _, item := range arr {
-			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
-				return err
-			}
+			escaped = false
+		} else if path[i] == '\\' {
+			// Enter escaped mode
+			escaped = true
+		} else if path[i] == '.' && !escaped {
+			// Unescaped dot, split here
+			result = append(result, current.String())
+			current.Reset()
+		} else {
+			// Regular character
+			current.WriteByte(path[i])
 		}
 	}
 
-	return nil
-}
-
-// Helper function to check if a node name corresponds to a kindless node
-func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
-	for _, node := range kindlessNodes {
-		if node.ResourceProperties.Name == nodeName {
-			return true
-		}
+	// Add the last part
+	if current.Len() > 0 {
+		result = append(result, current.String())
 	}
-	return false
+
+	return result
 }
 
 func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName string) (map[string][]map[string]interface{}, error) {
@@ -2780,6 +2956,57 @@ func isResourceInList(resource map[string]interface{}, matchedResources []map[st
 	for _, matchedResource := range matchedResources {
 		matchedJSON, _ := json.Marshal(matchedResource)
 		if string(resourceJSON) == string(matchedJSON) {
+			return true
+		}
+	}
+	return false
+}
+
+// Add this new function to handle wildcard updates
+func applyWildcardUpdate(resource interface{}, path string, value interface{}) error {
+	parts := strings.Split(path, "[*]")
+	return applyWildcardUpdateRecursive(resource, parts, 0, value)
+}
+
+func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, value interface{}) error {
+	if depth == len(parts)-1 {
+		// Last part - set the value
+		return setValueAtPath(data, parts[depth], value)
+	}
+
+	// Get the array at current level
+	currentPath := parts[depth]
+	if !strings.HasSuffix(currentPath, ".") {
+		currentPath += "."
+	}
+	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	if err != nil {
+		return err
+	}
+
+	// Update all elements in the array
+	switch arr := array.(type) {
+	case []interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	case []map[string]interface{}:
+		for _, item := range arr {
+			if err := applyWildcardUpdateRecursive(item, parts, depth+1, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// Helper function to check if a node name corresponds to a kindless node
+func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
+	for _, node := range kindlessNodes {
+		if node.ResourceProperties.Name == nodeName {
 			return true
 		}
 	}
