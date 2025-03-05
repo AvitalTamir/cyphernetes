@@ -8,7 +8,7 @@ Cyphernetes uses a Cypher-inspired query language that makes it intuitive to wor
 
 ## Basic Concepts
 
-In Cyphernetes, Kubernetes resources are represented as nodes in a graph. Each resource type (Pod, Service, Deployment, etc.) becomes a label, and the resource's metadata and spec become properties of the node. Resource types can be specified with their fully qualified names (e.g., `deployments.apps`, `pods.v1.core`) and are case-insensitive (e.g., `Pod`, `POD`, `pod` are equivalent).
+In Cyphernetes, Kubernetes resources are represented as nodes in a graph. Each resource type (Pod, Service, Deployment, etc.) becomes a label, and the resource's metadata and spec become properties of the node. Resource types can be specified with their fully qualified names (e.g., `deployments.apps`, `core.pods`) and are case-insensitive (e.g., `Pod`, `POD`, `pod` are equivalent).
 
 ## Node Structure
 
