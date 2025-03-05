@@ -74,6 +74,7 @@ const config: Config = {
         {
           href: "https://github.com/avitaltamir/cyphernetes",
           position: "right",
+          label: "GitHub",
           className: "header-github-link",
           "aria-label": "GitHub repository",
         },
