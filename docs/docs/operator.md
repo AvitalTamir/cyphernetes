@@ -24,13 +24,9 @@ cd cyphernetes-operator
 helm upgrade --install cyphernetes-operator . --namespace cyphernetes-operator --create-namespace
 ```
 
-## Custom Resources
-
-The operator introduces the following Custom Resource Definition (CRD):
-
 ### DynamicOperator
 
-The DynamicOperator CRD allows you to define Kubernetes automation using Cyphernetes queries. It watches specified resources and executes queries in response to resource events:
+The Cyphernetes Operator watches the DynamicOperator CRD. This custom resource allows you to define Kubernetes automation using Cyphernetes queries. It watches specified resources and executes queries in response to resource events:
 
 ```yaml
 apiVersion: cyphernetes-operator.cyphernet.es/v1
@@ -42,10 +38,12 @@ spec:
   resourceKind: pods
   namespace: default
   onUpdate: |
-    MATCH (p:Pod {metadata: {name: "{{$.metadata.name}}"}})
+    MATCH (p:Pod {name: "{{$.metadata.name}}"})
     WHERE p.status.phase = "Failed"
     DELETE p;
 ```
+
+> Note: Resources created by the operator using a CREATE statement will automatically get a finalizer.
 
 The DynamicOperator spec supports the following fields:
 - `resourceKind` (required): The Kubernetes resource kind to watch
@@ -53,7 +51,6 @@ The DynamicOperator spec supports the following fields:
 - `onCreate`: Query to execute when a resource is created
 - `onUpdate`: Query to execute when a resource is updated
 - `onDelete`: Query to execute when a resource is deleted
-- `finalizer`: Whether to register a finalizer on watched resources (defaults to false)
 
 At least one of `onCreate`, `onUpdate`, or `onDelete` must be specified.
 
@@ -73,7 +70,7 @@ spec:
   resourceKind: jobs
   namespace: default
   onUpdate: |
-    MATCH (j:Job {metadata: {name: "{{$.metadata.name}}"}})
+    MATCH (j:Job {name: "{{$.metadata.name}}"})
     WHERE j.status.completionTime != NULL
       AND j.status.succeeded > 0
     DELETE j;
@@ -93,7 +90,7 @@ spec:
   resourceKind: pods
   namespace: default
   onCreate: |
-    MATCH (p:Pod {metadata: {name: "{{$.metadata.name}}"}})
+    MATCH (p:Pod {name: "{{$.metadata.name}}"})
     WHERE NOT EXISTS(p.spec.containers[0].resources.limits)
     DELETE p;
 ```
@@ -112,35 +109,12 @@ spec:
   resourceKind: services
   namespace: default
   onUpdate: |
-    MATCH (s:Service {metadata: {name: "{{$.metadata.name}}"}})
+    MATCH (s:Service {name: "{{$.metadata.name}}"})
     WHERE NOT (s)->(:core.Endpoints)
     DELETE s;
 ```
 
 ## Configuration
-
-### Operator Settings
-
-The operator can be configured using environment variables or command-line flags:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cyphernetes-operator
-spec:
-  template:
-    spec:
-      containers:
-      - name: manager
-        args:
-        - --metrics-bind-address=:8080
-        - --health-probe-bind-address=:8081
-        - --leader-elect=true
-        env:
-        - name: WATCH_NAMESPACE
-          value: ""  # Watch all namespaces
-```
 
 ### RBAC Configuration
 
@@ -175,11 +149,10 @@ Health and readiness probes are available at:
 
 ## Best Practices
 
-1. **Start with Dry Run**: Test your operators in a development environment first
-2. **Use Namespaces**: Scope operators to specific namespaces when possible
-3. **Resource Limits**: Set appropriate resource limits for the operator
-4. **Monitor Logs**: Keep track of operator logs for debugging
-5. **Version Control**: Maintain operator configurations in version control
+1. **Use Namespaces**: Scope operators to specific namespaces when possible
+2. **Resource Limits**: Set appropriate resource limits for the operator
+3. **Monitor Logs**: Keep track of operator logs for debugging
+4. **Version Control**: Maintain operator configurations in version control
 
 ## Troubleshooting
 
