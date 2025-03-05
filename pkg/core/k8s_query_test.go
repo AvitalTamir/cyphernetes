@@ -43,6 +43,10 @@ func (m *MockProvider) CreateProviderForContext(context string) (provider.Provid
 	return &MockProvider{}, nil
 }
 
+func (m *MockProvider) ToggleDryRun() {
+	// do nothing
+}
+
 func TestJsonPath(t *testing.T) {
 	jsonString := `{
 		"d": [

@@ -199,6 +199,36 @@
 }
 
 .context-indicator .namespace {
-  color: #4caf50;
-  font-weight: bold;
+  color: #888;
+  font-size: 0.8em;
+  margin-left: 5px;
+}
+
+.dry-run-toggle {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8em;
+  color: #888;
+  background-color: transparent;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 8px;
+  transition: all 0.2s ease;
+}
+
+.dry-run-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dry-run-toggle.active {
+  background-color: rgba(255, 165, 0, 0.2);
+  border-color: orange;
+  color: orange;
+}
+
+.dry-run-toggle.active:hover {
+  background-color: rgba(255, 165, 0, 0.3);
 }
