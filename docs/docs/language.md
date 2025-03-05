@@ -106,11 +106,7 @@ RETURN p;
 
 // Find pods with a specific label (with escaped dots)
 MATCH (p:Pod)
-<<<<<<< HEAD
-WHERE p.metadata.labels.\"kubernetes\.io/name\" = "nginx"
-=======
 WHERE p.metadata.labels.\kubernetes\.io/name = "nginx"
->>>>>>> 5ab65a01cb07de27f54e857804bfdee5d791c7a8
 RETURN p;
 
 // Find pods with no node assigned
