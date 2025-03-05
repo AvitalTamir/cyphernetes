@@ -10,6 +10,22 @@ Cyphernetes uses a Cypher-inspired query language that makes it intuitive to wor
 
 In Cyphernetes, Kubernetes resources are represented as nodes in a graph. Each resource type (Pod, Service, Deployment, etc.) becomes a label, and the resource's metadata and spec become properties of the node. Resource types can be specified with their fully qualified names (e.g., `deployments.apps`, `pods.v1.core`) and are case-insensitive (e.g., `Pod`, `POD`, `pod` are equivalent).
 
+## Node Structure
+
+A node is a representation of a Kubernetes resource. It has a kind, metadata, and spec.
+
+```graphql
+MATCH (n:Pod)
+RETURN n;
+```
+
+Nodes may contain properties contained in curly braces. Node propeties may be `name`, `namespace` or any of the node's labels.
+
+```graphql
+MATCH (p:Pod {name: "my-pod", namespace: "my-namespace", app: "my-app"})
+RETURN p;
+```
+
 ## Query Structure
 
 A typical Cyphernetes query consists of several clauses:
@@ -41,11 +57,11 @@ The MATCH clause is used to find patterns in your Kubernetes cluster:
 MATCH (p:Pod)
 RETURN p;
 
-// Find pods and their services (right direction)
+// Find pods and the services exposing them
 MATCH (p:Pod)->(s:Service)
 RETURN p, s;
 
-// Find services and their pods (left direction)
+// Relationship direction does not matter
 MATCH (s:Service)<-(p:Pod)
 RETURN p, s;
 
@@ -53,17 +69,24 @@ RETURN p, s;
 MATCH (d:Deployment)->(rs:ReplicaSet)->(p:Pod)
 RETURN d.metadata.name, p.metadata.name;
 
-// Using anonymous nodes
-MATCH (p:Pod)-->()-->(:Service)
-RETURN p;
+// Using "kindless" nodes allows you to match any resource kind
+MATCH (d:Deployment)->(x)->(:Pod)
+RETURN d;
 ```
 
 Nodes can be anonymous (without a variable name) or named. Anonymous nodes are automatically assigned names:
 
 ```graphql
 // Using anonymous nodes
-MATCH (p:Pod)-->()-->(:Service)
-RETURN p;
+MATCH (d:Deployment)->(:ReplicaSet)->(:Pod)
+RETURN d;
+```
+
+Nodes can be both kindless and anonymous:
+
+```graphql
+MATCH (d:Deployment)->()->(:Pod)
+RETURN d, p;
 ```
 
 ## WHERE Clause
@@ -83,18 +106,27 @@ RETURN p;
 
 // Find pods with a specific label (with escaped dots)
 MATCH (p:Pod)
-WHERE p.metadata.labels.\"kubernetes\.io/name\" = "nginx"
+WHERE p.metadata.labels.\kubernetes\.io/name = "nginx"
 RETURN p;
 
 // Find pods with no node assigned
 MATCH (p:Pod)
 WHERE p.spec.nodeName = NULL
 RETURN p;
+```
 
-// Pattern matching with NOT
+## Pattern Matching in WHERE Clause
+
+```graphql
+// Find services with no endpoints
 MATCH (s:Service)
 WHERE NOT (s)->(:Endpoints)
 RETURN s.metadata.name;
+
+// Find unused configmaps
+MATCH (cm:ConfigMap)
+WHERE NOT (cm)->(:Pod)
+RETURN cm.metadata.name;
 ```
 
 Supported operators:
@@ -112,6 +144,7 @@ Values can be strings, numbers, booleans, or `NULL`.
 Multiple conditions can be combined using `AND`:
 
 ```graphql
+// Find unused persistent volume claims
 MATCH (pvc:PersistentVolumeClaim)
 WHERE NOT (pvc)->(:Pod) AND pvc.status.phase = "Bound"
 RETURN pvc.metadata.name;
@@ -144,7 +177,7 @@ RETURN COUNT{p} AS podCount;
 
 // Sum container CPU requests
 MATCH (d:Deployment)->(p:Pod)
-RETURN SUM{p.spec.containers[*].resources.requests.cpu} AS totalCPUReq;
+RETURN SUM { p.spec.containers[0].resources.requests.cpu } AS totalCPUReq;
 ```
 
 Supported aggregation functions:
@@ -157,10 +190,12 @@ Supported aggregation functions:
 
 Create new resources:
 
+> Note: use proper JSON keys in CREATE statements, must be surrounded by double quotes.
+
 ```graphql
 CREATE (n:Namespace {
-  metadata: {
-    name: "my-namespace"
+  "metadata": {
+    "name": "my-namespace"
   }
 });
 ```
@@ -170,7 +205,7 @@ CREATE (n:Namespace {
 Modify resource properties:
 
 ```graphql
-MATCH (d:Deployment {metadata: {name: "my-app"}})
+MATCH (d:Deployment {app: "my-app"})
 SET d.spec.replicas = 3;
 ```
 
@@ -198,6 +233,13 @@ Here are some common query patterns:
 ### Finding Resources by Label
 
 ```graphql
+MATCH (p:Pod {app: "my-app"})
+RETURN p;
+```
+
+This is equivalent to:
+
+```graphql
 MATCH (p:Pod)
 WHERE p.metadata.labels.app = "my-app"
 RETURN p;
@@ -207,8 +249,8 @@ RETURN p;
 
 ```graphql
 // Find pods belonging to a deployment
-MATCH (d:Deployment {metadata: {name: "my-app"}})->(p:Pod)
-RETURN p;
+MATCH (d:Deployment {app: "my-app"})->(p:Pod)
+RETURN d, p;
 
 // Find services and their endpoints
 MATCH (s:Service)->(e:Endpoints)
