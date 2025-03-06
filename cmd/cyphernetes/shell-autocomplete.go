@@ -21,10 +21,10 @@ func (c *CyphernetesCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 
 	words := strings.Fields(lineStr)
-	lastWord := words[len(words)-1]
-	prefix := strings.ToLower(lastWord)
-
+	var lastWord string
 	if len(words) > 0 {
+		lastWord = words[len(words)-1]
+		prefix := strings.ToLower(lastWord)
 		resourceKindIdentifierRegex := regexp.MustCompile(`(\(\w+:\w+$|\)->\(\w+:\w+$)`)
 		if resourceKindIdentifierRegex.MatchString(lastWord) {
 			var identifier string
