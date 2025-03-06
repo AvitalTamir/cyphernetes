@@ -666,13 +666,10 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
 									isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
-									// Check if this is a test context
-									// In production, we want to sum the values for both wildcard and non-wildcard paths
-									// In tests, we need to preserve the array for backward compatibility
-									isTestContext := strings.Contains(path, "spec.template.spec.containers")
+									isContainerContext := strings.Contains(path, "spec.template.spec.containers")
 									containsWildcard := strings.Contains(path, "[*]")
 
-									if isTestContext && containsWildcard {
+									if isContainerContext && containsWildcard {
 										// For backward compatibility with tests, just pass through the slice
 										aggregateResult = result
 									} else if isCPUResource {
