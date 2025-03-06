@@ -115,7 +115,7 @@ WHERE p.spec.nodeName = NULL
 RETURN p;
 ```
 
-## Pattern Matching in WHERE Clause
+### Pattern Matching in WHERE Clause
 
 ```graphql
 // Find services with no endpoints
@@ -129,7 +129,26 @@ WHERE NOT (cm)->(:Pod)
 RETURN cm.metadata.name;
 ```
 
-Supported operators:
+### Temporal Expressions
+
+Cyphernetes supports temporal expressions for filtering resources based on their creation or modification times.
+The `datetime()` function returns the current date and time in ISO 8601 format when called without arguments.
+The `duration()` function returns a duration in ISO 8601 format.
+You may use plus (+) and minus (-) operators to add or subtract durations from a datetime:
+
+```graphql
+// Find pods that were created in the last 24 hours
+MATCH (p:Pod)
+WHERE p.metadata.creationTimestamp > datetime() - duration("PT24H")
+RETURN p.metadata.name;
+
+// Delete pods that were created more than 7 days ago
+MATCH (p:Pod)
+WHERE p.metadata.creationTimestamp < datetime() - duration("P7D")
+DELETE p;
+```
+
+### Supported operators:
 - `=` (equals)
 - `!=` (not equals)
 - `>` (greater than)
