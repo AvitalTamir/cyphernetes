@@ -27,7 +27,7 @@ DELETE p;
 
 📚 **Documentation**
 
-For comprehensive documentation, visit our official documentation site at [https://cyphernet.es/docs](https://cyphernet.es/docs).
+For comprehensive documentation, visit our official documentation site at [https://cyphernet.es/docs](https://cyphernet.es).
 
 ## How?
 
