@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent, useEffect, useCallback } from 'react';
+import React, { useState, useRef, KeyboardEvent, useEffect, useCallback, useMemo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { fetchAutocompleteSuggestions } from '../api/queryApi';
@@ -45,6 +45,15 @@ const QueryInput: React.FC<QueryInputProps> = ({
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
 
   const [isDryRunMode, setIsDryRunMode] = useState(false);
+  
+  // Namespace selector state
+  const [namespaces, setNamespaces] = useState<string[]>([]);
+  const [isNamespaceSelectorOpen, setIsNamespaceSelectorOpen] = useState(false);
+  const [namespaceFilter, setNamespaceFilter] = useState('');
+  const namespaceSelectorRef = useRef<HTMLDivElement>(null);
+  const namespaceSearchRef = useRef<HTMLInputElement>(null);
+  const namespaceElementRef = useRef<HTMLSpanElement>(null);
+  const [namespaceSelectorPosition, setNamespaceSelectorPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('queryHistory');
@@ -250,6 +259,121 @@ const QueryInput: React.FC<QueryInputProps> = ({
       });
   };
 
+  const fetchNamespaces = useCallback(async () => {
+    try {
+      const response = await fetch('/api/namespaces');
+      if (!response.ok) {
+        throw new Error('Failed to fetch namespaces');
+      }
+      const data = await response.json();
+      console.log('Fetched namespaces:', data); // Debug log
+      setNamespaces(data.namespaces || []);
+    } catch (error) {
+      console.error('Failed to fetch namespaces:', error);
+    }
+  }, []);
+
+  const handleNamespaceClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Calculate position for the namespace selector
+    if (namespaceElementRef.current) {
+      const rect = namespaceElementRef.current.getBoundingClientRect();
+      setNamespaceSelectorPosition({
+        top: rect.bottom + 5,
+        left: rect.left,
+      });
+    }
+    
+    // Fetch namespaces when opening the selector
+    fetchNamespaces();
+    
+    setIsNamespaceSelectorOpen(!isNamespaceSelectorOpen);
+    
+    // Focus the search input when opening
+    if (!isNamespaceSelectorOpen) {
+      setTimeout(() => {
+        if (namespaceSearchRef.current) {
+          namespaceSearchRef.current.focus();
+        }
+      }, 100);
+    }
+  };
+
+  const handleNamespaceSelect = (namespace: string) => {
+    // Set the namespace via API
+    fetch('/api/namespace', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ namespace }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        // Update the context info with the new namespace
+        if (contextInfo) {
+          setContextInfo({
+            ...contextInfo,
+            namespace: data.namespace,
+          });
+        }
+        setIsNamespaceSelectorOpen(false);
+      })
+      .catch(error => {
+        console.error('Error setting namespace:', error);
+      });
+  };
+
+  // Close namespace selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        namespaceSelectorRef.current && 
+        !namespaceSelectorRef.current.contains(event.target as Node)
+      ) {
+        setIsNamespaceSelectorOpen(false);
+      }
+    };
+
+    if (isNamespaceSelectorOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNamespaceSelectorOpen]);
+
+  // Filter namespaces based on search input
+  const filteredNamespaces = useMemo(() => {
+    if (!namespaceFilter) return namespaces;
+    return namespaces.filter(ns => 
+      ns.toLowerCase().includes(namespaceFilter.toLowerCase())
+    );
+  }, [namespaces, namespaceFilter]);
+
+  // Debug log for filtered namespaces
+  useEffect(() => {
+    if (isNamespaceSelectorOpen) {
+      console.log('Filtered namespaces:', filteredNamespaces);
+    }
+  }, [isNamespaceSelectorOpen, filteredNamespaces]);
+
+  // Fetch namespaces when component mounts
+  useEffect(() => {
+    // Only fetch if we haven't already
+    if (namespaces.length === 0) {
+      fetchNamespaces();
+    }
+  }, [fetchNamespaces, namespaces.length]);
+
+  // Debug log for namespaces
+  useEffect(() => {
+    console.log('Current namespaces state:', namespaces);
+  }, [namespaces]);
+
   return (
     <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
       <div className="query-editor">
@@ -258,7 +382,58 @@ const QueryInput: React.FC<QueryInputProps> = ({
             ctx: <span className="context">{contextInfo.context}</span>
             {contextInfo.namespace && (
               <>
-                ns: <span className="namespace">{contextInfo.namespace}</span>
+                ns: <span 
+                  ref={namespaceElementRef}
+                  className="namespace" 
+                  onClick={handleNamespaceClick}
+                  title="Click to change namespace"
+                >
+                  {contextInfo.namespace}
+                </span>
+                
+                {isNamespaceSelectorOpen && (
+                  <div 
+                    className="namespace-selector" 
+                    ref={namespaceSelectorRef}
+                    style={{
+                      position: 'fixed',
+                      top: `${namespaceSelectorPosition.top}px`,
+                      left: `${namespaceSelectorPosition.left}px`,
+                      maxHeight: '300px',
+                      width: '250px',
+                      overflowY: 'auto',
+                      zIndex: 9999,
+                    }}
+                  >
+                    <div className="namespace-search">
+                      <input
+                        ref={namespaceSearchRef}
+                        type="text"
+                        placeholder="Search namespaces..."
+                        value={namespaceFilter}
+                        onChange={(e) => setNamespaceFilter(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    {filteredNamespaces.length > 0 ? (
+                      filteredNamespaces.map(ns => (
+                        <div 
+                          key={ns} 
+                          className={`namespace-item ${contextInfo.namespace === ns ? 'active' : ''}`}
+                          onClick={() => handleNamespaceSelect(ns)}
+                          style={{ padding: '8px 12px', cursor: 'pointer' }}
+                        >
+                          {ns}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="namespace-item" style={{ padding: '8px 12px' }}>
+                        {namespaces.length === 0 ? 'Loading namespaces...' : 'No namespaces found'}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <button 
                   type="button"
                   className={`dry-run-toggle ${isDryRunMode ? 'active' : ''}`}
