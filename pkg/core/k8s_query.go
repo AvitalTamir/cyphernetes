@@ -716,7 +716,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 								isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
 								isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
-								isContainerContext := strings.Contains(path, "spec.template.spec.containers")
+								isContainerContext := strings.Contains(path, "spec.containers")
 								containsWildcard := strings.Contains(path, "[*]")
 
 								// Handle slice results (from wildcards)
