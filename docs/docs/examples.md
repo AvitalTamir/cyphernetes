@@ -78,6 +78,11 @@ RETURN p.metadata.name;
 MATCH (p:Pod)
 WHERE p.status.containerStatuses[0].restartCount > 5
 RETURN p.metadata.name, p.status.containerStatuses[0].restartCount;
+
+// Delete pods that were created more than 7 days ago
+MATCH (p:Pod)
+WHERE p.metadata.creationTimestamp < datetime() - duration("P7D")
+DELETE p;
 ```
 
 ### Deployment Management
