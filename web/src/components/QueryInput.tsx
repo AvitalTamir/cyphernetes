@@ -369,11 +369,6 @@ const QueryInput: React.FC<QueryInputProps> = ({
     }
   }, [fetchNamespaces, namespaces.length]);
 
-  // Debug log for namespaces
-  useEffect(() => {
-    console.log('Current namespaces state:', namespaces);
-  }, [namespaces]);
-
   return (
     <form className={`query-input-form ${isFocused ? 'focused' : ''} ${!isPanelOpen ? 'panel-closed' : ''}`} onSubmit={handleSubmit}>
       <div className="query-editor">
