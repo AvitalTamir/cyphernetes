@@ -126,7 +126,7 @@
   left: 1rem;
   font-size: 12px;
   color: #e0e0e0;
-  z-index: 10000;
+  z-index: 999;
   font-family: 'Arial', sans-serif;
   display: flex;
   align-items: center;
@@ -202,6 +202,12 @@
   color: #888;
   font-size: 0.8em;
   margin-left: 5px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.context-indicator .namespace:hover {
+  color: #03a9f4;
 }
 
 .dry-run-toggle {
@@ -231,4 +237,59 @@
 
 .dry-run-toggle.active:hover {
   background-color: rgba(255, 165, 0, 0.3);
+}
+
+.namespace-selector {
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 999999;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  width: 250px;
+}
+
+.namespace-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.namespace-item:hover {
+  background-color: #444;
+}
+
+.namespace-item.active {
+  background-color: rgba(3, 169, 244, 0.2);
+  color: #03a9f4;
+}
+
+.namespace-search {
+  padding: 8px;
+  border-bottom: 1px solid #444;
+  position: sticky;
+  top: 0;
+  background-color: #2a2a2a;
+  z-index: 1001;
+}
+
+.namespace-search input {
+  width: 100%;
+  padding: 6px 8px;
+  background-color: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.9em;
+  box-sizing: border-box;
+}
+
+.namespace-search input:focus {
+  outline: none;
+  border-color: #03a9f4;
 }

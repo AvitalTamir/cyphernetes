@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -37,6 +40,9 @@ func setupAPIRoutes(router *gin.Engine) {
 
 		api.GET("/config", handleGetConfig)
 		api.POST("/config", handleSetConfig)
+
+		api.GET("/namespaces", handleGetNamespaces)
+		api.POST("/namespace", handleSetNamespace)
 	}
 }
 
@@ -210,5 +216,70 @@ func handleSetConfig(c *gin.Context) {
 func handleGetConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"dryRun": DryRun,
+	})
+}
+
+// handleGetNamespaces returns a list of all available namespaces
+func handleGetNamespaces(c *gin.Context) {
+	// Get the provider from the executor
+	if executor == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Executor not initialized"})
+		return
+	}
+
+	// Get the API server provider directly
+	apiProvider, ok := executor.Provider().(*apiserver.APIServerProvider)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider is not an APIServerProvider"})
+		return
+	}
+
+	// Get the clientset directly from the provider
+	clientset, err := apiProvider.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get clientset: %v", err)})
+		return
+	}
+
+	// Get the list of namespaces
+	namespaces, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to list namespaces: %v", err)})
+		return
+	}
+
+	// Extract namespace names
+	namespaceList := make([]string, 0, len(namespaces.Items))
+	for _, ns := range namespaces.Items {
+		namespaceList = append(namespaceList, ns.Name)
+	}
+
+	// Sort the namespaces alphabetically
+	sort.Strings(namespaceList)
+
+	// Return the list of namespaces
+	c.JSON(http.StatusOK, gin.H{
+		"namespaces": namespaceList,
+		"current":    core.Namespace,
+	})
+}
+
+// handleSetNamespace sets the current namespace
+func handleSetNamespace(c *gin.Context) {
+	var req struct {
+		Namespace string `json:"namespace"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
+		return
+	}
+
+	// Set the namespace
+	core.Namespace = req.Namespace
+
+	// Return the updated namespace
+	c.JSON(http.StatusOK, gin.H{
+		"namespace": core.Namespace,
 	})
 }
