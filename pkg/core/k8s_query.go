@@ -666,11 +666,10 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 									isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
 									isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
-									isContainerContext := strings.Contains(path, "spec.template.spec.containers")
+									isContainerContext := strings.Contains(path, "spec.containers")
 									containsWildcard := strings.Contains(path, "[*]")
 
 									if isContainerContext && containsWildcard {
-										// For backward compatibility with tests, just pass through the slice
 										aggregateResult = result
 									} else if isCPUResource {
 										// Convert to string slice and sum
@@ -717,13 +716,12 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 								isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
 								isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
-								// Check if this is a test context
-								isTestContext := strings.Contains(path, "spec.template.spec.containers")
+								isContainerContext := strings.Contains(path, "spec.template.spec.containers")
 								containsWildcard := strings.Contains(path, "[*]")
 
 								// Handle slice results (from wildcards)
 								if v1.Kind() == reflect.Slice || v2.Kind() == reflect.Slice {
-									if isTestContext && containsWildcard {
+									if isContainerContext && containsWildcard {
 										// For backward compatibility with tests, combine the slices
 										if v1.Kind() == reflect.Slice && v2.Kind() == reflect.Slice {
 											// Both are slices, combine them
