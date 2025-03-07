@@ -660,7 +660,48 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					case "SUM":
 						if result != nil {
 							if aggregateResult == nil {
-								aggregateResult = reflect.ValueOf(result).Interface()
+								// Handle the case where the first result is a slice (from wildcard path)
+								v := reflect.ValueOf(result)
+								if v.Kind() == reflect.Slice {
+									isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
+									isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
+
+									isContainerContext := strings.Contains(path, "spec.containers")
+									containsWildcard := strings.Contains(path, "[*]")
+
+									if isContainerContext && containsWildcard {
+										aggregateResult = result
+									} else if isCPUResource {
+										// Convert to string slice and sum
+										cpuStrs, err := convertToStringSlice(v)
+										if err != nil {
+											return *results, fmt.Errorf("error converting CPU slice: %v", err)
+										}
+
+										cpuSum, err := sumMilliCPU(cpuStrs)
+										if err != nil {
+											return *results, err
+										}
+										aggregateResult = convertMilliCPUToStandard(cpuSum)
+									} else if isMemoryResource {
+										// Convert to string slice and sum
+										memStrs, err := convertToStringSlice(v)
+										if err != nil {
+											return *results, fmt.Errorf("error converting memory slice: %v", err)
+										}
+
+										memSum, err := sumMemoryBytes(memStrs)
+										if err != nil {
+											return *results, err
+										}
+										aggregateResult = convertBytesToMemory(memSum)
+									} else {
+										// For other types, we can't sum slices
+										return *results, fmt.Errorf("unsupported type for SUM: slice")
+									}
+								} else {
+									aggregateResult = reflect.ValueOf(result).Interface()
+								}
 							} else {
 								v1 := reflect.ValueOf(aggregateResult)
 								v2 := reflect.ValueOf(result)
@@ -675,41 +716,149 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 								isCPUResource := strings.Contains(path, "resources.limits.cpu") || strings.Contains(path, "resources.requests.cpu")
 								isMemoryResource := strings.Contains(path, "resources.limits.memory") || strings.Contains(path, "resources.requests.memory")
 
-								switch v1.Kind() {
-								case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-									aggregateResult = v1.Int() + v2.Int()
-								case reflect.Float32, reflect.Float64:
-									aggregateResult = v1.Float() + v2.Float()
-								case reflect.String:
-									if isCPUResource {
-										// Convert CPU strings to millicores
-										cpu1, err := convertToMilliCPU(v1.String())
+								isContainerContext := strings.Contains(path, "spec.containers")
+								containsWildcard := strings.Contains(path, "[*]")
+
+								// Handle slice results (from wildcards)
+								if v1.Kind() == reflect.Slice || v2.Kind() == reflect.Slice {
+									if isContainerContext && containsWildcard {
+										// For backward compatibility with tests, combine the slices
+										if v1.Kind() == reflect.Slice && v2.Kind() == reflect.Slice {
+											// Both are slices, combine them
+											combined := reflect.MakeSlice(v1.Type(), 0, v1.Len()+v2.Len())
+											for i := 0; i < v1.Len(); i++ {
+												combined = reflect.Append(combined, v1.Index(i))
+											}
+											for i := 0; i < v2.Len(); i++ {
+												combined = reflect.Append(combined, v2.Index(i))
+											}
+											aggregateResult = combined.Interface()
+										} else if v1.Kind() == reflect.Slice {
+											// v1 is a slice, v2 is not
+											combined := reflect.MakeSlice(v1.Type(), 0, v1.Len()+1)
+											for i := 0; i < v1.Len(); i++ {
+												combined = reflect.Append(combined, v1.Index(i))
+											}
+											combined = reflect.Append(combined, v2)
+											aggregateResult = combined.Interface()
+										} else {
+											// v2 is a slice, v1 is not
+											combined := reflect.MakeSlice(v2.Type(), 0, v2.Len()+1)
+											combined = reflect.Append(combined, v1)
+											for i := 0; i < v2.Len(); i++ {
+												combined = reflect.Append(combined, v2.Index(i))
+											}
+											aggregateResult = combined.Interface()
+										}
+									} else if isCPUResource {
+										// Convert both values to string slices
+										var cpuStrs []string
+
+										// Handle if v1 is a slice
+										if v1.Kind() == reflect.Slice {
+											v1Strs, err := convertToStringSlice(v1)
+											if err != nil {
+												return *results, fmt.Errorf("error converting CPU slice: %v", err)
+											}
+											cpuStrs = append(cpuStrs, v1Strs...)
+										} else {
+											// v1 is a single value
+											cpuStrs = append(cpuStrs, v1.String())
+										}
+
+										// Handle if v2 is a slice
+										if v2.Kind() == reflect.Slice {
+											v2Strs, err := convertToStringSlice(v2)
+											if err != nil {
+												return *results, fmt.Errorf("error converting CPU slice: %v", err)
+											}
+											cpuStrs = append(cpuStrs, v2Strs...)
+										} else {
+											// v2 is a single value
+											cpuStrs = append(cpuStrs, v2.String())
+										}
+
+										// Sum all CPU values
+										cpuSum, err := sumMilliCPU(cpuStrs)
 										if err != nil {
 											return *results, err
 										}
-										cpu2, err := convertToMilliCPU(v2.String())
-										if err != nil {
-											return *results, err
-										}
-										aggregateResult = convertMilliCPUToStandard(cpu1 + cpu2)
+										aggregateResult = convertMilliCPUToStandard(cpuSum)
 									} else if isMemoryResource {
-										// Convert memory strings to bytes
-										mem1, err := convertMemoryToBytes(v1.String())
+										// Convert both values to string slices
+										var memStrs []string
+
+										// Handle if v1 is a slice
+										if v1.Kind() == reflect.Slice {
+											v1Strs, err := convertToStringSlice(v1)
+											if err != nil {
+												return *results, fmt.Errorf("error converting memory slice: %v", err)
+											}
+											memStrs = append(memStrs, v1Strs...)
+										} else {
+											// v1 is a single value
+											memStrs = append(memStrs, v1.String())
+										}
+
+										// Handle if v2 is a slice
+										if v2.Kind() == reflect.Slice {
+											v2Strs, err := convertToStringSlice(v2)
+											if err != nil {
+												return *results, fmt.Errorf("error converting memory slice: %v", err)
+											}
+											memStrs = append(memStrs, v2Strs...)
+										} else {
+											// v2 is a single value
+											memStrs = append(memStrs, v2.String())
+										}
+
+										// Sum all memory values
+										memSum, err := sumMemoryBytes(memStrs)
 										if err != nil {
 											return *results, err
 										}
-										mem2, err := convertMemoryToBytes(v2.String())
-										if err != nil {
-											return *results, err
-										}
-										aggregateResult = convertBytesToMemory(mem1 + mem2)
+										aggregateResult = convertBytesToMemory(memSum)
 									} else {
+										// For other types, we can't sum slices
+										return *results, fmt.Errorf("unsupported type for SUM: slice")
+									}
+								} else {
+									switch v1.Kind() {
+									case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+										aggregateResult = v1.Int() + v2.Int()
+									case reflect.Float32, reflect.Float64:
+										aggregateResult = v1.Float() + v2.Float()
+									case reflect.String:
+										if isCPUResource {
+											// Convert CPU strings to millicores
+											cpu1, err := convertToMilliCPU(v1.String())
+											if err != nil {
+												return *results, err
+											}
+											cpu2, err := convertToMilliCPU(v2.String())
+											if err != nil {
+												return *results, err
+											}
+											aggregateResult = convertMilliCPUToStandard(cpu1 + cpu2)
+										} else if isMemoryResource {
+											// Convert memory strings to bytes
+											mem1, err := convertMemoryToBytes(v1.String())
+											if err != nil {
+												return *results, err
+											}
+											mem2, err := convertMemoryToBytes(v2.String())
+											if err != nil {
+												return *results, err
+											}
+											aggregateResult = convertBytesToMemory(mem1 + mem2)
+										} else {
+											// Handle unsupported types or error out
+											return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
+										}
+									default:
 										// Handle unsupported types or error out
 										return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
 									}
-								default:
-									// Handle unsupported types or error out
-									return *results, fmt.Errorf("unsupported type for SUM: %v", v1.Kind())
 								}
 							}
 						}
