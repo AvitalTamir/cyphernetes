@@ -32,23 +32,17 @@ For comprehensive documentation, visit our official documentation site at [https
 ## How?
 
 Cyphernetes is a [Cypher](https://neo4j.com/developer/cypher/)-inspired query language for Kubernetes.
-Cypher is a mixture of ASCII-art, SQL and JSON that lets us express graph operations in an efficeint way that is also fun and creative.
-Cyphernetes extends Cypher with Kubernetes-specific syntax and features. It allows you to query and mutate Kubernetes resources in a natural way, works out-of-the-box with your CRDs, supports multi-cluster queries, and more.
+A mixture of ASCII-art, SQL and JSONPath, it lets the user express Kubernetes graph operations in a fun and creative way.
+Cyphernetes works out-of-the-box with your CRDs, supports multi-cluster queries, and more.
 
 There are multiple ways to run Cyphernetes queries:
 1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
 4. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
-5. Using the Cyphernetes API in your own Go programs. See our [integration guide](guides/INTEGRATION.md) for more details.
+5. Using the Cyphernetes API in your own Go programs.
 
-To learn more about how to use Cyphernetes, refer to these documents:
-* [LANGUAGE.md](guides/LANGUAGE.md) - a crash-course in Cyphernetes language syntax
-* [CLI.md](guides/CLI.md) - a guide to using Cyphernetes shell, query command and macros
-* [OPERATOR.md](guides/OPERATOR.md) - a guide to using Cyphernetes DynamicOperator
-* [INTEGRATION.md](guides/INTEGRATION.md) - a guide to using Cyphernetes in your own Go programs
-
-### Examples (from the Cyphernetes Shell)
+### Examples
 ```graphql
 # Get the desired and running replicas for all deployments
 MATCH (d:Deployment)
@@ -107,11 +101,13 @@ The Cyphernetes monorepo is a multi-package project that includes the core Cyphe
 ├── cmd # The CLI (this is where the cyphernetes binary lives)
 │   └── cyphernetes
 │       └── ...
+├── docs # The cyphernet.es website
+│   └── ...
 ├── operator # The operator
 │   └── ...
 ├── pkg
 │   └── core # The core Cyphernetes package (parser and engine behind the language features)
-│   └── provider # An interface for different backend implementations and a default implementation for an api-server client
+│   └── provider # An interface for different backend implementations
 │       └── apiserver # A client for the Kubernetes API server
 ├── web # The web client
 │   └── src
