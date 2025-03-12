@@ -30,7 +30,6 @@ cyphernetes web [flags]
 
 Options:
 - `--port` - Port to listen on (default: 8080)
-- `--host` - Host to bind to (default: localhost)
 
 After starting the web interface, visit `http://localhost:8080` in your browser.
 
@@ -75,33 +74,8 @@ cyphernetes query "MATCH (p:Pod) WHERE p.status.phase = 'Failed' DELETE p"
 ```
 
 Options:
-- `--output, -o` - Output format (json, yaml, table)
+- `--format` - Output format (json, yaml, table)
 - `--namespace, -n` - Kubernetes namespace
-- `--context` - Kubernetes context to use
-
-## Configuration
-
-Cyphernetes uses your Kubernetes configuration (`~/.kube/config`) by default. You can override this using environment variables or flags:
-
-```bash
-# Use a specific kubeconfig file
-export KUBECONFIG=/path/to/kubeconfig
-
-# Or use the --kubeconfig flag
-cyphernetes query --kubeconfig=/path/to/kubeconfig "MATCH (p:Pod) RETURN p"
-```
-
-### Context Management
-
-Switch between different Kubernetes contexts:
-
-```bash
-# List available contexts
-cyphernetes query "SHOW CONTEXTS"
-
-# Use a specific context
-cyphernetes query --context=my-context "MATCH (p:Pod) RETURN p"
-```
 
 ## Output Formatting
 
@@ -109,13 +83,10 @@ Control the output format of your queries:
 
 ```bash
 # Output as JSON
-cyphernetes query -o json "MATCH (p:Pod) RETURN p"
+cyphernetes query "MATCH (p:Pod) RETURN p"
 
 # Output as YAML
-cyphernetes query -o yaml "MATCH (p:Pod) RETURN p"
-
-# Output as table (default)
-cyphernetes query -o table "MATCH (p:Pod) RETURN p"
+cyphernetes query --format yaml "MATCH (p:Pod) RETURN p"
 ```
 
 ## Shell Scripting
@@ -126,7 +97,7 @@ Cyphernetes can be used effectively in shell scripts:
 #!/bin/bash
 
 # Get all non-running pods
-FAILED_PODS=$(cyphernetes query -o json \
+FAILED_PODS=$(cyphernetes query \
   "MATCH (p:Pod) WHERE p.status.phase != 'Running' RETURN p.metadata.name")
 
 # Process the results
@@ -140,9 +111,6 @@ done
 Cyphernetes respects the following environment variables:
 
 - `KUBECONFIG` - Path to kubeconfig file
-- `CYPHERNETES_CONTEXT` - Default Kubernetes context
-- `CYPHERNETES_NAMESPACE` - Default Kubernetes namespace
-- `CYPHERNETES_OUTPUT` - Default output format
 
 ## Best Practices
 

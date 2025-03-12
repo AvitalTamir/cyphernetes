@@ -8,6 +8,11 @@ Cyphernetes can be integrated with other tools and programs in various ways. Thi
 
 ## Go Integration
 
+Cyphernetes is made up of two main packages:
+
+1. The `pkg/core` package, which contains the Cyphernetes parser and engine.
+2. The `pkg/provider` package, which contains the Cyphernetes provider interface and a default implementation for an api-server client.
+
 ### Using the Cyphernetes Go Package
 
 Import and use Cyphernetes in your Go programs:
@@ -16,71 +21,89 @@ Import and use Cyphernetes in your Go programs:
 package main
 
 import (
-    "context"
     "fmt"
+    "log"
     "github.com/avitaltamir/cyphernetes/pkg/core"
     "github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 )
 
 func main() {
     // Initialize the Kubernetes provider
-    provider, err := apiserver.NewProvider()
-    if err != nil {
-        panic(err)
-    }
-
-    // Create a new Cyphernetes engine
-    engine := core.NewEngine(provider)
-
-    // Execute a query
-    query := `
-        MATCH (p:Pod)
-        WHERE p.status.phase != "Running"
-        RETURN p.metadata.name, p.status.phase
-    `
+    provider := apiserver.NewAPIServerProvider()
     
-    result, err := engine.Execute(context.Background(), query)
+    // Create a new Cyphernetes query executor
+    executor := core.NewQueryExecutor(provider)
+    
+    // Execute a query
+    query := "MATCH (p:Pod) WHERE p.status.phase != 'Running' RETURN p.metadata.name"
+    
+    result, err := executor.Parse(query)
     if err != nil {
-        panic(err)
+        log.Fatalf("Error parsing query: %v", err)
     }
-
+    
     // Process results
-    for _, row := range result.Rows {
-        fmt.Printf("Pod: %s, Status: %s\n", row[0], row[1])
-    }
+    fmt.Printf("Result: %+v\n", result)
 }
 ```
 
 ### Custom Provider Implementation
 
-Implement your own provider for custom backends:
+Implement your own provider for custom backends by implementing the Provider interface defined in `pkg/provider/interface.go`:
 
 ```go
-package custom
+type Provider interface {
+    // Resource Operations
+    GetK8sResources(kind, fieldSelector, labelSelector, namespace string) (interface{}, error)
+    DeleteK8sResources(kind, name, namespace string) error
+    CreateK8sResource(kind, name, namespace string, body interface{}) error
+    PatchK8sResource(kind, name, namespace string, body interface{}) error
 
-import (
-    "context"
-    "github.com/avitaltamir/cyphernetes/pkg/provider"
-)
-
-type CustomProvider struct {
-    // Your custom fields
+    // Schema Operations
+    FindGVR(kind string) (schema.GroupVersionResource, error)
+    GetOpenAPIResourceSpecs() (map[string][]string, error)
+    CreateProviderForContext(context string) (Provider, error)
 }
+```
 
-func (p *CustomProvider) GetResources(ctx context.Context, kind string) ([]provider.Resource, error) {
-    // Implement resource retrieval
-}
+The 4 CRUD operations are straightforward. They all take a kind and namespace, "Get" operations take a fieldSelector and labelSelector, while "Create" and "Patch" operations take a body (JSON for "Create", and a JSON patch for "Patch").
 
-func (p *CustomProvider) CreateResource(ctx context.Context, resource provider.Resource) error {
-    // Implement resource creation
-}
+The schema operation functions are as follows:
 
-func (p *CustomProvider) UpdateResource(ctx context.Context, resource provider.Resource) error {
-    // Implement resource update
-}
+- `FindGVR` is used to find the GVR for a given kind. This is used by the Cyphernetes parser to find the correct API endpoint to query.
+- `GetOpenAPIResourceSpecs` is used to get a flat list of JSONPaths for a given kind. This is used by the Cyphernetes parser to understand the API schema.
+- `CreateProviderForContext` is used to create a new provider for a given context. This is used by the Cyphernetes engine when running multi-context queries only.
 
-func (p *CustomProvider) DeleteResource(ctx context.Context, resource provider.Resource) error {
-    // Implement resource deletion
+You can implement your own provider from scratch, as long as it:
+- implements the `Provider` interface
+- `FindGVR` correctly resolves strings to `schema.GroupVersionResource` objects
+- `GetOpenAPIResourceSpecs` provides a list of JSONPaths for each kind
+- You may choose to make this a "read-only" provider by having CUD operations return an error or warning
+- You may choose to support multiple Kubernetes contexts, or leave out this functionality and return an error from `CreateProviderForContext`
+
+### Kubernetes Client Integration
+
+The `pkg/provider/apiserver` package is a wrapper around the Kubernetes client-go library and may be used as a base implementation for your own provider. If your program already uses client-go, you can re-use a lot of the code in the `pkg/provider/apiserver` package:
+
+- You can pass a clientSet to the `NewAPIServerProvider` function
+- Or you can initialize the provider with no options and a new clientSet will be created from the available configuration
+
+Example of JSONPaths returned by `GetOpenAPIResourceSpecs()`:
+
+```
+{
+    ...
+    "pods": [ // Plural name of the kind
+        ...
+        "$.metadata.name",
+        "$.spec.containers[*].name",
+        "$.spec.containers[*].resources.requests.cpu",
+        "$.spec.containers[*].resources.requests.memory",
+        "$.spec.containers[*].resources.limits.cpu",
+        "$.spec.containers[*].resources.limits.memory"
+        ...
+    ],
+    ...
 }
 ```
 
