@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,6 +22,11 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var cfg *rest.Config
 var testNamespace string
+
+const (
+	timeout  = time.Second * 10
+	interval = time.Millisecond * 250
+)
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)

@@ -104,9 +104,9 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 
 func InitializeRelationships(resourceSpecs map[string][]string, provider provider.Provider) {
 	if CleanOutput {
-		logDebug("Running relationship initialization in query mode (suppressing output)")
+		debugLog("Running relationship initialization in query mode (suppressing output)")
 	} else {
-		logDebug("Starting relationship initialization with", len(resourceSpecs), "resource specs")
+		debugLog("Starting relationship initialization with %d resource specs", len(resourceSpecs))
 	}
 
 	// Only show progress bar if not in clean output mode
@@ -184,7 +184,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			if relSpecType == "Ref" || relSpecType == "KeyRef" {
 				fullFieldPath = fieldPath + ".name"
 			}
-			logDebug("Using field path:", fullFieldPath)
+			debugLog("Using field path: %s", fullFieldPath)
 
 			relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
 				strings.ToUpper(relatedKindSingular),
@@ -219,7 +219,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			fieldA := "$." + fullFieldPath
 			fieldB := "$.metadata.name"
 
-			logDebug("Creating relationship rule:", kindA, "->", kindB, "with fields:", fieldA, "->", fieldB)
+			debugLog("Creating relationship rule: %s -> %s with fields: %s -> %s", kindA, kindB, fieldA, fieldB)
 			criterion := MatchCriterion{
 				FieldA:         fieldA,
 				FieldB:         fieldB,
@@ -236,13 +236,13 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			}
 
 			if existingRuleIndex >= 0 {
-				logDebug("Adding criterion to existing rule for:", kindA, "->", kindB)
+				debugLog("Adding criterion to existing rule for: %s -> %s", kindA, kindB)
 				relationshipRules[existingRuleIndex].MatchCriteria = append(
 					relationshipRules[existingRuleIndex].MatchCriteria,
 					criterion,
 				)
 			} else {
-				logDebug("Creating new relationship rule for:", kindA, "->", kindB)
+				debugLog("Creating new relationship rule for: %s -> %s", kindA, kindB)
 				// Create new rule
 				rule := RelationshipRule{
 					KindA:         kindA,
@@ -327,7 +327,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		suffix = fmt.Sprintf(" and %d custom", customRelationshipsCount)
 	}
 
-	logDebug("Relationship initialization complete. Found", relationshipCount, "internal relationships and", customRelationshipsCount, "custom relationships")
+	debugLog("Relationship initialization complete. Found %d internal relationships and %d custom relationships", relationshipCount, customRelationshipsCount)
 
 	if !CleanOutput {
 		fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)
@@ -416,13 +416,6 @@ func loadCustomRelationships() (int, error) {
 	return counter, nil
 }
 
-func AddRelationship(resourceA, resourceB interface{}, relationshipType string) {
-	relationshipsMutex.Lock()
-	defer relationshipsMutex.Unlock()
-
-	// Add relationship logic...
-}
-
 func GetRelationships() map[string][]string {
 	relationshipsMutex.RLock()
 	defer relationshipsMutex.RUnlock()
@@ -430,181 +423,175 @@ func GetRelationships() map[string][]string {
 	return relationships
 }
 
-// FindPotentialKinds returns all possible target kinds that could have a relationship with the given source kind
-func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string, error) {
-	sourceKind = strings.ToLower(sourceKind)
-	debugLog("FindPotentialKinds: looking for relationships for sourceKind=%s", sourceKind)
+func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
+	debugLog(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
-	// Get the plural form using FindGVR
-	gvr, err := tryResolveGVR(provider, sourceKind)
+	// Determine relationship type and fetch related resources
+	var relType RelationshipType
+
+	// Resolve kinds if needed
+	if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
+		// Try to resolve the kind using relationships
+		potentialKinds, err := FindPotentialKindsIntersection(c.Relationships, q.provider)
+		if err != nil {
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
+		}
+		if len(potentialKinds) == 0 {
+			return false, fmt.Errorf("unable to determine kind for nodes in relationship")
+		}
+		if len(potentialKinds) > 1 {
+			// Instead of expanding the query here, we'll let rewriteQueryForKindlessNodes handle it
+			return false, &QueryExpandedError{ExpandedQuery: "needs_rewrite"}
+		}
+		if rel.LeftNode.ResourceProperties.Kind == "" {
+			rel.LeftNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+		if rel.RightNode.ResourceProperties.Kind == "" {
+			rel.RightNode.ResourceProperties.Kind = potentialKinds[0]
+		}
+	}
+
+	leftKind, err := q.findGVR(rel.LeftNode.ResourceProperties.Kind)
 	if err != nil {
-		return []string{}, fmt.Errorf("error getting GVR for %s: %v", sourceKind, err)
+		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
-	sourceKind = strings.ToLower(gvr.Resource)
-
-	var sourceKindFull string
-	if gvr.Group != "" {
-		sourceKindFull = fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group)
-	} else {
-		sourceKindFull = "core." + sourceKind
-	}
-
-	// Check cache with plural form
-	potentialKindsMutex.RLock()
-	if kinds, exists := potentialKindsCache[sourceKindFull]; exists {
-		potentialKindsMutex.RUnlock()
-		debugLog("FindPotentialKinds: found in cache for %s = %v", sourceKind, kinds)
-		return kinds, nil
-	}
-	potentialKindsMutex.RUnlock()
-
-	// If not in cache, fall back to scanning rules (this should be rare)
-	debugLog("FindPotentialKinds: cache miss for %s, falling back to rule scan", sourceKind)
-	potentialKinds := make(map[string]bool)
-	rules := GetRelationshipRules()
-	debugLog("FindPotentialKinds: found %d relationship rules", len(rules))
-
-	for _, rule := range rules {
-		// Get proper plural forms using FindGVR
-		gvrA, err := provider.FindGVR(rule.KindA)
-		if err != nil {
-			debugLog("Error getting GVR for %s: %v", rule.KindA, err)
-			continue
-		}
-		gvrB, err := provider.FindGVR(rule.KindB)
-		if err != nil {
-			debugLog("Error getting GVR for %s: %v", rule.KindB, err)
-			continue
-		}
-
-		ruleKindA := strings.ToLower(gvrA.Resource)
-		ruleKindB := strings.ToLower(gvrB.Resource)
-
-		debugLog("FindPotentialKinds: checking rule KindA=%s, KindB=%s, Relationship=%s", ruleKindA, ruleKindB, rule.Relationship)
-		if ruleKindB == sourceKind {
-			debugLog("FindPotentialKinds: matched KindB, adding KindA=%s", ruleKindA)
-			potentialKinds[ruleKindA] = true
-		}
-		if ruleKindA == sourceKind {
-			debugLog("FindPotentialKinds: matched KindA, adding KindB=%s", ruleKindB)
-			potentialKinds[ruleKindB] = true
-		}
-	}
-
-	var result []string
-	for kind := range potentialKinds {
-		result = append(result, kind)
-	}
-	sort.Strings(result)
-
-	// Update cache with results
-	potentialKindsMutex.Lock()
-	potentialKindsCache[sourceKind] = result
-	potentialKindsMutex.Unlock()
-
-	debugLog("FindPotentialKinds: final result for %s = %v", sourceKind, result)
-	return result, nil
-}
-
-// FindPotentialKindsIntersection returns the intersection of possible kinds from multiple relationships
-func FindPotentialKindsIntersection(relationships []*Relationship, provider provider.Provider) ([]string, error) {
-	logDebug("FindPotentialKindsIntersection: Starting with relationships:", relationships)
-	if len(relationships) == 0 {
-		debugLog("FindPotentialKindsIntersection: no relationships provided")
-		return []string{}, nil
-	}
-
-	// Check if there are any unknown kinds that need resolution
-	hasUnknownKind := false
-	for _, rel := range relationships {
-		if rel.LeftNode.ResourceProperties.Kind == "" || rel.RightNode.ResourceProperties.Kind == "" {
-			hasUnknownKind = true
-			break
-		}
-	}
-
-	// If all kinds are known, return empty slice
-	if !hasUnknownKind {
-		debugLog("FindPotentialKindsIntersection: all kinds are known")
-		return []string{}, nil
-	}
-
-	// Find all known kinds in the relationships
-	knownKinds := make(map[string]bool)
-	for _, rel := range relationships {
-		if rel.LeftNode.ResourceProperties.Kind != "" {
-			knownKinds[strings.ToLower(rel.LeftNode.ResourceProperties.Kind)] = true
-			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (left): %s", rel.LeftNode.ResourceProperties.Kind))
-		}
-		if rel.RightNode.ResourceProperties.Kind != "" {
-			knownKinds[strings.ToLower(rel.RightNode.ResourceProperties.Kind)] = true
-			logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Found known kind (right): %s", rel.RightNode.ResourceProperties.Kind))
-		}
-	}
-	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: All known kinds: %v", knownKinds))
-
-	// If no known kinds, return empty
-	if len(knownKinds) == 0 {
-		logDebug("FindPotentialKindsIntersection: no known kinds found")
-		return []string{}, nil
-	}
-
-	// Initialize result with potential kinds from first known kind
-	var firstKnownKind string
-	for kind := range knownKinds {
-		firstKnownKind = kind
-		break
-	}
-
-	result := make(map[string]bool)
-	initialPotentialKinds, err := FindPotentialKinds(firstKnownKind, provider)
+	rightKind, err := q.findGVR(rel.RightNode.ResourceProperties.Kind)
 	if err != nil {
-		return nil, fmt.Errorf("%s", err)
-	}
-	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Initial potential kinds from %s: %v", firstKnownKind, initialPotentialKinds))
-	for _, kind := range initialPotentialKinds {
-		result[kind] = true
+		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
 
-	// For each additional known kind, intersect with its potential kinds
-	for kind := range knownKinds {
-		if kind == firstKnownKind {
-			continue
-		}
+	if rightKind.Resource == "namespaces" || leftKind.Resource == "namespaces" {
+		relType = NamespaceHasResource
+	}
 
-		potentialKinds, err := FindPotentialKinds(kind, provider)
-		if err != nil {
-			return nil, fmt.Errorf("unable to determine kind for nodes in relationship >> %s", err)
-		}
-		logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Potential kinds for %s: %v", kind, potentialKinds))
-
-		newResult := make(map[string]bool)
-		// Keep only kinds that exist in both sets
-		for _, potentialKind := range potentialKinds {
-			if result[potentialKind] {
-				logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Keeping common kind %s", potentialKind))
-				newResult[potentialKind] = true
+	if relType == "" {
+		for _, resourceRelationship := range relationshipRules {
+			if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
+				(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
+				relType = resourceRelationship.Relationship
 			}
 		}
-		result = newResult
 	}
 
-	// Convert map back to slice
-	var kinds []string
-	for kind := range result {
-		kinds = append(kinds, kind)
+	if relType == "" {
+		// no relationship type found, error out
+		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
 	}
-	sort.Strings(kinds) // Sort for consistent results
-	logDebug(fmt.Sprintf("FindPotentialKindsIntersection: Final result=%v", kinds))
-	return kinds, nil
-}
 
-// Helper function to check if a string slice contains a string
-func contains(slice []string, str string) bool {
-	for _, s := range slice {
-		if s == str {
-			return true
+	rule, err := findRuleByRelationshipType(relType)
+	if err != nil {
+		return false, fmt.Errorf("error determining relationship type >> %s", err)
+	}
+
+	// Fetch and process related resources
+	for _, node := range c.Nodes {
+		if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
+			if results.Data[node.ResourceProperties.Name] == nil {
+				err := getNodeResources(node, q, c.ExtraFilters)
+				if err != nil {
+					return false, err
+				}
+			}
 		}
 	}
-	return false
+
+	var resourcesA, resourcesB []map[string]interface{}
+	var filteredDirection Direction
+
+	resultMapMutex.RLock()
+	if rule.KindA == rightKind.Resource {
+		resourcesA = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
+		resourcesB = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
+		filteredDirection = Left
+	} else if rule.KindA == leftKind.Resource {
+		resourcesA = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
+		resourcesB = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
+		filteredDirection = Right
+	} else {
+		resultMapMutex.RUnlock()
+		return false, fmt.Errorf("relationship rule not found for %s and %s", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
+	}
+	resultMapMutex.RUnlock()
+
+	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
+
+	// Add nodes and edges based on the matched resources
+	rightResources := matchedResources["right"].([]map[string]interface{})
+	leftResources := matchedResources["left"].([]map[string]interface{})
+
+	// Add nodes
+	for _, rightResource := range rightResources {
+		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.RightNode.ResourceProperties.Name,
+					Kind: rightResource["kind"].(string),
+					Name: name,
+				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
+			}
+		}
+	}
+
+	for _, leftResource := range leftResources {
+		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				node := Node{
+					Id:   rel.LeftNode.ResourceProperties.Name,
+					Kind: leftResource["kind"].(string),
+					Name: name,
+				}
+				if node.Kind != "Namespace" {
+					node.Namespace = getNamespaceName(metadata)
+				}
+				results.Graph.Nodes = append(results.Graph.Nodes, node)
+			}
+		}
+	}
+
+	// Process edges
+	for _, rightResource := range rightResources {
+		for _, leftResource := range leftResources {
+			// Check if these resources actually match according to the criteria
+			for _, criterion := range rule.MatchCriteria {
+				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
+					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
+					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
+					results.Graph.Edges = append(results.Graph.Edges, Edge{
+						From: rightNodeId,
+						To:   leftNodeId,
+						Type: string(relType),
+					})
+				}
+			}
+		}
+	}
+
+	filteredA := len(matchedResources["right"].([]map[string]interface{})) < len(resourcesA)
+	filteredB := len(matchedResources["left"].([]map[string]interface{})) < len(resourcesB)
+
+	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
+	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
+
+	resultMapMutex.Lock()
+	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
+			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+		}
+	} else {
+		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
+	}
+	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
+		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
+			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+		}
+	} else {
+		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
+	}
+	resultMapMutex.Unlock()
+
+	return filteredA || filteredB, nil
 }
