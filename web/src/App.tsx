@@ -32,6 +32,7 @@ function App() {
   const [filterManagedFields, setFilterManagedFields] = useState(true);
   const [darkTheme, setDarkTheme] = useState(false);
   const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
+  const [queryTimestamp, setQueryTimestamp] = useState<number>(0);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -59,6 +60,7 @@ function App() {
   const handleQuerySubmit = async (query: string, selectedText: string | null) => {
     setIsLoading(true);
     setError(null);
+    setQueryTimestamp(Date.now());
     const startTime = performance.now();
     try {
       if (graphRef.current && typeof graphRef.current.resetGraph === 'function') {
@@ -238,7 +240,7 @@ function App() {
   const hasResults = originalQueryResult && originalQueryResult.result && Object.keys(JSON.parse(originalQueryResult.result)).length > 0;
 
   return (
-    <div className={`App ${!isPanelOpen ? 'left-sidebar-closed' : ''}`}>
+    <div className={`App ${!isPanelOpen ? 'left-sidebar-closed' : ''} ${isHistoryModalOpen ? 'history-modal-open' : ''}`}>
       {!isPanelOpen && (
         <button className="toggle-button" onClick={() => {
           setIsPanelOpen(!isPanelOpen);
@@ -262,9 +264,10 @@ function App() {
             </button>
             <ResultsDisplay 
               result={filteredResult} 
-              error={error} 
+              error={error}
               darkTheme={darkTheme}
-              format={format} 
+              format={format}
+              key={`results-${queryTimestamp}`}
             />
             {hasResults && (
               <div>
