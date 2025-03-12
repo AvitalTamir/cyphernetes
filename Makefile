@@ -31,10 +31,6 @@ build-all-platforms:
 	done
 	@echo "🎉 Done!"
 
-# Define how to run tests
-.PHONY: test-all
-test-all: test test-e2e
-
 test:
 	@echo "🧪 Running tests..."
 	go test ./...
