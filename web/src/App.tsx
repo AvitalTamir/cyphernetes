@@ -288,7 +288,7 @@ function App() {
                     onChange={(e) => setDarkTheme(e.target.checked)}
                   />
                   <span className="checkmark"></span>
-                  Dark Theme
+                  Flat Background
                 </label>
               </div>
               <div className="format-selector">
