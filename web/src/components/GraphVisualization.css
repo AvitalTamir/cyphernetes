@@ -3,15 +3,27 @@
   height: calc(100% - 2rem);
   display: flex;
   flex-direction: column;
-  background-color: #efefef;
-  padding: 1rem;
+  background-color: #1e1e1e;
   box-sizing: border-box;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.left-sidebar-closed .graph-visualization-container {
+  border-radius: 0;
+  padding: 0;
 }
 
 .graph-visualization {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(140, 82, 255, 0.2);
+}
+
+.left-sidebar-closed .graph-visualization {
+  border-radius: 0;
 }
 
 .graph-visualization > div {
@@ -20,28 +32,37 @@
 }
 
 .graph-legend {
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.05);
   margin-top: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
   margin: 5px 10px;
+  transition: all 0.2s ease;
+}
+
+.legend-item:hover {
+  transform: translateY(-2px);
 }
 
 .legend-color {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  margin-right: 5px;
+  margin-right: 8px;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
 }
 
 .legend-label {
   color: #e0e0e0;
   font-size: 14px;
+  font-family: 'Arial', sans-serif;
 }

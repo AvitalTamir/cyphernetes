@@ -92,6 +92,30 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
     }
   }, [data]);
 
+  // Define distinct colors for different node kinds
+  const getNodeColor = useCallback((node: any) => {
+    // Vibrant color palette for different node kinds
+    const colorMap: {[key: string]: string} = {
+      'Pod': '#4285F4',         // Google Blue
+      'Service': '#34A853',     // Google Green
+      'Deployment': '#FBBC05',  // Google Yellow
+      'StatefulSet': '#EA4335', // Google Red
+      'ConfigMap': '#8E44AD',   // Purple
+      'Secret': '#F39C12',      // Orange
+      'PersistentVolumeClaim': '#1ABC9C', // Turquoise
+      'Ingress': '#E74C3C',     // Bright Red
+      'Job': '#3498DB',         // Light Blue
+      'CronJob': '#2ECC71',     // Emerald
+      'Namespace': '#9B59B6',   // Amethyst
+      'ReplicaSet': '#E67E22',  // Carrot
+      'DaemonSet': '#16A085',   // Green Sea
+      'Endpoint': '#2980B9',    // Belize Hole
+      'Node': '#F1C40F',        // Sunflower
+    };
+    
+    return colorMap[node.kind] || '#5555aa'; // Default color if kind not found
+  }, []);
+
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
   const [hoverNode, setHoverNode] = useState(null);
@@ -175,7 +199,56 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
     // Draw the node
     ctx.beginPath();
     ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
-    ctx.fillStyle = node.__color;
+    
+    // Create a radial gradient for 3D effect
+    const baseColor = getNodeColor(node);  // Use our custom color function
+    
+    // Ensure coordinates are finite numbers
+    const x = isFinite(node.x) ? node.x : 0;
+    const y = isFinite(node.y) ? node.y : 0;
+    
+    try {
+      // Adjust light source position for more pronounced 3D effect
+      const gradient = ctx.createRadialGradient(
+        x - NODE_R/2, y - NODE_R/2, 0,  // Light source position (more pronounced)
+        x, y, NODE_R * 1.2  // Slightly larger radius for better edge shading
+      );
+      
+      // Parse the base color to create lighter and darker versions
+      let r = 100, g = 100, b = 100; // Default values
+      
+      if (baseColor && typeof baseColor === 'string') {
+        if (baseColor.startsWith('#')) {
+          const hex = baseColor.slice(1);
+          r = parseInt(hex.slice(0, 2), 16) || r;
+          g = parseInt(hex.slice(2, 4), 16) || g;
+          b = parseInt(hex.slice(4, 6), 16) || b;
+        } else if (baseColor.startsWith('rgb')) {
+          const match = baseColor.match(/\d+/g);
+          if (match && match.length >= 3) {
+            r = parseInt(match[0]) || r;
+            g = parseInt(match[1]) || g;
+            b = parseInt(match[2]) || b;
+          }
+        }
+      }
+      
+      // Create lighter and darker versions for gradient with more contrast
+      const lighterColor = `rgba(${Math.min(r + 100, 255)}, ${Math.min(g + 100, 255)}, ${Math.min(b + 100, 255)}, 1)`;
+      const darkerColor = `rgba(${Math.max(r - 70, 0)}, ${Math.max(g - 70, 0)}, ${Math.max(b - 70, 0)}, 1)`;
+      
+      // Add color stops to gradient
+      gradient.addColorStop(0, lighterColor);
+      gradient.addColorStop(0.5, baseColor);
+      gradient.addColorStop(1, darkerColor);
+      
+      ctx.fillStyle = gradient;
+    } catch (error) {
+      // Fallback to solid color if gradient creation fails
+      console.warn("Gradient creation failed, using solid color", error);
+      ctx.fillStyle = baseColor;
+    }
+    
     ctx.fill();
 
     // Draw highlight ring if needed
@@ -183,13 +256,28 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
       ctx.beginPath();
       ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
       if (isHighlightLocked) {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";  // Almost black for locked highlights
+        ctx.strokeStyle = "rgba(140, 82, 255, 0.7)";  // Purple from the gradient
         ctx.lineWidth = 3;  // Slightly thicker line for locked highlights
       } else {
-        ctx.strokeStyle = node === hoverNode ? 'red' : 'orange';
+        // Add glow effect for hover
+        if (node === hoverNode) {
+          // Pink glow for hovered node
+          ctx.shadowColor = '#ff57e6';
+          ctx.shadowBlur = 15;
+          ctx.strokeStyle = 'rgba(255, 0, 217, 0.94)';
+        } else {
+          // Light blue for neighbors
+          ctx.shadowColor = '#03a9f4';
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = 'rgba(3, 169, 244, 0.6)';
+        }
         ctx.lineWidth = 2;
       }
       ctx.stroke();
+      
+      // Reset shadow after drawing
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
     }
 
     // Draw node label
@@ -224,7 +312,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
 
     ctx.restore();  // Restore the canvas state
     
-  }, [highlightNodes, hoverNode, isHighlightLocked]);
+  }, [highlightNodes, hoverNode, isHighlightLocked, getNodeColor]);
 
   const linkCanvasObject = useCallback((link: any, ctx: CanvasRenderingContext2D) => {
     ctx.save();  // Save the current canvas state
@@ -232,7 +320,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
     ctx.beginPath();
     ctx.moveTo(link.source.x, link.source.y);
     ctx.lineTo(link.target.x, link.target.y);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.lineWidth = 1;
     
     // Set global alpha based on highlight state
@@ -283,7 +371,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
           height={dimensions.height}
           width={dimensions.width}
           linkColor="#ffffff"
-          backgroundColor="#efefef"
+          backgroundColor="rgb(18,18,18)"
           nodeLabel={""}
         />
       </div>
