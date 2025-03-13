@@ -23,6 +23,7 @@
   width: 100%;
   height: 100%;
   margin: 0;
+  padding: 1rem;
   font-family: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
   line-height: 1.5;
@@ -114,14 +115,10 @@
   font-size: 14px;
   scroll-behavior: smooth;
   top: 52px !important;
-  background-color: rgba(30, 30, 30, 0.95);
-  border-radius: 8px;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), 0 0 10px rgba(140, 82, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .suggestion-item {
-  padding: 8px 12px;
+  padding: 0;
   cursor: pointer;
   color: #8f8f8f;
   transition: all 0.2s ease;
@@ -130,11 +127,7 @@
 .suggestion-item:hover,
 .suggestion-item.highlighted {
   color: #ffffff;
-  background-color: rgba(140, 82, 255, 0.2);
-}
-
-.suggestion-item.highlighted {
-  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 12px rgba(255, 255, 255, 0.6), 0 0 16px rgba(255, 255, 255, 0.4);
 }
 
 .query-status {
