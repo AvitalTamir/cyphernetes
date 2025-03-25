@@ -49,6 +49,14 @@ const config: Config = {
   ],
 
   themeConfig: {
+    announcementBar: {
+      id: "product_hunt_launch",
+      content:
+        '🎉 We\'re live on Product Hunt! <a href="https://www.producthunt.com/products/cyphernetes" target="_blank" rel="noopener noreferrer" style="color: #818CF8; font-weight: bold;">Check us out and show your support</a>',
+      backgroundColor: "#1E293B",
+      textColor: "#FFFFFF",
+      isCloseable: true,
+    },
     docs: {
       sidebar: {
         hideable: true,
