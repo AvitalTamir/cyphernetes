@@ -240,3 +240,15 @@ div[class^='codeBlockContent'] {
     color: var(--ifm-navbar-link-color);
   }
 }
+
+/* Announcement bar close button styling */
+div[class^='announcementBar_'] button {
+  color: #FFFFFF !important;
+  opacity: 1 !important;
+  font-size: 1.25rem !important;
+}
+
+div[class^='announcementBar_'] button:hover {
+  color: #818CF8 !important;
+  opacity: 1 !important;
+}
