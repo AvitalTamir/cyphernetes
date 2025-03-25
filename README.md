@@ -1,6 +1,9 @@
 <img width="1440" alt="Screenshot 2025-02-06 at 21 11 45" src="https://github.com/user-attachments/assets/d8eadc99-069e-4c95-aee6-b3530f890f03" />
 
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
+<p>
+<a href="https://www.producthunt.com/posts/cyphernetes?embed=true&utm_source=badge-featured&utm_medium=badge&utm_souce=badge-cyphernetes" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=807107&theme=light&t=1742919242411" alt="Cyphernetes - A&#0032;Kubernetes&#0032;Query&#0032;Language | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+</p>
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
 [![Go Reference](https://pkg.go.dev/badge/github.com/avitaltamir/cyphernetes.svg)](https://pkg.go.dev/github.com/avitaltamir/cyphernetes)
