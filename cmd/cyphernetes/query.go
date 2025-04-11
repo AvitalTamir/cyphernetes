@@ -9,6 +9,7 @@ import (
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -89,13 +90,13 @@ func runQuery(args []string, w io.Writer) {
 
 	// Marshal data based on the output format
 	var output []byte
-	if core.OutputFormat == "yaml" {
-		output, err = yaml.Marshal(results.Data)
-	} else { // core.OutputFormat == "json"
+	if core.OutputFormat == "json" {
 		output, err = json.MarshalIndent(results.Data, "", "  ")
-		if !returnRawJsonOutput {
+		if err == nil && !returnRawJsonOutput && term.IsTerminal(int(os.Stdout.Fd())) {
 			output = []byte(formatJson(string(output)))
 		}
+	} else {
+		output, err = yaml.Marshal(results.Data)
 	}
 
 	// Handle marshalling errors
