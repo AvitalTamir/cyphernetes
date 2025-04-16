@@ -1,4 +1,4 @@
-# The Cyphernetes DynamicOperator
+# Operator
 
 Cyphernetes is available as a Kubernetes Operator that can be used to define child operators on-the-fly.
 

@@ -1,4 +1,4 @@
-# Introduction to the Cyphernetes Language
+# Language
 
 Hi, welcome to Cyphernetes.
 

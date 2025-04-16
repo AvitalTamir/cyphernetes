@@ -1,4 +1,4 @@
-# Integrating Cyphernetes in your own Go project
+# Integration
 
 This guide will help you integrate Cyphernetes into your own Go project.
 Cyphernetes is made up of two main packages:
