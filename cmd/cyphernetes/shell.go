@@ -404,12 +404,30 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			input = strings.TrimSpace(cmd)
 		} else {
 			input = strings.TrimSpace(line)
+		}
+
+		// Check if the input consists only of comments and whitespace
+		isOnlyComments := true
+		potentialLines := strings.Split(input, "\n")
+		for _, potentialLine := range potentialLines {
+			trimmedLine := strings.TrimSpace(potentialLine)
+			if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "//") {
+				isOnlyComments = false
+				break
+			}
+		}
+
+		if input != "" && !isOnlyComments {
+			// Print the processed command only if it's not just comments
 			lastQuery := rl.Config.Painter.Paint([]rune(input), 0)
 			fmt.Println(string(lastQuery))
+			fmt.Print("\n")
+			rl.SaveHistory(input)
 		}
-		fmt.Print("\n")
 
-		rl.SaveHistory(input)
+		if isOnlyComments {
+			continue // Skip processing if only comments/whitespace
+		}
 
 		if input == "exit" {
 			break
@@ -486,7 +504,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			fmt.Printf("Dry-run mode: %t\n\n", DryRun)
 		} else if input == "help" {
 			printHelp()
-		} else if input != "" {
+		} else if input != "" { // This check remains, but isOnlyComments handles the case where input is non-empty but has no executable content
 			executing = true
 			// Process the input if not empty
 			result, graph, err := processQuery(input)

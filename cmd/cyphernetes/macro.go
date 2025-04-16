@@ -115,7 +115,7 @@ func (mm *MacroManager) LoadMacrosFromFile(filename string) error {
 		line := strings.TrimSpace(scanner.Text())
 
 		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
 
@@ -199,7 +199,7 @@ func (mm *MacroManager) loadMacros(source string, reader io.Reader) error {
 		line := strings.TrimSpace(scanner.Text())
 
 		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
 
@@ -227,8 +227,8 @@ func (mm *MacroManager) loadMacros(source string, reader io.Reader) error {
 			// Parse description if present
 			description := ""
 			for i, part := range parts {
-				if strings.HasPrefix(part, "#") {
-					description = strings.TrimSpace(strings.Join(parts[i:], " ")[1:])
+				if strings.HasPrefix(part, "//") {
+					description = strings.TrimSpace(strings.Join(parts[i:], " ")[2:])
 					args = parts[1:i]
 					break
 				}

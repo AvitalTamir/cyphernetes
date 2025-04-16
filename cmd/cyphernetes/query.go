@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
@@ -74,8 +75,27 @@ func runQuery(args []string, w io.Writer) {
 		return
 	}
 
+	// Get the query string
+	queryStr := args[0]
+
+	// Check if the input query consists only of comments and whitespace
+	isOnlyComments := true
+	potentialLines := strings.Split(queryStr, "\n")
+	for _, potentialLine := range potentialLines {
+		trimmedLine := strings.TrimSpace(potentialLine)
+		if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "//") {
+			isOnlyComments = false
+			break
+		}
+	}
+
+	if isOnlyComments {
+		// If only comments or empty, do nothing and exit cleanly.
+		return
+	}
+
 	// Parse the query to get an AST
-	ast, err := parseQuery(args[0])
+	ast, err := parseQuery(queryStr)
 	if err != nil {
 		fmt.Fprintln(w, "Error parsing query: ", err)
 		return
