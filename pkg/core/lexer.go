@@ -36,297 +36,298 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: l.buf.tok, Literal: l.buf.lit}
 	}
 
-	// Skip whitespace
-	l.skipWhitespace()
+	// Loop until a valid token is found or EOF
+	for {
+		// Skip whitespace first
+		l.skipWhitespace()
 
-	if l.s.Peek() == scanner.EOF {
-		return Token{Type: EOF, Literal: ""}
-	}
-
-	// Check if we're in a property access context (after a dot in a WHERE or RETURN clause)
-	// or if we're in a WHERE clause and the last token was a comma or AND
-	if (l.lastToken.Type == DOT || l.lastToken.Type == COMMA || l.lastToken.Type == AND || l.lastToken.Type == WHERE || l.lastToken.Type == SET) && !l.inJsonData && !l.inPropertyKey {
-		l.isInJsonPath = true
-	}
-
-	tok := l.s.Scan()
-
-	switch tok {
-	case scanner.EOF:
-		return Token{Type: EOF, Literal: ""}
-
-	case scanner.Ident:
-		lit := l.s.TokenText()
-		debugLog("Lexer got IDENT token: '%s'", lit)
-		if !l.inNodeLabel {
-			switch strings.ToUpper(lit) {
-			case "MATCH":
-				return Token{Type: MATCH, Literal: lit}
-			case "CREATE":
-				return Token{Type: CREATE, Literal: lit}
-			case "WHERE":
-				return Token{Type: WHERE, Literal: lit}
-			case "SET":
-				return Token{Type: SET, Literal: lit}
-			case "DELETE":
-				return Token{Type: DELETE, Literal: lit}
-			case "RETURN":
-				return Token{Type: RETURN, Literal: lit}
-			case "IN":
-				return Token{Type: IN, Literal: lit}
-			case "AS":
-				return Token{Type: AS, Literal: lit}
-			case "COUNT":
-				return Token{Type: COUNT, Literal: lit}
-			case "SUM":
-				return Token{Type: SUM, Literal: lit}
-			case "CONTAINS":
-				return Token{Type: CONTAINS, Literal: lit}
-			case "AND":
-				return Token{Type: AND, Literal: lit}
-			case "TRUE", "FALSE":
-				return Token{Type: BOOLEAN, Literal: lit}
-			case "NULL":
-				return Token{Type: NULL, Literal: lit}
-			case "NOT":
-				return Token{Type: NOT, Literal: lit}
-			case "DATETIME":
-				return Token{Type: DATETIME, Literal: "datetime"}
-			case "DURATION":
-				return Token{Type: DURATION, Literal: "duration"}
-			default:
-				debugLog("Returning IDENT token: '%s'", lit)
-				if !l.isInJsonPath {
-					return Token{Type: IDENT, Literal: lit}
+		// Check for single-line comments (//)
+		if l.s.Peek() == '/' {
+			ch1 := l.s.Next() // Tentatively consume the first '/'
+			if l.s.Peek() == '/' {
+				l.s.Next() // Consume the second '/'
+				// It's a comment, skip to the end of the line or EOF
+				for {
+					peekedChar := l.s.Peek() // Peek first
+					if peekedChar == '\n' || peekedChar == scanner.EOF {
+						// Don't consume EOF here, let the main loop handle it
+						if peekedChar == '\n' {
+							l.s.Next() // Consume the newline
+						}
+						break // Break the inner comment skipping loop
+					}
+					// Consume the character if it's not newline or EOF
+					l.s.Next()
 				}
+				// After skipping the comment (or hitting EOF during skip),
+				// continue the main loop to find the *next* token.
+				continue // Restarts the outer 'for' loop
+			} else {
+				// It was just a single '/'. We already consumed it (ch1).
+				// Treat single '/' as ILLEGAL.
+				return Token{Type: ILLEGAL, Literal: string(ch1)}
 			}
 		}
-		var fullLit strings.Builder
-		fullLit.WriteString(lit)
 
-		// Handle dots in identifiers
-		for l.s.Peek() == '.' || l.s.Peek() == '"' || (l.isInJsonPath && l.s.Peek() == '\\') || l.s.Peek() == '-' {
-			// First check for escaped dots in JSON paths
-			if l.isInJsonPath && l.s.Peek() == '\\' {
-				l.s.Next() // consume backslash
-				if l.s.Peek() == '.' {
-					l.s.Next()                 // consume dot
-					fullLit.WriteString("\\.") // Write the escaped dot
+		// Check for EOF *after* potentially skipping comments/whitespace
+		if l.s.Peek() == scanner.EOF {
+			return Token{Type: EOF, Literal: ""}
+		}
 
-					// Continue scanning the rest of the identifier
-					scanTok := l.s.Scan()
-					if scanTok != scanner.Ident {
-						return Token{Type: ILLEGAL, Literal: fullLit.String()}
-					}
-					fullLit.WriteString(l.s.TokenText())
+		// Check if we're in a property access context (after a dot in a WHERE or RETURN clause)
+		// or if we're in a WHERE clause and the last token was a comma or AND
+		if (l.lastToken.Type == DOT || l.lastToken.Type == COMMA || l.lastToken.Type == AND || l.lastToken.Type == WHERE || l.lastToken.Type == SET) && !l.inJsonData && !l.inPropertyKey {
+			l.isInJsonPath = true
+		} else {
+			// Reset isInJsonPath if not in a relevant context
+			l.isInJsonPath = false
+		}
 
-					// Continue scanning for more parts (like helm.sh/release-name)
-					for l.s.Peek() == '.' || l.s.Peek() == '/' || (l.isInJsonPath && l.s.Peek() == '\\') || l.s.Peek() == '-' {
-						if l.isInJsonPath && l.s.Peek() == '\\' {
-							l.s.Next() // consume backslash
-							if l.s.Peek() == '.' {
-								l.s.Next() // consume dot
-								fullLit.WriteString("\\.")
-								scanTok = l.s.Scan()
-								if scanTok != scanner.Ident {
-									return Token{Type: ILLEGAL, Literal: fullLit.String()}
-								}
-								fullLit.WriteString(l.s.TokenText())
-								continue
-							}
-							return Token{Type: ILLEGAL, Literal: "\\"}
-						}
-						ch := l.s.Next()
-						fullLit.WriteRune(ch)
-						scanTok = l.s.Scan()
+		// Scan the next token
+		tok := l.s.Scan()
+
+		switch tok {
+		case scanner.EOF: // Should be caught by peek earlier, but handle defensively
+			return Token{Type: EOF, Literal: ""}
+
+		case scanner.Ident:
+			lit := l.s.TokenText()
+			debugLog("Lexer got IDENT token: '%s'", lit)
+			if !l.inNodeLabel {
+				// Handle keywords first
+				switch strings.ToUpper(lit) {
+				case "MATCH":
+					return Token{Type: MATCH, Literal: lit}
+				case "CREATE":
+					return Token{Type: CREATE, Literal: lit}
+				case "WHERE":
+					return Token{Type: WHERE, Literal: lit}
+				case "SET":
+					return Token{Type: SET, Literal: lit}
+				case "DELETE":
+					return Token{Type: DELETE, Literal: lit}
+				case "RETURN":
+					return Token{Type: RETURN, Literal: lit}
+				case "IN":
+					return Token{Type: IN, Literal: lit}
+				case "AS":
+					return Token{Type: AS, Literal: lit}
+				case "COUNT":
+					return Token{Type: COUNT, Literal: lit}
+				case "SUM":
+					return Token{Type: SUM, Literal: lit}
+				case "CONTAINS":
+					return Token{Type: CONTAINS, Literal: lit}
+				case "AND":
+					return Token{Type: AND, Literal: lit}
+				case "TRUE", "FALSE":
+					return Token{Type: BOOLEAN, Literal: lit}
+				case "NULL":
+					return Token{Type: NULL, Literal: lit}
+				case "NOT":
+					return Token{Type: NOT, Literal: lit}
+				case "DATETIME":
+					return Token{Type: DATETIME, Literal: "datetime"}
+				case "DURATION":
+					return Token{Type: DURATION, Literal: "duration"}
+					// If not a keyword, fall through to identifier logic below
+				}
+			}
+
+			// Check what follows the initial identifier
+			peek := l.s.Peek()
+			isPotentialSeparator := peek == '.' || peek == '"' || peek == '/' || peek == '-' || (l.isInJsonPath && peek == '\\')
+
+			// Case 1: Simple identifier (not followed by separator) or JSON path segment (followed by '.')
+			if !isPotentialSeparator || (peek == '.' && !l.inNodeLabel) {
+				// If it's followed by a dot but not in a node label context, treat as path segment.
+				// Return the identifier now, the next call will return the DOT.
+				// If it's not followed by any separator, it's just a simple identifier.
+				debugLog("Returning simple IDENT or path segment: '%s'", lit)
+				resultTok := Token{Type: IDENT, Literal: lit}
+				l.lastToken = resultTok
+				return resultTok
+			}
+
+			// Case 2: Complex identifier (resource kind like `deployments.apps` or path with `/ - \.`)
+			var fullLit strings.Builder
+			fullLit.WriteString(lit)
+
+			for l.s.Peek() == '.' || l.s.Peek() == '"' || l.s.Peek() == '/' || l.s.Peek() == '-' || (l.isInJsonPath && l.s.Peek() == '\\') {
+				peek = l.s.Peek() // Re-peek inside the loop
+
+				// Handle JSON path dot separation *within* the loop? No, handled above.
+				// If peek is '.' and !l.inNodeLabel, the outer check should have returned the token already.
+				// So if we are here and peek is '.', it must be because l.inNodeLabel is true (resource kind).
+
+				// Handle escaped dots in JSON paths
+				if l.isInJsonPath && peek == '\\' {
+					l.s.Next() // consume backslash
+					if l.s.Peek() == '.' {
+						l.s.Next()                 // consume dot
+						fullLit.WriteString("\\.") // Write the escaped dot
+						// Scan the next part of the identifier
+						scanTok := l.s.Scan()
 						if scanTok != scanner.Ident {
-							return Token{Type: ILLEGAL, Literal: fullLit.String()}
+							return Token{Type: ILLEGAL, Literal: fullLit.String()} // Part after escaped dot is not ident
 						}
 						fullLit.WriteString(l.s.TokenText())
+						continue // Continue the complex identifier building loop
 					}
-					debugLog("Built escaped identifier: '%s'", fullLit.String())
-					resultTok := Token{Type: IDENT, Literal: fullLit.String()}
-					l.lastToken = resultTok
-					return resultTok
+					// Not a dot after backslash, treat as illegal
+					return Token{Type: ILLEGAL, Literal: fullLit.String() + "\\"}
 				}
-				// Not a dot after backslash, treat as illegal
-				return Token{Type: ILLEGAL, Literal: "\\"}
-			}
 
-			next := l.s.Next()
-			debugLog("Lexer peeked: '%c'", next)
-			if next == '"' {
-				// Include quotes in the identifier
-				fullLit.WriteRune('"')
-				debugLog("Added quote to identifier: '%s'", fullLit.String())
-				continue
-			}
+				// Consume the separator ('.', '"', '/', '-')
+				next := l.s.Next()
+				fullLit.WriteRune(next) // Append the separator
+				debugLog("Added separator '%c' to complex identifier: '%s'", next, fullLit.String())
 
-			if next == '-' {
-				fullLit.WriteRune('-')
+				// Scan the next part of the identifier
 				scanTok := l.s.Scan()
 				if scanTok != scanner.Ident {
+					// If the char after separator is not IDENT, it's an error
 					return Token{Type: ILLEGAL, Literal: fullLit.String()}
 				}
+				// Append the scanned identifier part
 				fullLit.WriteString(l.s.TokenText())
-				continue
+			} // End of complex identifier building loop
+
+			// If the loop finishes, return the fully built complex identifier
+			finalLit := fullLit.String()
+			debugLog("Final complex identifier: '%s'", finalLit)
+			resultTok := Token{Type: IDENT, Literal: finalLit}
+			l.lastToken = resultTok
+			return resultTok
+
+		case scanner.Int, scanner.Float:
+			debugLog("Got number: '%s'", l.s.TokenText())
+			resultTok := Token{Type: NUMBER, Literal: l.s.TokenText()}
+			l.lastToken = resultTok
+			return resultTok
+
+		case scanner.String:
+			debugLog("Got string: '%s'", l.s.TokenText())
+			lit := l.s.TokenText()
+			var resultTok Token
+			if l.inNodeLabel && l.inPropertyKey && !l.inJsonData {
+				l.inPropertyKey = false
+				resultTok = Token{Type: IDENT, Literal: strings.Trim(lit, "\"")}
+			} else {
+				resultTok = Token{Type: STRING, Literal: lit}
 			}
+			l.lastToken = resultTok
+			return resultTok
 
-			// Handle dots differently for resource kinds vs JSON paths
-			if l.inNodeLabel {
-				// For resource kinds, combine with dots
-				fullLit.WriteRune('.')
-				scanTok := l.s.Scan()
-				if scanTok != scanner.Ident {
-					return Token{Type: ILLEGAL, Literal: fullLit.String()}
-				}
-				fullLit.WriteString(l.s.TokenText())
-				continue
-			}
-
-			// For JSON paths, return separate tokens
-			debugLog("Final identifier: '%s'", fullLit.String())
-			l.buf.hasNext = true
-			l.buf.tok = DOT
-			l.buf.lit = "."
-			tok := Token{Type: IDENT, Literal: fullLit.String()}
-			l.lastToken = tok
-			return tok
-		}
-		debugLog("Final identifier: '%s'", fullLit.String())
-		tok := Token{Type: IDENT, Literal: fullLit.String()}
-		l.lastToken = tok
-		return tok
-
-	case scanner.Int:
-		debugLog("Got number: '%s'", l.s.TokenText())
-		tok := Token{Type: NUMBER, Literal: l.s.TokenText()}
-		l.lastToken = tok
-		return tok
-
-	case scanner.String:
-		debugLog("Got string: '%s'", l.s.TokenText())
-		lit := l.s.TokenText()
-		var tok Token
-		if l.inNodeLabel && l.inPropertyKey && !l.inJsonData {
-			l.inPropertyKey = false
-			tok = Token{Type: IDENT, Literal: strings.Trim(lit, "\"")}
-		} else {
-			tok = Token{Type: STRING, Literal: lit}
-		}
-		l.lastToken = tok
-		return tok
-
-	case '*':
-		return Token{Type: ILLEGAL, Literal: "*"}
-
-	case '[':
-		return Token{Type: LBRACKET, Literal: "["}
-	case ']':
-		if l.s.Peek() == '-' {
-			l.s.Next()
-			if l.s.Peek() == '>' {
-				l.s.Next()
-				return Token{Type: REL_ENDPROPS_RIGHT, Literal: "]->"}
-			}
-			return Token{Type: REL_ENDPROPS_NONE, Literal: "]-"}
-		}
-		return Token{Type: RBRACKET, Literal: "]"}
-	case '(':
-		return Token{Type: LPAREN, Literal: "("}
-	case ')':
-		l.inNodeLabel = false
-		return Token{Type: RPAREN, Literal: ")"}
-	case '{':
-		if !l.inNodeLabel && !l.inPropertyKey {
-			l.inJsonData = true
-		}
-		l.inPropertyKey = true
-		return Token{Type: LBRACE, Literal: "{"}
-	case '}':
-		l.inJsonData = false
-		return Token{Type: RBRACE, Literal: "}"}
-	case ':':
-		if !l.inNodeLabel {
-			l.inNodeLabel = true
-		}
-		l.inPropertyKey = false
-		return Token{Type: COLON, Literal: ":"}
-	case ',':
-		if !l.inJsonData {
-			l.inPropertyKey = true
-		}
-		return Token{Type: COMMA, Literal: ","}
-	case '.':
-		tok := Token{Type: DOT, Literal: "."}
-		l.lastToken = tok
-		return tok
-
-	case '=':
-		if l.s.Peek() == '~' {
-			l.s.Next() // consume '~'
-			return Token{Type: REGEX_COMPARE, Literal: "=~"}
-		}
-		tok := Token{Type: EQUALS, Literal: "="}
-		l.lastToken = tok
-		return tok
-
-	case '!':
-		if l.s.Peek() == '=' {
-			l.s.Next() // consume '='
-			return Token{Type: NOT_EQUALS, Literal: "!="}
-		}
-		return Token{Type: ILLEGAL, Literal: "!"}
-
-	case '-':
-		switch l.s.Peek() {
-		case '>':
-			l.s.Next()
-			return Token{Type: REL_NOPROPS_RIGHT, Literal: "->"}
+		// Handle single characters and operators recognized by Scan()
 		case '[':
-			l.s.Next()
-			return Token{Type: REL_BEGINPROPS_NONE, Literal: "-["}
-		case '-':
-			l.s.Next()
-			return Token{Type: REL_NOPROPS_NONE, Literal: "--"}
-		default:
-			if l.inContexts {
-				return Token{Type: IDENT, Literal: "-"}
-			}
-			return Token{Type: MINUS, Literal: "-"}
-		}
-
-	case '+':
-		return Token{Type: PLUS, Literal: "+"}
-
-	case '<':
-		switch l.s.Peek() {
-		case '-':
-			l.s.Next()
-			if l.s.Peek() == '[' {
+			return Token{Type: LBRACKET, Literal: "["}
+		case ']':
+			if l.s.Peek() == '-' {
 				l.s.Next()
-				return Token{Type: REL_BEGINPROPS_LEFT, Literal: "<-["}
+				if l.s.Peek() == '>' {
+					l.s.Next()
+					return Token{Type: REL_ENDPROPS_RIGHT, Literal: "]->"}
+				}
+				return Token{Type: REL_ENDPROPS_NONE, Literal: "]-"}
 			}
-			return Token{Type: REL_NOPROPS_LEFT, Literal: "<-"}
+			return Token{Type: RBRACKET, Literal: "]"}
+		case '(':
+			return Token{Type: LPAREN, Literal: "("}
+		case ')':
+			l.inNodeLabel = false
+			return Token{Type: RPAREN, Literal: ")"}
+		case '{':
+			if !l.inNodeLabel && !l.inPropertyKey {
+				l.inJsonData = true
+			}
+			l.inPropertyKey = true
+			return Token{Type: LBRACE, Literal: "{"}
+		case '}':
+			l.inJsonData = false
+			return Token{Type: RBRACE, Literal: "}"}
+		case ':':
+			if !l.inNodeLabel {
+				l.inNodeLabel = true
+			}
+			l.inPropertyKey = false
+			return Token{Type: COLON, Literal: ":"}
+		case ',':
+			if !l.inJsonData {
+				l.inPropertyKey = true
+			}
+			resultTok := Token{Type: COMMA, Literal: ","}
+			l.lastToken = resultTok
+			return resultTok
+		case '.':
+			resultTok := Token{Type: DOT, Literal: "."}
+			l.lastToken = resultTok
+			return resultTok
 		case '=':
-			l.s.Next()
-			return Token{Type: LESS_THAN_EQUALS, Literal: "<="}
+			if l.s.Peek() == '~' {
+				l.s.Next() // consume '~'
+				return Token{Type: REGEX_COMPARE, Literal: "=~"}
+			}
+			resultTok := Token{Type: EQUALS, Literal: "="}
+			l.lastToken = resultTok
+			return resultTok
+		case '!':
+			if l.s.Peek() == '=' {
+				l.s.Next() // consume '='
+				return Token{Type: NOT_EQUALS, Literal: "!="}
+			}
+			return Token{Type: ILLEGAL, Literal: "!"}
+		case '-':
+			switch l.s.Peek() {
+			case '>':
+				l.s.Next()
+				return Token{Type: REL_NOPROPS_RIGHT, Literal: "->"}
+			case '[':
+				l.s.Next()
+				return Token{Type: REL_BEGINPROPS_NONE, Literal: "-["}
+			case '-':
+				l.s.Next()
+				return Token{Type: REL_NOPROPS_NONE, Literal: "--"}
+			default:
+				// Context check for dashed names removed as identifier logic handles it
+				return Token{Type: MINUS, Literal: "-"}
+			}
+		case '+':
+			return Token{Type: PLUS, Literal: "+"}
 		case '<':
-			l.s.Next()
-			return Token{Type: ILLEGAL, Literal: "<<"}
+			switch l.s.Peek() {
+			case '-':
+				l.s.Next()
+				if l.s.Peek() == '[' {
+					l.s.Next()
+					return Token{Type: REL_BEGINPROPS_LEFT, Literal: "<-["}
+				}
+				return Token{Type: REL_NOPROPS_LEFT, Literal: "<-"}
+			case '=':
+				l.s.Next()
+				return Token{Type: LESS_THAN_EQUALS, Literal: "<="}
+			case '<':
+				// Disallow <<
+				l.s.Next()
+				return Token{Type: ILLEGAL, Literal: "<<"}
+			default:
+				return Token{Type: LESS_THAN, Literal: "<"}
+			}
+		case '>':
+			if l.s.Peek() == '=' {
+				l.s.Next()
+				return Token{Type: GREATER_THAN_EQUALS, Literal: ">="}
+			}
+			return Token{Type: GREATER_THAN, Literal: ">"}
+		case '*': // Handle '*' often used in RETURN or array index
+			// Check context? For now, assume it's part of an expression/path
+			return Token{Type: ILLEGAL, Literal: "*"} // Treat as ILLEGAL if scanned standalone, specific parsing handles it
 		default:
-			return Token{Type: LESS_THAN, Literal: "<"}
+			// If scanner.Scan() returns a rune not handled above, treat it as ILLEGAL.
+			// Note: Single '/' is handled by the comment check logic earlier.
+			return Token{Type: ILLEGAL, Literal: l.s.TokenText()}
 		}
-
-	case '>':
-		if l.s.Peek() == '=' {
-			l.s.Next()
-			return Token{Type: GREATER_THAN_EQUALS, Literal: ">="}
-		}
-		return Token{Type: GREATER_THAN, Literal: ">"}
-	}
-
-	return Token{Type: ILLEGAL, Literal: l.s.TokenText()}
+	} // End of the for loop
 }
 
 // Add Peek method to Lexer
