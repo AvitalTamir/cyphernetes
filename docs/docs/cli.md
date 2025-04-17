@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # CLI
 
 > Note: Dry Run mode is available for all CLI commands.

@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Operator
 
 Cyphernetes is available as a Kubernetes Operator that can be used to define child operators on-the-fly.

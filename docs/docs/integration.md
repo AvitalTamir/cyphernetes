@@ -1,3 +1,7 @@
+---
+sidebar_position: 5
+---
+
 # Integration
 
 This guide will help you integrate Cyphernetes into your own Go project.
