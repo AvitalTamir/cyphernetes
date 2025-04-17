@@ -21,7 +21,7 @@ brew install cyphernetes
 ```
 
 </TabItem>
-<TabItem value="goGet" label="Using go get">
+<TabItem value="goGet" label="Using Go">
 ```bash
    go install github.com/avitaltamir/cyphernetes/cmd/cyphernetes@latest
 ```
