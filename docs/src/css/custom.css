@@ -14,7 +14,8 @@
   --ifm-color-primary-lighter: #818cf8;
   --ifm-color-primary-lightest: #a5b4fc;
   --ifm-code-font-size: 95%;
-  --ifm-font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ifm-font-family-base: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --ifm-font-family-monospace: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --ifm-navbar-height: 4rem;
   --ifm-navbar-padding-vertical: 0.75rem;
   --ifm-navbar-background-color: rgba(247, 248, 252, 0.8);
@@ -26,19 +27,89 @@
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #8b5cf6;
-  --ifm-color-primary-dark: #7c3aed;
-  --ifm-color-primary-darker: #6d28d9;
-  --ifm-color-primary-darkest: #5b21b6;
-  --ifm-color-primary-light: #a78bfa;
-  --ifm-color-primary-lighter: #c4b5fd;
-  --ifm-color-primary-lightest: #ddd6fe;
-  --ifm-background-color: #0f172a;
-  --ifm-navbar-background-color: rgba(15, 23, 42, 0.8);
-  --ifm-footer-background-color: #1e293b;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-  --code-block-bg: #1a1a1a;
-  --code-block-color: #e5e7eb;
+  /* --- Enhanced Cyberpunk/Neon Theme --- */
+
+  /* Primary Neon Accent: Electric Blue */
+  --ifm-color-primary: #e9e9e9;         /* Deep Sky Blue */
+  --ifm-color-primary-dark: #e9e9e9;     /* Slightly darker */
+  --ifm-color-primary-darker: #e9e9e9;   /* Darker */
+  --ifm-color-primary-darkest: #132c38;  /* Darkest */
+  --ifm-color-primary-light: #33ccff;    /* Lighter */
+  --ifm-color-primary-lighter: #66d9ff;  /* Even lighter */
+  --ifm-color-primary-lightest: #99e6ff; /* Lightest */
+
+  /* Backgrounds */
+  --ifm-background-color: #0a0a0a; /* Even darker background */
+  --ifm-navbar-background-color: rgba(10, 10, 10, 0.9); /* Match background, slightly transparent */
+  --ifm-footer-background-color: #0a0a0a;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 191, 255, 0.2); /* Neon blue highlight */
+  --code-block-bg: #141414; /* Dark background for code */
+  --code-block-color: #e0e0e0;
+
+  /* Base text color */
+  --ifm-font-color-base: #e0e0e0;
+  --ifm-font-color-secondary: #aaaaaa;
+
+  /* Link colors */
+  --ifm-link-color: var(--ifm-color-primary);
+  --ifm-link-hover-color: var(--ifm-color-primary-light);
+
+  /* Border color */
+  --ifm-toc-border-color: rgba(0, 191, 255, 0.3); /* More pronounced neon blue border */
+
+  /* Admonition Colors (Neon Accents) */
+  --ifm-color-info: #00bfff;         /* Electric Blue */
+  --ifm-color-success: #39ff14;    /* Lime Green */
+  --ifm-color-warning: #ffff00;    /* Bright Yellow */
+  --ifm-color-danger: #ff1dce;     /* Hot Pink */
+}
+
+/* Light mode specific styles */
+[data-theme='light'] {
+  /* Neon Theme for Light Mode */
+
+  /* Primary Neon Accent: Electric Blue */
+  --ifm-color-primary: #153945;
+  --ifm-color-primary-dark: #00aeee;
+  --ifm-color-primary-darker: #0099cc;
+  --ifm-color-primary-darkest: #0077aa;
+  --ifm-color-primary-light: #33ccff;
+  --ifm-color-primary-lighter: #66d9ff;
+  --ifm-color-primary-lightest: #99e6ff;
+
+  /* Backgrounds */
+  --ifm-background-color: #f0f0f0;
+  --ifm-navbar-background-color: rgba(240, 240, 240, 0.9);
+  --ifm-footer-background-color: #f8f9fa; /* Lighten the footer background */
+  --docusaurus-highlighted-code-line-bg: rgba(0, 191, 255, 0.1);
+  --code-block-bg: #141414; /* Dark background for code */
+  --code-block-color: #e0e0e0;
+
+  /* Base text color */
+  --ifm-font-color-base: #333333;
+  --ifm-font-color-secondary: #555555;
+
+  /* Link colors */
+  --ifm-link-color: var(--ifm-color-primary);
+  --ifm-link-hover-color: var(--ifm-color-primary-light);
+
+  /* Border color */
+  --ifm-toc-border-color: rgba(0, 191, 255, 0.2);
+
+  /* Admonition Colors (Neon Accents) */
+  --ifm-color-info: #00bfff;
+  --ifm-color-success: #39ff14;
+  --ifm-color-warning: #ffff00;
+  --ifm-color-danger: #ff1dce;
+}
+
+[data-theme='light'] .footer {
+  background-color: #f8f9fa; /* Lighten the footer background */
+  color: #333333; /* Ensure text is dark for contrast */
+}
+
+[data-theme='light'] .footer a {
+  color: #007bff; /* Link color for visibility */
 }
 
 /* Navbar customization */
@@ -46,6 +117,15 @@
   border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
+[data-theme='dark'] .navbar {
+  /* Stronger Neon blue glow */
+  box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+}
+
+[data-theme='light'] .navbar {
+  /* Neon blue glow for light mode */
+  box-shadow: 0 0 20px rgba(0, 191, 255, 0.3);
+}
 
 /* GitHub icon in navbar */
 .header-github-link:hover {
@@ -60,7 +140,7 @@
 /* Footer customization */
 .footer {
   padding: 2rem 0;
-  background-color: var(--ifm-navbar-background-color);
+  background-color: var(--ifm-footer-background-color);
   border-top: 1px solid var(--ifm-toc-border-color);
 }
 
@@ -69,7 +149,8 @@
     backdrop-filter: blur(10px);
   }
 
-  .footer {
+  [data-theme='dark'] .footer {
+    background-color: var(--ifm-navbar-background-color);
     backdrop-filter: blur(10px);
   }
 }
@@ -126,10 +207,14 @@ article {
 .markdown h1:first-child {
   --ifm-h1-font-size: 2.5rem;
   font-weight: 700;
+  color: #ffffff; /* Subtle white heading */
 }
 
 .markdown > h2 {
   --ifm-h2-font-size: 1.8rem;
+  color: #cccccc; /* Subtle grey heading */
+  border-left: 3px solid var(--ifm-color-primary);
+  padding-left: 0.5em;
 }
 
 .theme-doc-markdown {
@@ -147,6 +232,7 @@ div[class^='codeBlockContent'] {
   background-color: var(--code-block-bg);
   color: var(--code-block-color);
   padding: 1rem;
+  min-height: 280px; /* Set a minimum height for uniformity */
 }
 
 .prism-code {
@@ -251,4 +337,118 @@ div[class^='announcementBar_'] button {
 div[class^='announcementBar_'] button:hover {
   color: #818CF8 !important;
   opacity: 1 !important;
+}
+
+/* --- Enhanced Admonition Neon Styling --- */
+[data-theme='dark'] .admonition {
+  border-left-width: 4px;
+  border-radius: 4px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .admonition-heading {
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='dark'] .admonition-icon svg {
+  fill: currentColor;
+}
+
+/* Specific neon colors for admonitions */
+[data-theme='dark'] .admonition.alert--info {
+  border-color: var(--ifm-color-info);
+  background-color: rgba(0, 191, 255, 0.2); /* Neon Blue background */
+  color: var(--ifm-color-primary-lightest);
+}
+[data-theme='dark'] .admonition.alert--info .admonition-heading {
+  color: var(--ifm-color-info);
+  background-color: rgba(0, 191, 255, 0.25);
+}
+
+[data-theme='dark'] .admonition.alert--success {
+  border-color: var(--ifm-color-success);
+  background-color: rgba(57, 255, 20, 0.2); /* Lime Green background */
+  color: #caffbf;
+}
+[data-theme='dark'] .admonition.alert--success .admonition-heading {
+  color: var(--ifm-color-success);
+  background-color: rgba(57, 255, 20, 0.25);
+}
+
+[data-theme='dark'] .admonition.alert--warning {
+  border-color: var(--ifm-color-warning);
+  background-color: rgba(255, 255, 0, 0.2); /* Yellow background */
+  color: #ffffcc;
+}
+[data-theme='dark'] .admonition.alert--warning .admonition-heading {
+  color: var(--ifm-color-warning);
+  background-color: rgba(255, 255, 0, 0.25);
+}
+
+[data-theme='dark'] .admonition.alert--danger {
+  border-color: var(--ifm-color-danger);
+  background-color: rgba(255, 29, 206, 0.2); /* Hot Pink background */
+  color: #ffccf6;
+}
+[data-theme='dark'] .admonition.alert--danger .admonition-heading {
+  color: var(--ifm-color-danger);
+  background-color: rgba(255, 29, 206, 0.25);
+}
+
+/* Light mode specific styles */
+[data-theme='light'] .admonition {
+  border-left-width: 4px;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='light'] .admonition-heading {
+  font-weight: bold;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='light'] .admonition-icon svg {
+  fill: currentColor;
+}
+
+/* Specific neon colors for admonitions in light mode */
+[data-theme='light'] .admonition.alert--info {
+  border-color: var(--ifm-color-info);
+  background-color: rgba(0, 191, 255, 0.1);
+  color: var(--ifm-color-primary-darkest);
+}
+[data-theme='light'] .admonition.alert--info .admonition-heading {
+  color: var(--ifm-color-info);
+  background-color: rgba(0, 191, 255, 0.15);
+}
+
+[data-theme='light'] .admonition.alert--success {
+  border-color: var(--ifm-color-success);
+  background-color: rgba(57, 255, 20, 0.1);
+  color: #2e7d32;
+}
+[data-theme='light'] .admonition.alert--success .admonition-heading {
+  color: var(--ifm-color-success);
+  background-color: rgba(57, 255, 20, 0.15);
+}
+
+[data-theme='light'] .admonition.alert--warning {
+  border-color: var(--ifm-color-warning);
+  background-color: rgba(255, 255, 0, 0.1);
+  color: #f57f17;
+}
+[data-theme='light'] .admonition.alert--warning .admonition-heading {
+  color: var(--ifm-color-warning);
+  background-color: rgba(255, 255, 0, 0.15);
+}
+
+[data-theme='light'] .admonition.alert--danger {
+  border-color: var(--ifm-color-danger);
+  background-color: rgba(255, 29, 206, 0.1);
+  color: #c2185b;
+}
+[data-theme='light'] .admonition.alert--danger .admonition-heading {
+  color: var(--ifm-color-danger);
+  background-color: rgba(255, 29, 206, 0.15);
 }

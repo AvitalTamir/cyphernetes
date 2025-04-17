@@ -62,7 +62,7 @@ function GraphParticles() {
 
     // Create particles
     const particles: Particle[] = [];
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 150; i++) {
       particles.push(new Particle());
     }
 
@@ -84,12 +84,12 @@ function GraphParticles() {
           const dy = p1.y - p2.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          if (distance < 150) {
+          if (distance < 100) {
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
             ctx.strokeStyle = `rgba(255, 255, 255, ${
-              0.3 * (1 - distance / 150)
+              0.3 * (1 - distance / 100)
             })`;
             ctx.lineWidth = 1;
             ctx.stroke();
@@ -145,16 +145,16 @@ function HomepageHeader() {
   );
 }
 
-const beforeExample = `# Delete all pods that are not running
+const beforeExample = `# Delete all non-running pods
 $ kubectl get pods --all-namespaces \\
-    --field-selector 'status.phase!=Running' \\
-    -o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' \\
-    --no-headers | xargs -L1 -I {} bash -c 'set -- {}; kubectl delete pod $2 -n $1'`;
+  --field-selector 'status.phase!=Running' \\
+  -o 'custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name' \\
+  --no-headers | xargs -L1 -I {} bash -c 'set -- {}; kubectl delete pod $2 -n $1'`;
 
-const afterExample = `# Do the same thing!
+const afterExample = `// Do the same thing!
 MATCH (p:Pod)
-  WHERE p.status.phase != "Running"
-DELETE p;`;
+WHERE p.status.phase != "Running"
+DELETE p;`
 
 function CodeComparison() {
   return (
