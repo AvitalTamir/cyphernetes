@@ -29,6 +29,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
@@ -113,8 +114,8 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
       'Node': '#F1C40F',        // Sunflower
     };
     
-    return colorMap[node.kind] || '#5555aa'; // Default color if kind not found
-  }, []);
+    return colorMap[node.kind] || (theme === 'dark' ? '#5555aa' : '#aaaaaa');
+  }, [theme]);
 
   const [highlightNodes, setHighlightNodes] = useState(new Set());
   const [highlightLinks, setHighlightLinks] = useState(new Set());
@@ -190,11 +191,14 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
 
   const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     ctx.save();  // Save the current canvas state
+    const isDarkTheme = theme === 'dark';
+    const textColor = isDarkTheme ? 'white' : 'black';
+    const labelBackgroundColor = isDarkTheme ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)';
     
     // Set global alpha based on highlight state
     ctx.globalAlpha = highlightNodes.size > 0
       ? (highlightNodes.has(node) ? 1 : 0.05)
-      : 0.8;
+      : isDarkTheme ? 0.8 : 0.9;
 
     // Draw the node
     ctx.beginPath();
@@ -285,7 +289,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
     ctx.font = '5px Sans-Serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = textColor;
     ctx.fillText(label, node.x, node.y);
 
     // Draw full label if highlighted
@@ -301,37 +305,41 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
       const labelX = node.x;
       const labelY = node.y + NODE_R + boxHeight / 2 + 3 / globalScale + 1.5;
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillStyle = labelBackgroundColor;
       ctx.fillRect(labelX - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight);
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = textColor;
       ctx.fillText(fullLabel, labelX, labelY);
       ctx.globalAlpha = 1;
     } else {
-        ctx.globalAlpha = 0.05;
+        ctx.globalAlpha = isDarkTheme ? 0.05 : 0.1;
     }
 
     ctx.restore();  // Restore the canvas state
     
-  }, [highlightNodes, hoverNode, isHighlightLocked, getNodeColor]);
+  }, [highlightNodes, hoverNode, isHighlightLocked, getNodeColor, theme]);
 
   const linkCanvasObject = useCallback((link: any, ctx: CanvasRenderingContext2D) => {
     ctx.save();  // Save the current canvas state
+    const isDarkTheme = theme === 'dark';
+    const linkBaseColor = isDarkTheme ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+    const linkHighlightMultiplier = isDarkTheme ? 0.45 : 0.6;
+    const linkFadeMultiplier = isDarkTheme ? 0.01 : 0.02;
 
     ctx.beginPath();
     ctx.moveTo(link.source.x, link.source.y);
     ctx.lineTo(link.target.x, link.target.y);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.strokeStyle = linkBaseColor;
     ctx.lineWidth = 1;
     
     // Set global alpha based on highlight state
     ctx.globalAlpha = highlightLinks.size > 0
-      ? (highlightLinks.has(link) ? 0.45 : 0.01)
-      : 0.45;
+      ? (highlightLinks.has(link) ? linkHighlightMultiplier : linkFadeMultiplier)
+      : linkHighlightMultiplier;
 
     ctx.stroke();
 
     ctx.restore();  // Restore the canvas state
-  }, [highlightLinks]);
+  }, [highlightLinks, theme]);
 
   const resetGraph = useCallback(() => {
     setHighlightNodes(new Set());
@@ -348,8 +356,15 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
     resetGraph
   }));
 
+  const toggleTheme = () => {
+    setTheme(prevTheme => (prevTheme === 'dark' ? 'light' : 'dark'));
+  };
+
   return (
-    <div ref={containerRef} className="graph-visualization-container">
+    <div ref={containerRef} className={`graph-visualization-container ${theme}-theme`}>
+      <button onClick={toggleTheme} className="theme-toggle-button" title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
       <div className="graph-visualization" data-testid="graph-container">
         <ForceGraph2D
           ref={fgRef}
@@ -370,8 +385,8 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
           nodeAutoColorBy="kind"
           height={dimensions.height}
           width={dimensions.width}
-          linkColor="#ffffff"
-          backgroundColor="rgb(18,18,18)"
+          linkColor={theme === 'dark' ? "#ffffff" : "#000000"}
+          backgroundColor={theme === 'dark' ? "rgb(18,18,18)" : "rgb(240, 240, 240)"}
           nodeLabel={""}
         />
       </div>
