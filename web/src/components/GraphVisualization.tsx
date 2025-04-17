@@ -29,7 +29,7 @@ const GraphVisualization = forwardRef<{ resetGraph: () => void }, GraphVisualiza
   const fgRef = useRef<any>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
 
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
