@@ -232,7 +232,10 @@ div[class^='codeBlockContent'] {
   background-color: var(--code-block-bg);
   color: var(--code-block-color);
   padding: 1rem;
-  min-height: 280px; /* Set a minimum height for uniformity */
+}
+
+section[class^='codeComparison'] div[class^='codeBlockContent'] {
+  min-height: 280px;
 }
 
 .prism-code {
@@ -451,4 +454,20 @@ div[class^='announcementBar_'] button:hover {
 [data-theme='light'] .admonition.alert--danger .admonition-heading {
   color: var(--ifm-color-danger);
   background-color: rgba(255, 29, 206, 0.15);
+}
+
+[data-theme='light'] .markdown h1:first-child {
+  color: #333333; /* Darker color for visibility in light theme */
+}
+
+[data-theme='light'] .markdown > h2 {
+  color: #555555; /* Darker color for visibility in light theme */
+}
+
+[data-theme='light'] div[class^='ecosystemCard'] {
+  border: 1px solid #c9c9c9; /* Light border for visibility in light theme */
+}
+
+[data-theme='light'] div[class^='featureCard'] {
+  border: 1px solid #c9c9c9; /* Light border for visibility in light theme */
 }
