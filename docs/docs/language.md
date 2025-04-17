@@ -494,7 +494,8 @@ This query will find and return all resources that have a relationship with the 
 Anonymous nodes are nodes without a variable name. They are useful when you want to express a relationship path but don't want to use the intermediate resources in a subsequent `RETURN`, `SET` or `DELETE` clause.
 
 ```graphql
-// Find all pods that are two relationships away from a deployment
+// Find all configmaps that are related to a pod
+// Notice that we don't specify a variable name for the Pod
 MATCH (cm:ConfigMap)->(:Pod)
 RETURN cm.data
 ```
