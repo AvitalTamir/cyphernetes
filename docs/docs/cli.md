@@ -65,7 +65,7 @@ You can list available macros by running `\lm` in the shell.
 
 You can use a macro by running `:<macro-name>` in the shell:
 
-```graphql
+```cypher
 > :getpo
 
 {
@@ -167,7 +167,7 @@ The relationships.yaml file supports the following fields:
 
 Custom relationships are loaded on startup and can be used just like built-in relationships in queries:
 
-```graphql
+```cypher
 MATCH (d:Deployment)->(p:Pod)
 RETURN d.metadata.name, p.metadata.name
 ```

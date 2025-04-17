@@ -12,7 +12,7 @@ This guide provides practical examples of using Cyphernetes in various scenarios
 
 Basic node patterns with and without variables:
 
-```graphql
+```cypher
 // Basic node pattern
 MATCH (p:Pod)
 RETURN p;
@@ -34,7 +34,7 @@ RETURN p, x.kind;
 
 Different ways to express relationships between resources:
 
-```graphql
+```cypher
 // Right direction relationship
 MATCH (p:Pod)->(s:Service)
 RETURN p.metadata.name, s.metadata.name;
@@ -58,7 +58,7 @@ RETURN d.metadata.name, p.metadata.name;
 
 Find and manage pods in your cluster:
 
-```graphql
+```cypher
 // List all pods that aren't running
 MATCH (p:Pod)
 WHERE p.status.phase != "Running"
@@ -89,7 +89,7 @@ DELETE p;
 
 Work with deployments and their related resources:
 
-```graphql
+```cypher
 // Scale deployments in a namespace
 MATCH (d:Deployment {namespace: "production"})
 SET d.spec.replicas = 3;
@@ -115,7 +115,7 @@ RETURN d.metadata.name;
 
 Analyze services and their endpoints:
 
-```graphql
+```cypher
 // Find services without endpoints
 MATCH (s:Service)
 WHERE NOT (s)->(:core.Endpoints)
@@ -138,7 +138,7 @@ RETURN s.metadata.name, s.spec.clusterIP;
 
 Find relationships between different resource types:
 
-```graphql
+```cypher
 // Find all resources related to a deployment
 MATCH (d:Deployment {app: "my-app"})->(x)
 RETURN d, x.kind, x.metadata.name;
