@@ -4,19 +4,40 @@ sidebar_position: 5
 
 # Operator
 
-The Cyphernetes Operator extends Kubernetes with dynamic, graph-based automation capabilities. It allows you to define custom resources that use Cyphernetes queries to monitor and manage your cluster.
+Cyphernetes is available as a Kubernetes Operator that can be used to define child operators on-the-fly.
+
+## Usage
+
+The cyphernetes-operator watches for CustomResourceDefinitions (CRDs) of type `DynamicOperator` and sets up watches on the specified Kubernetes resources.
+When a change is detected, the operator executes the Cypher queries and updates the resources accordingly.
+
+Here is a simple example of a DynamicOperator that sets the ingress class name to "inactive" when the deployment has 0 replicas and to "active" when the deployment has more than 0 replicas:
+```yaml
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: ingress-activator-operator
+spec:
+  resourceKind: deployments
+  namespace: default
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";
+```
+
+In addition to the `onUpdate` field, the operator also supports the `onCreate` and `onDelete` fields.
 
 ## Installation
 
-You can install the Cyphernetes Operator using kubectl:
+The operator can be installed either using helm, or using the Cyphernetes CLI.
 
-```bash
-# Install CRDs and operator
-kubectl apply -f https://raw.githubusercontent.com/avitaltamir/cyphernetes/main/dist/install.yaml
-```
+### Helm
 
-Or using Helm:
-
+To install the operator using helm, run the following command:
 ```bash
 helm pull oci://ghcr.io/avitaltamir/cyphernetes/cyphernetes-operator
 tar -xvf cyphernetes-operator-*.tgz
@@ -24,148 +45,47 @@ cd cyphernetes-operator
 helm upgrade --install cyphernetes-operator . --namespace cyphernetes-operator --create-namespace
 ```
 
-### DynamicOperator
+Make sure to edit the values.yaml file and configure the operator's RBAC rules.
+By default, the operator will have no permissions and will not be able to watch any resources.
 
-The Cyphernetes Operator watches the DynamicOperator CRD. This custom resource allows you to define Kubernetes automation using Cyphernetes queries. It watches specified resources and executes queries in response to resource events:
+### Cyphernetes CLI
 
+Alternatively, you can install the operator using the Cyphernetes CLI - this is meant for development and testing purposes:
+```bash
+cyphernetes operator deploy
+```
+(or to remove):
+```bash
+cyphernetes operator remove
+```
+
+## Using the operator
+
+To start watching resources, you need to provision your first `DynamicOperator` resource.
 ```yaml
 apiVersion: cyphernetes-operator.cyphernet.es/v1
 kind: DynamicOperator
 metadata:
-  name: pod-cleaner
+  name: ingress-activator-operator
   namespace: default
 spec:
-  resourceKind: pods
+  resourceKind: deployments
   namespace: default
   onUpdate: |
-    MATCH (p:Pod {name: "{{$.metadata.name}}"})
-    WHERE p.status.phase = "Failed"
-    DELETE p;
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";
 ```
 
-> Note: Resources created by the operator using a CREATE statement will automatically get a finalizer.
+The operator will now watch the `deployments` resource in the `default` namespace and update the ingress class name accordingly.
+In addition to the `onUpdate` field, the operator also supports the `onCreate` and `onDelete` fields.
 
-The DynamicOperator spec supports the following fields:
-- `resourceKind` (required): The Kubernetes resource kind to watch
-- `namespace`: The namespace to watch (if empty, watches all namespaces)
-- `onCreate`: Query to execute when a resource is created
-- `onUpdate`: Query to execute when a resource is updated
-- `onDelete`: Query to execute when a resource is deleted
-
-At least one of `onCreate`, `onUpdate`, or `onDelete` must be specified.
-
-## Common Use Cases
-
-### Automated Cleanup
-
-Clean up resources based on conditions:
-
-```yaml
-apiVersion: cyphernetes-operator.cyphernet.es/v1
-kind: DynamicOperator
-metadata:
-  name: cleanup-operator
-  namespace: default
-spec:
-  resourceKind: jobs
-  namespace: default
-  onUpdate: |
-    MATCH (j:Job {name: "{{$.metadata.name}}"})
-    WHERE j.status.completionTime != NULL
-      AND j.status.succeeded > 0
-    DELETE j;
+You can easily template `DynamicOperator` resources using the cyphernetes cli:
+```bash
+cyphernetes operator create my-operator --on-create "MATCH (n) RETURN n" | kubectl apply -f -
 ```
 
-### Resource Validation
 
-Monitor and enforce cluster policies:
-
-```yaml
-apiVersion: cyphernetes-operator.cyphernet.es/v1
-kind: DynamicOperator
-metadata:
-  name: resource-validator
-  namespace: default
-spec:
-  resourceKind: pods
-  namespace: default
-  onCreate: |
-    MATCH (p:Pod {name: "{{$.metadata.name}}"})
-    WHERE NOT EXISTS(p.spec.containers[0].resources.limits)
-    DELETE p;
-```
-
-### Service Health Monitoring
-
-Monitor service health across the cluster:
-
-```yaml
-apiVersion: cyphernetes-operator.cyphernet.es/v1
-kind: DynamicOperator
-metadata:
-  name: service-health
-  namespace: default
-spec:
-  resourceKind: services
-  namespace: default
-  onUpdate: |
-    MATCH (s:Service {name: "{{$.metadata.name}}"})
-    WHERE NOT (s)->(:core.Endpoints)
-    DELETE s;
-```
-
-## Configuration
-
-### RBAC Configuration
-
-The operator requires specific RBAC permissions to function:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: cyphernetes-operator-role
-rules:
-- apiGroups: ["*"]
-  resources: ["*"]
-  verbs: ["*"]
-```
-
-## Monitoring
-
-### Operator Metrics
-
-The operator exposes Prometheus metrics at `/metrics`:
-
-- `cyphernetes_operator_reconciliations_total`
-- `cyphernetes_operator_query_duration_seconds`
-- `cyphernetes_operator_errors_total`
-
-### Health Checks
-
-Health and readiness probes are available at:
-- Liveness: `/healthz`
-- Readiness: `/readyz`
-
-## Best Practices
-
-1. **Use Namespaces**: Scope operators to specific namespaces when possible
-2. **Resource Limits**: Set appropriate resource limits for the operator
-3. **Monitor Logs**: Keep track of operator logs for debugging
-4. **Version Control**: Maintain operator configurations in version control
-
-## Troubleshooting
-
-Common issues and solutions:
-
-1. **Permission Errors**
-   - Verify RBAC configurations
-   - Check operator service account permissions
-
-2. **Query Timeouts**
-   - Optimize complex queries
-   - Adjust timeout settings
-
-3. **Resource Constraints**
-   - Monitor operator resource usage
-   - Adjust resource limits 

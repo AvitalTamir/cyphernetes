@@ -1,7 +1,6 @@
 <img width="1440" alt="Screenshot 2025-02-06 at 21 11 45" src="https://github.com/user-attachments/assets/d8eadc99-069e-4c95-aee6-b3530f890f03" />
 
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
-
 [![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
 [![Go Reference](https://pkg.go.dev/badge/github.com/avitaltamir/cyphernetes.svg)](https://pkg.go.dev/github.com/avitaltamir/cyphernetes)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -18,7 +17,7 @@ kubectl get pods --all-namespaces --field-selector 'status.phase!=Running' \
 
 Into this: 🤩 
 ```graphql
-# Do the same thing!
+// Do the same thing!
 
 MATCH (p:Pod)
 WHERE p.status.phase != "Running"
@@ -44,7 +43,7 @@ There are multiple ways to run Cyphernetes queries:
 
 ### Examples
 ```graphql
-# Get the desired and running replicas for all deployments
+// Get the desired and running replicas for all deployments
 MATCH (d:Deployment)
 RETURN d.spec.replicas AS desiredReplicas, 
        d.status.availableReplicas AS runningReplicas;
@@ -67,9 +66,9 @@ This feature is expressed using the arrows (`->`) you see in the example queries
 Relationships let us express connected operations in a natural way, and without having to worry about the underlying Kubernetes API:
 
 ```graphql
-# This is similar to `kubectl expose`
-> MATCH (d:Deployment {name: "nginx"})
-  CREATE (d)->(s:Service);
+// This is similar to `kubectl expose`
+MATCH (d:Deployment {name: "nginx"})
+CREATE (d)->(s:Service);
 
 Created services/nginx
 

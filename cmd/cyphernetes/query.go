@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -73,8 +75,27 @@ func runQuery(args []string, w io.Writer) {
 		return
 	}
 
+	// Get the query string
+	queryStr := args[0]
+
+	// Check if the input query consists only of comments and whitespace
+	isOnlyComments := true
+	potentialLines := strings.Split(queryStr, "\n")
+	for _, potentialLine := range potentialLines {
+		trimmedLine := strings.TrimSpace(potentialLine)
+		if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "//") {
+			isOnlyComments = false
+			break
+		}
+	}
+
+	if isOnlyComments {
+		// If only comments or empty, do nothing and exit cleanly.
+		return
+	}
+
 	// Parse the query to get an AST
-	ast, err := parseQuery(args[0])
+	ast, err := parseQuery(queryStr)
 	if err != nil {
 		fmt.Fprintln(w, "Error parsing query: ", err)
 		return
@@ -89,13 +110,13 @@ func runQuery(args []string, w io.Writer) {
 
 	// Marshal data based on the output format
 	var output []byte
-	if core.OutputFormat == "yaml" {
-		output, err = yaml.Marshal(results.Data)
-	} else { // core.OutputFormat == "json"
+	if core.OutputFormat == "json" {
 		output, err = json.MarshalIndent(results.Data, "", "  ")
-		if !returnRawJsonOutput {
+		if err == nil && !returnRawJsonOutput && term.IsTerminal(int(os.Stdout.Fd())) {
 			output = []byte(formatJson(string(output)))
 		}
+	} else {
+		output, err = yaml.Marshal(results.Data)
 	}
 
 	// Handle marshalling errors
