@@ -1,4 +1,4 @@
-<img width="1440" alt="Screenshot 2025-02-06 at 21 11 45" src="https://github.com/user-attachments/assets/d8eadc99-069e-4c95-aee6-b3530f890f03" />
+<img width="1440" alt="Cyphernetes Web UI" src="https://github.com/user-attachments/assets/ccbfc41f-ba52-4a65-8f88-f8991c74b90c" />
 
 ![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
 [![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
