@@ -61,6 +61,7 @@ This is a key feature of Cypher (and Cyphernetes) that is important to understan
 Note that the names of resources are always returned in the `name` field, even when not specified in the `RETURN` clause.
 
 ```graphql
+// Comments are supported
 MATCH (d:Deployment) RETURN d.spec.replicas
 ```
 
@@ -288,28 +289,28 @@ RETURN d.metadata.annotations.meta\.cyphernet\.es/foo-bar
 
 Examples:
 ```graphql
-# Get all deployments with more than 2 replicas
+// Get all deployments with more than 2 replicas
 MATCH (d:Deployment)
 WHERE d.spec.replicas > 2
 RETURN d.metadata.name, d.spec.replicas
 ```
 
 ```graphql
-# Get all pods that are not running
+// Get all pods that are not running
 MATCH (p:Pod)
 WHERE p.status.phase != "Running"
 RETURN p.metadata.name, p.status.phase
 ```
 
 ```graphql
-# Find all deployments scaled above zero and set their related ingresses' ingressClassName to "active"
+// Find all deployments scaled above zero and set their related ingresses' ingressClassName to "active"
 MATCH (d:Deployment)->(s:Service)->(i:Ingress)
 WHERE d.spec.replicas >= 1
 SET i.spec.ingressClassName = "active"
 ```
 
 ```graphql
-# Find all deployments that end with "api"
+// Find all deployments that end with "api"
 MATCH (d:Deployment)
 WHERE d.metadata.name =~ "^.*api$"
 RETURN d.spec
@@ -476,7 +477,7 @@ RETURN i.spec.rules,
 Sometimes you might want to match or operate on resources connected to another resource without knowing their kind in advance. Cyphernetes supports this through "kindless nodes" - nodes where you omit the kind label:
 
 ```graphql
-# Find all resources related to a deployment
+// Find all resources related to a deployment
 MATCH (d:Deployment {name: "nginx"})->(x)
 RETURN x.kind
 ```
@@ -493,7 +494,7 @@ This query will find and return all resources that have a relationship with the 
 Anonymous nodes are nodes without a variable name. They are useful when you want to express a relationship path but don't want to use the intermediate resources in a subsequent `RETURN`, `SET` or `DELETE` clause.
 
 ```graphql
-# Find all pods that are two relationships away from a deployment
+// Find all pods that are two relationships away from a deployment
 MATCH (cm:ConfigMap)->(:Pod)
 RETURN cm.data
 ```
@@ -501,7 +502,7 @@ RETURN cm.data
 For even more flexibility, you can use nodes that are both kindless and anonymous - nodes without both a variable name and kind:
 
 ```graphql
-# Find all pods that are two relationships away from a deployment
+// Find all pods that are two relationships away from a deployment
 MATCH (d:Deployment {name: "nginx"})->()->(p:Pod)
 RETURN p.metadata.name
 ```
