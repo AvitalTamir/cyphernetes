@@ -16,7 +16,7 @@ kubectl get pods --all-namespaces --field-selector 'status.phase!=Running' \
 ```
 
 Into this: 🤩 
-```cypher
+```graphql
 // Do the same thing!
 
 MATCH (p:Pod)
@@ -42,7 +42,7 @@ There are multiple ways to run Cyphernetes queries:
 5. Using the Cyphernetes API in your own Go programs.
 
 ### Examples
-```cypher
+```graphql
 // Get the desired and running replicas for all deployments
 MATCH (d:Deployment)
 RETURN d.spec.replicas AS desiredReplicas, 
@@ -65,7 +65,7 @@ Cyphernetes' superpower is understanding the relationships between Kubernetes re
 This feature is expressed using the arrows (`->`) you see in the example queries.
 Relationships let us express connected operations in a natural way, and without having to worry about the underlying Kubernetes API:
 
-```cypher
+```graphql
 // This is similar to `kubectl expose`
 MATCH (d:Deployment {name: "nginx"})
 CREATE (d)->(s:Service);
