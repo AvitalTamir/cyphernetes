@@ -39,17 +39,25 @@ Different ways to express relationships between resources:
 MATCH (p:Pod)->(s:Service)
 RETURN p.metadata.name, s.metadata.name;
 
-// Left direction relationship
-MATCH (s:Service)<-(p:Pod)
+// Relationship direction doesn't matter
+MATCH (p:Pod)<-(s:Service)
 RETURN p.metadata.name, s.metadata.name;
 
-// Multiple relationships
+// Chained relationships
 MATCH (d:Deployment)->(rs:ReplicaSet)->(p:Pod)
 RETURN d.metadata.name, rs.metadata.name, p.metadata.name;
 
-// Anonymous relationships
+// Anonymous, kindless relationships
 MATCH (d:Deployment)->()->(p:Pod)
 RETURN d.metadata.name, p.metadata.name;
+
+// Find all resources related to a deployment
+MATCH (d:Deployment {app: "my-app"})->(x)
+RETURN d, x.kind, x.metadata.name;
+
+// Complex relationship chains
+MATCH (d:Deployment {app: "my-app"})->(rs:ReplicaSet)->(p:Pod)->(s:Service)->(i:Ingress)
+RETURN d.metadata.name, rs.metadata.name, p.metadata.name, s.metadata.name, i.metadata.name;
 ```
 
 ## Resource Management
@@ -59,10 +67,10 @@ RETURN d.metadata.name, p.metadata.name;
 Find and manage pods in your cluster:
 
 ```graphql
-// List all pods that aren't running
+// Delete all pods that aren't running
 MATCH (p:Pod)
 WHERE p.status.phase != "Running"
-RETURN p.metadata.name, p.status.phase;
+DELETE p;
 
 // Find pods with no node assigned
 MATCH (p:Pod)
@@ -71,18 +79,13 @@ RETURN p.metadata.name;
 
 // Find pods with specific labels (with escaped dots)
 MATCH (p:Pod)
-WHERE p.metadata.labels.\kubernetes\.io/name = "nginx"
+WHERE p.metadata.labels.kubernetes\.io/name = "nginx"
 RETURN p.metadata.name;
 
 // Find pods with high restart counts
 MATCH (p:Pod)
 WHERE p.status.containerStatuses[0].restartCount > 5
 RETURN p.metadata.name, p.status.containerStatuses[0].restartCount;
-
-// Delete pods that were created more than 7 days ago
-MATCH (p:Pod)
-WHERE p.metadata.creationTimestamp < datetime() - duration("P7D")
-DELETE p;
 ```
 
 ### Deployment Management
@@ -109,11 +112,28 @@ SET d.spec.template.spec.containers[0].image = "nginx:latest"
 RETURN d.metadata.name;
 ```
 
-## Service Discovery
+### Cluster Maintenance
+
+```graphql
+// Find configmaps not used by any pod
+MATCH (cm:ConfigMap)
+WHERE NOT (cm)->(:Pod)
+RETURN cm.metadata.name;
+
+// Find orphaned PersistentVolumeClaims
+MATCH (pvc:PersistentVolumeClaim)
+WHERE NOT (pvc)->(:PersistentVolume)
+AND pvc.status.phase != "Bound"
+RETURN pvc.metadata.name;
+
+// Delete pods that are not running and were created more than 7 days ago
+MATCH (p:Pod)
+WHERE p.status.phase != "Running"
+AND p.metadata.creationTimestamp < datetime() - duration("P7D")
+DELETE p;
+```
 
 ### Service and Endpoint Analysis
-
-Analyze services and their endpoints:
 
 ```graphql
 // Find services without endpoints
@@ -122,32 +142,11 @@ WHERE NOT (s)->(:core.Endpoints)
 RETURN s.metadata.name;
 
 // Find services with specific labels
-MATCH (s:Service)
-WHERE s.metadata.labels.app = "frontend"
+MATCH (s:Service {app: "frontend"})
 RETURN s.metadata.name;
 
 // Find services in multiple contexts
 IN production, staging
-MATCH (s:Service)
+MATCH (s:Service {name: "api"})
 RETURN s.metadata.name, s.spec.clusterIP;
-```
-
-## Resource Relationships
-
-### Cross-Resource Queries
-
-Find relationships between different resource types:
-
-```graphql
-// Find all resources related to a deployment
-MATCH (d:Deployment {app: "my-app"})->(x)
-RETURN d, x.kind, x.metadata.name;
-
-// Find configmaps used by pods
-MATCH (p:Pod)->(c:ConfigMap)
-RETURN p.metadata.name, c.metadata.name;
-
-// Complex relationship chains
-MATCH (d:Deployment {app: "my-app"})->(rs:ReplicaSet)->(p:Pod)->(s:Service)->(i:Ingress)
-RETURN d.metadata.name, rs.metadata.name, p.metadata.name, s.metadata.name, i.metadata.name;
 ```
