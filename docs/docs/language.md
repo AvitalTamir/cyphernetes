@@ -21,15 +21,6 @@ Let's draw a circle using parenthesis:
 ```
 
 This is called a _node_. Nodes are the basic building blocks of the Kubernetes resource graph.
-
-Imagine a flow diagram, where each node represents a Kubernetes resource, and the edges (arrows) between them represent the relationships between the resources:
-
-```graphql
-()->()
-```
-
-This is Cyphernetes in a nutshell. You draw a diagram of the resources you want to work with, and Cyphernetes will translate it into the appropriate Kubernetes API calls.
-
 Nodes are usually not empty. They tend to look more like this:
 
 ```graphql
@@ -37,35 +28,41 @@ Nodes are usually not empty. They tend to look more like this:
 ```
 
 This node contains a _variable_ (in this example it's called `p`), followed by a colon, followed by a _label_ (in our case, it's `Pod`).
-
 We assign variable names to nodes so we can refer to them later in the query. Labels are used to specify the node's Kubernetes resource kind.
 
-When specifying the label we can use the resource's singular name, plural name or shortname, just like in kubectl.
-Unlike kubectl, labels in Cyphernetes are case-insensitive, so `(p:Pod)`, `(p:POD)`, `(p:pod)`, `(p:pods)`, `(p:po)` etc. are all legal and mean the same.
+> 💡 Variable names are allowed to be mixed-case and have any length. Labels may also be mixed-case.
+> Unlike labels, variable names are case-sensitive, so `(d:Deployment)` and `(D:Deployment)` are not the same.
 
-This document adheres to a convention of using minified, lowercase variable names and CamelCase, singular-name labels i.e. `(d:Deployment)`, `(rs:ReplicaSet)` - however this is completely up to the user.
+Now, imagine a flow chart where each node represents a Kubernetes resource, and the edges (arrows) between them represent the relationships between the resources:
 
-Variable names are allowed to be mixed-case and have any length. Labels may also be mixed-case.
-Unlike labels, variable names are case-sensitive, so `(d:Deployment)` and `(D:Deployment)` are not the same.
+```graphql
+(d:Deployment)->(s:Service)
+```
+
+This is Cyphernetes in a nutshell. You draw a pattern of the resources you want to work with, Cyphernetes will then match all instances of this pattern on the current context, and translate it into the appropriate Kubernetes API calls. The arrow `->` is used to express a relationship between two nodes.
+This pattern will match all Deployments that are exposed by a Service. It will not match Deployments that are not exposed, or Services that do not expose any Deployments.
+
+This is a key feature of Cypher (and Cyphernetes): **We act on patterns** - and only select resources that exactly match the patterns we draw.
+
+> 💡 When specifying the label we can use the resource's singular name, plural name or shortname, just like in kubectl.
+> Unlike kubectl, labels in Cyphernetes are case-insensitive, so `(p:Pod)`, `(p:POD)`, `(p:pod)`, `(p:pods)`, `(p:po)` etc. are all legal and mean the same.
+> This document adheres to a convention of using minified, lowercase variable names and CamelCase, singular-name labels i.e. `(d:Deployment)`, `(rs:ReplicaSet)` - however this is completely up to the user.
 
 ## Reading Resources from the Graph
 
 To query the Kubernetes resource graph, we use `MATCH`/`RETURN` expressions.
-`MATCH` is used to "draw" a pattern of resources, and will select all instances that match the pattern.
-
-For example, `MATCH (d:Deployment)->(s:Service)` will ONLY select Deployments that are connected to a Service - i.e. exposed Deployments. It will not select any other Deployments that don't have a Service exposing them, or any Services that have selectors that don't match any Deployment.
-
-This is a key feature of Cypher (and Cyphernetes) that is important to understand: **We act on patterns** - and only select resources that exactly match the pattern we draw.
+In the `MATCH` clause we draw a pattern or patterns of resources.
 
 `RETURN` is then used to organize the results. It takes a list of comma-separated JSONPaths, and returns the results in a JSON object, allowing us to easily craft a custom payload that only contains the fields we need.
-Note that the names of resources are always returned in the `name` field, even when not specified in the `RETURN` clause.
+
+> 💡 Note that the names of resources are always returned in the special `name` field, even when not specified in the `RETURN` clause.
 
 ```graphql
 // Comments are supported
 MATCH (d:Deployment) RETURN d.spec.replicas
 ```
 
-This query will match all Deployments in the current context, and return their names:
+This query will match all Deployments in the current context and return their desired replica count (as well as their name):
 
 ```json
 {
@@ -126,13 +123,20 @@ This query will match all Deployments in the current context, and return a custo
 ```
 
 The returned payload is a JSON object that contains a key for every variable defined in the `RETURN` clause.
-Each of these keys' value is an array of Kubernetes resources that matched the respective node pattern in the `MATCH` clause. Unlike kubectl, Cyphernetes will **always return an array**, even if only one or zero resources were matched.
+Each of these keys' value is a list of Kubernetes resources that matched the respective node pattern in the `MATCH` clause.
 
-The payload will only include the fields requested in the `RETURN` clause. If only the variable name is specified in the `RETURN` clause, the payload will include the entire Kubernetes resource.
+> 💡 Unlike kubectl, Cyphernetes will **always return a list** (a JSON array), even if only one or zero resources were matched.
+
+The payload will only include the fields requested in the `RETURN` clause - as well as the `name` field, which is always present. To see the full resource, we simply return the variable name:
+
+```graphql
+MATCH (d:Deployment)
+RETURN d
+```
 
 ## Context
 
-> Some Cyphernetes programs will allow you to change the default namespace or context, but this is beyond the scope of this document, which is focused on the Cyphernetes query language itself.
+> 💡 Some Cyphernetes programs may allow you to change the default namespace or context using command line arguments and UI elements, but this is beyond the scope of this document which is focused on the Cyphernetes query language itself.
 
 By default, Cyphernetes will query the current context (as defined by `kubectl config current-context`).
 If no namespace is specified in the current context, Cyphernetes will default to using the `default` namespace, similar to kubectl.
@@ -194,7 +198,7 @@ The results will be prefixed with the context name, followed by an underscore:
 A node may contain an optional set of properties. Node properties let us query the resource by name or by any of it's labels.
 
 ```graphql
-MATCH (d:Deployment {name: "nginx-internal"})
+MATCH (d:Deployment {name: "nginx-internal", app: "nginx"})
 RETURN d.metadata.labels,
        d.spec.template.spec.containers[0].image
 ```
