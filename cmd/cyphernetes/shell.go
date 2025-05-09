@@ -17,6 +17,7 @@ import (
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
+	"github.com/samber/lo"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
 	"gopkg.in/yaml.v3"
@@ -502,6 +503,39 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			executor.Provider().ToggleDryRun()
 			DryRun = !DryRun
 			fmt.Printf("Dry-run mode: %t\n\n", DryRun)
+		} else if input == "\\rr" {
+			// Fetch all configured relationship rules
+			rules := lo.Map(core.GetRelationshipRules(), func(rule core.RelationshipRule, _ int) core.RelationshipType { return rule.Relationship })
+
+			serializedRules, err := json.MarshalIndent(rules, "", "  ")
+			if err != nil {
+				fmt.Printf("Error >> %s\n", err)
+				continue
+			}
+
+			fmt.Println(formatJson(string(serializedRules)))
+		} else if strings.HasPrefix(input, "\\rl") {
+			// Describe relationship rule
+			input = strings.TrimPrefix(input, "\\rl")
+			input = strings.TrimSpace(input)
+
+			if strings.ToUpper(input) == "" {
+				fmt.Println("Rule cannot be empty. Usage: \\rl <relationship>|all") // ? all realy needed
+				continue
+			} else {
+				rule, ok := lo.Find(core.GetRelationshipRules(), func(rule core.RelationshipRule) bool { return string(rule.Relationship) == input })
+				if !ok {
+					fmt.Printf("Error >> not found %s\n", input)
+				}
+
+				serializedRule, err := json.Marshal(rule)
+				if err != nil {
+					fmt.Printf("Error >> %s\n", err)
+					continue
+				}
+
+				fmt.Println(formatJson(string(serializedRule)))
+			}
 		} else if input == "help" {
 			printHelp()
 		} else if input != "" { // This check remains, but isOnlyComments handles the case where input is non-empty but has no executable content
