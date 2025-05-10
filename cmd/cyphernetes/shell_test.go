@@ -263,9 +263,9 @@ func Test_listRelationshipRules(t *testing.T) {
 	}
 }
 
-// AI: переведи комментарии в этой функции на английский язык AI!
 func validateJSONArray(input string) bool {
-	// Проверяем, что это валидный JSON массив
+
+	// Check if this is a valid JSON array
 	var items []string
 	if err := json.Unmarshal([]byte(input), &items); err != nil {
 		return false
