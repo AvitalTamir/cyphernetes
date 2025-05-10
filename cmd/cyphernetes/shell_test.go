@@ -271,9 +271,9 @@ func validateJSONArray(input string) bool {
 	if err := json.Unmarshal([]byte(input), &items); err != nil {
 		return false
 	}
-	// AI: переведи этот комментарий на английский язык
-	// Регулярное выражение для проверки каждого элемента
-	// Формат: "UPPERCASE_WITH_UNDERSCORES" или "UPPERCASE_WITH_UNDERSCORES_AND_INSPEC" AI!
+
+	// Regular expression pattern to validate each item
+	// Format: "ALPHANUMERIC_WITH_UNDERSCORES" or "ALPHANUMERIC_WITH_UNDERSCORES_AND_INSPEC"
 	pattern := `^[A-Z]+(_[A-Z]+)*(?:_INSPEC_[A-Z]+)?$`
 	re := regexp.MustCompile(pattern)
 
@@ -284,4 +284,40 @@ func validateJSONArray(input string) bool {
 	}
 
 	return true
+}
+
+func Test_describeRelationshipRule(t *testing.T) {
+	type args struct {
+		input string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    string(core.GetRelationshipRules()[0].Relationship),
+			args:    args{input: string(core.GetRelationshipRules()[0].Relationship)},
+			want:    "{\"KindA\":\"pods\",\"KindB\":\"replicasets\",\"Relationship\":\"REPLICASET_OWN_POD\",\"MatchCriteria\":[{\"FieldA\":\"$.metadata.ownerReferences[].name\",\"FieldB\":\"$.metadata.name\",\"ComparisonType\":\"ExactMatch\",\"DefaultProps\":null}]}",
+			wantErr: false,
+		},
+		{
+			name:    "non-existatnt",
+			args:    args{input: "non-existatnt"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := describeRelationshipRule(tt.args.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("describeRelationshipRule() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("describeRelationshipRule() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

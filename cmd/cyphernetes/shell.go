@@ -17,7 +17,6 @@ import (
 	colorjson "github.com/TylerBrock/colorjson"
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
-	"github.com/samber/lo"
 	cobra "github.com/spf13/cobra"
 	"github.com/wader/readline"
 	"gopkg.in/yaml.v3"
@@ -505,36 +504,29 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			fmt.Printf("Dry-run mode: %t\n\n", DryRun)
 		} else if input == "\\rr" {
 			// Fetch all configured relationship rules
-			rules := lo.Map(core.GetRelationshipRules(), func(rule core.RelationshipRule, _ int) core.RelationshipType { return rule.Relationship })
-
-			serializedRules, err := json.MarshalIndent(rules, "", "  ")
+			rules, err := listRelationshipRules()
 			if err != nil {
 				fmt.Printf("Error >> %s\n", err)
 				continue
 			}
 
-			fmt.Println(formatJson(string(serializedRules)))
+			fmt.Println(formatJson(rules))
 		} else if strings.HasPrefix(input, "\\rl") {
 			// Describe relationship rule
 			input = strings.TrimPrefix(input, "\\rl")
 			input = strings.TrimSpace(input)
 
 			if strings.ToUpper(input) == "" {
-				fmt.Println("Rule cannot be empty. Usage: \\rl <relationship>|all") // ? all realy needed
+				fmt.Println("Rule cannot be empty. Usage: \\rl <relationship>")
 				continue
 			} else {
-				rule, ok := lo.Find(core.GetRelationshipRules(), func(rule core.RelationshipRule) bool { return string(rule.Relationship) == input })
-				if !ok {
-					fmt.Printf("Error >> not found %s\n", input)
-				}
-
-				serializedRule, err := json.Marshal(rule)
+				rule, err := describeRelationshipRule(input)
 				if err != nil {
 					fmt.Printf("Error >> %s\n", err)
 					continue
 				}
 
-				fmt.Println(formatJson(string(serializedRule)))
+				fmt.Println(formatJson(rule))
 			}
 		} else if input == "help" {
 			printHelp()
@@ -793,6 +785,31 @@ func wrapInColor(input string, color int) string {
 	return fmt.Sprintf("\033[%dm%s\033[0m", color, input)
 }
 
+func listRelationshipRules() (string, error) {
+	rules := core.Map(core.GetRelationshipRules(), func(rule core.RelationshipRule, _ int) core.RelationshipType { return rule.Relationship })
+
+	serializedRules, err := json.MarshalIndent(rules, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	return string(serializedRules), nil
+}
+
+func describeRelationshipRule(input string) (string, error) {
+	rule, ok := core.Find(core.GetRelationshipRules(), func(rule core.RelationshipRule) bool { return string(rule.Relationship) == input })
+	if !ok {
+		return "", fmt.Errorf("relationship rule '%s' not found", input)
+	}
+
+	serializedRule, err := json.Marshal(rule)
+	if err != nil {
+		return "", err
+	}
+
+	return string(serializedRule), nil
+}
+
 func InitShell() {
 	if executor == nil {
 		return
@@ -845,19 +862,22 @@ func printHelp() {
 %s
 %s
 %s
-
-%s
-%s
-%s
-
-%s
-%s
-%s
 %s
 %s
 
 %s
-%s`,
+%s
+%s
+
+%s
+%s
+%s
+%s
+%s
+
+%s
+%s
+`,
 		formatSection("Commands:"),
 		formatCmd("\\h, \\help", "Show this help"),
 		formatCmd("\\q, \\quit, \\exit", "Exit the shell"),
@@ -871,6 +891,8 @@ func printHelp() {
 		formatCmd("\\m, \\multiline", "Toggle multiline input mode"),
 		formatCmd("\\r, \\raw", "Toggle raw JSON output"),
 		formatCmd("\\dr, \\dry-run", "Toggle dry-run mode"),
+		formatCmd("\\rr, \\relationship-rules", "List available relationship rules"),
+		formatCmd("\\rl, \\relationship-rule <rule-name>", "Describe relationship rule"),
 
 		formatSection("\nQuery syntax:"),
 		wrapInColor("  MATCH (n:Pod) RETURN n;", descColor),
