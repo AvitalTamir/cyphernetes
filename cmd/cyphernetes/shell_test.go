@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/wader/readline"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 func TestShellPrompt(t *testing.T) {
@@ -234,4 +237,50 @@ func TestExecuteMacro(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_listRelationshipRules(t *testing.T) {
+	tests := []struct {
+		name    string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "Success",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := listRelationshipRules()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("listRelationshipRules() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("listRelationshipRules() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// AI: переведи комментарии в этой функции на английский язык AI!
+func validateJSONArray(input string) bool {
+	// Проверяем, что это валидный JSON массив
+	var items []string
+	if err := json.Unmarshal([]byte(input), &items); err != nil {
+		return false
+	}
+
+	// Регулярное выражение для проверки каждого элемента
+	// Формат: "UPPERCASE_WITH_UNDERSCORES" или "UPPERCASE_WITH_UNDERSCORES_AND_INSPEC"
+	pattern := `^[A-Z]+(_[A-Z]+)*(?:_INSPEC_[A-Z]+)?$`
+	re := regexp.MustCompile(pattern)
+
+	for _, item := range items {
+		if !re.MatchString(item) {
+			return false
+		}
+	}
+
+	return true
 }
