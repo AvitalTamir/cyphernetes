@@ -270,7 +270,7 @@ func validateJSONArray(input string) bool {
 	if err := json.Unmarshal([]byte(input), &items); err != nil {
 		return false
 	}
-
+	// AI: переведи этот комментарий на английский язык AI!
 	// Регулярное выражение для проверки каждого элемента
 	// Формат: "UPPERCASE_WITH_UNDERSCORES" или "UPPERCASE_WITH_UNDERSCORES_AND_INSPEC"
 	pattern := `^[A-Z]+(_[A-Z]+)*(?:_INSPEC_[A-Z]+)?$`
