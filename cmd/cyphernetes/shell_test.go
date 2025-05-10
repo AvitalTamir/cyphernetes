@@ -242,11 +242,13 @@ func TestExecuteMacro(t *testing.T) {
 func Test_listRelationshipRules(t *testing.T) {
 	tests := []struct {
 		name    string
-		want    string
+		want    bool
 		wantErr bool
 	}{
 		{
-			name: "Success",
+			name:    "Success",
+			want:    true,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -256,23 +258,22 @@ func Test_listRelationshipRules(t *testing.T) {
 				t.Errorf("listRelationshipRules() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("listRelationshipRules() = %v, want %v", got, tt.want)
+			if validateJSONArray(got) != tt.want {
+				t.Errorf("listRelationshipRules() = %v, invalid json", got)
 			}
 		})
 	}
 }
 
 func validateJSONArray(input string) bool {
-
 	// Check if this is a valid JSON array
 	var items []string
 	if err := json.Unmarshal([]byte(input), &items); err != nil {
 		return false
 	}
-	// AI: переведи этот комментарий на английский язык AI!
+	// AI: переведи этот комментарий на английский язык
 	// Регулярное выражение для проверки каждого элемента
-	// Формат: "UPPERCASE_WITH_UNDERSCORES" или "UPPERCASE_WITH_UNDERSCORES_AND_INSPEC"
+	// Формат: "UPPERCASE_WITH_UNDERSCORES" или "UPPERCASE_WITH_UNDERSCORES_AND_INSPEC" AI!
 	pattern := `^[A-Z]+(_[A-Z]+)*(?:_INSPEC_[A-Z]+)?$`
 	re := regexp.MustCompile(pattern)
 
