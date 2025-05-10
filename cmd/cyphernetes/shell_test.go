@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/wader/readline"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 func TestShellPrompt(t *testing.T) {
@@ -231,6 +234,89 @@ func TestExecuteMacro(t *testing.T) {
 				if result != tt.expectedResult {
 					t.Errorf("Expected result %q, but got %q", tt.expectedResult, result)
 				}
+			}
+		})
+	}
+}
+
+func Test_listRelationshipRules(t *testing.T) {
+	tests := []struct {
+		name    string
+		want    bool
+		wantErr bool
+	}{
+		{
+			name:    "Success",
+			want:    true,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := listRelationshipRules()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("listRelationshipRules() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if validateJSONArray(got) != tt.want {
+				t.Errorf("listRelationshipRules() = %v, invalid json", got)
+			}
+		})
+	}
+}
+
+func validateJSONArray(input string) bool {
+	// Check if this is a valid JSON array
+	var items []string
+	if err := json.Unmarshal([]byte(input), &items); err != nil {
+		return false
+	}
+
+	// Regular expression pattern to validate each item
+	// Format: "ALPHANUMERIC_WITH_UNDERSCORES" or "ALPHANUMERIC_WITH_UNDERSCORES_AND_INSPEC"
+	pattern := `^[A-Z]+(_[A-Z]+)*(?:_INSPEC_[A-Z]+)?$`
+	re := regexp.MustCompile(pattern)
+
+	for _, item := range items {
+		if !re.MatchString(item) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func Test_describeRelationshipRule(t *testing.T) {
+	type args struct {
+		input string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    string(core.GetRelationshipRules()[0].Relationship),
+			args:    args{input: string(core.GetRelationshipRules()[0].Relationship)},
+			want:    "{\"KindA\":\"pods\",\"KindB\":\"replicasets\",\"Relationship\":\"REPLICASET_OWN_POD\",\"MatchCriteria\":[{\"FieldA\":\"$.metadata.ownerReferences[].name\",\"FieldB\":\"$.metadata.name\",\"ComparisonType\":\"ExactMatch\",\"DefaultProps\":null}]}",
+			wantErr: false,
+		},
+		{
+			name:    "non-existatnt",
+			args:    args{input: "non-existatnt"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := describeRelationshipRule(tt.args.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("describeRelationshipRule() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("describeRelationshipRule() = %v, want %v", got, tt.want)
 			}
 		})
 	}
