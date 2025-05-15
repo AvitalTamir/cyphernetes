@@ -1,10 +1,12 @@
-<img width="1440" alt="Cyphernetes Web UI" src="https://github.com/user-attachments/assets/ccbfc41f-ba52-4a65-8f88-f8991c74b90c" />
-
-![Cyphernetes Logo (3 5 x 1 2 in)](https://github.com/user-attachments/assets/2e0a92ce-26a6-4918-bc07-3747c2fe1464)
 [![Go Report Card](https://goreportcard.com/badge/github.com/avitaltamir/cyphernetes)](https://goreportcard.com/report/github.com/avitaltamir/cyphernetes)
 [![Go Reference](https://pkg.go.dev/badge/github.com/avitaltamir/cyphernetes.svg)](https://pkg.go.dev/github.com/avitaltamir/cyphernetes)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/cyphernetes-operator)](https://artifacthub.io/packages/search?repo=cyphernetes-operator)
+<br /><br /><br /><br />
+![cyphernetes_logo_full_transparent_small](https://github.com/user-attachments/assets/24c77d6d-e8e2-431b-8279-aa941ccf208d)
+<br /><br /><br /><br />
+<img width="1440" alt="Cyphernetes Web UI" src="https://github.com/user-attachments/assets/ccbfc41f-ba52-4a65-8f88-f8991c74b90c" />
+<br /><br /><br /><br />
 
 Cyphernetes turns this: 😣
 ```bash
