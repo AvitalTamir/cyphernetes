@@ -183,73 +183,88 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 				if parentGVR != (schema.GroupVersionResource{}) {
 					relatedKindSingularFromParentGVR := parentGVR.Resource
 
-					// Use the standard INSPEC relationship format instead of creating a special BY_PARENT_FIELD rule
-					relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
-						strings.ToUpper(relatedKindSingularFromParentGVR),
-						strings.ToUpper(kindANameSingular)))
-
 					ruleKindA := strings.ToLower(gvrA.Resource)
 					ruleKindB := strings.ToLower(relatedKindSingularFromParentGVR)
 
-					var kindAFull string
-					if gvrA.Group != "" {
-						kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
-					} else {
-						kindAFull = "core." + ruleKindA
-					}
+					// First, check if a relationship rule already exists between these kinds
+					existingRuleIndex, found := findExistingRelationshipRule(ruleKindA, ruleKindB, provider)
 
-					var kindBFullName string
-					if parentGVR.Group != "" {
-						kindBFullName = fmt.Sprintf("%s.%s", parentGVR.Resource, parentGVR.Group)
-					} else {
-						kindBFullName = "core." + ruleKindB
-					}
+					if found {
+						// Use the existing relationship type for consistency
+						existingRelType := relationshipRules[existingRuleIndex].Relationship
+						debugLog("Found existing relationship rule %s for %s -> %s", existingRelType, ruleKindA, ruleKindB)
 
-					if tempPotentialKinds[kindAFull] == nil {
-						tempPotentialKinds[kindAFull] = make(map[string]bool)
-					}
-					if tempPotentialKinds[kindBFullName] == nil {
-						tempPotentialKinds[kindBFullName] = make(map[string]bool)
-					}
-					tempPotentialKinds[kindAFull][kindBFullName] = true
-					tempPotentialKinds[kindBFullName][kindAFull] = true
+						// Create the new criterion
+						fieldA := "$." + fieldPath  // Path to the "name" field itself
+						fieldB := "$.metadata.name" // Standard target
 
-					fieldA := "$." + fieldPath  // Path to the "name" field itself
-					fieldB := "$.metadata.name" // Standard target
-
-					debugLog("Creating relationship rule (parent GVR) for: %s -> %s with fields: %s -> %s for relType: %s", ruleKindA, ruleKindB, fieldA, fieldB, relType)
-					criterion := MatchCriterion{
-						FieldA:         fieldA,
-						FieldB:         fieldB,
-						ComparisonType: ExactMatch,
-					}
-
-					existingRuleIndex := -1
-					for i, r := range relationshipRules {
-						if r.KindA == ruleKindA && r.KindB == ruleKindB && r.Relationship == relType {
-							existingRuleIndex = i
-							break
+						criterion := MatchCriterion{
+							FieldA:         fieldA,
+							FieldB:         fieldB,
+							ComparisonType: ExactMatch,
 						}
-					}
 
-					if existingRuleIndex >= 0 {
-						debugLog("Adding criterion to existing rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
-						// Prevent adding duplicate criterion
+						// Check for duplicate criterion
 						alreadyExists := false
 						for _, existingCrit := range relationshipRules[existingRuleIndex].MatchCriteria {
-							if existingCrit.FieldA == criterion.FieldA && existingCrit.FieldB == criterion.FieldB && existingCrit.ComparisonType == criterion.ComparisonType {
+							if existingCrit.FieldA == criterion.FieldA &&
+								existingCrit.FieldB == criterion.FieldB &&
+								existingCrit.ComparisonType == criterion.ComparisonType {
 								alreadyExists = true
 								break
 							}
 						}
+
 						if !alreadyExists {
+							// Add new criterion to existing rule
+							debugLog("Adding criterion to existing rule %s for: %s -> %s", existingRelType, ruleKindA, ruleKindB)
 							relationshipRules[existingRuleIndex].MatchCriteria = append(
 								relationshipRules[existingRuleIndex].MatchCriteria,
 								criterion,
 							)
 						}
 					} else {
-						debugLog("Creating new relationship rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
+						// Create a new relationship using standard INSPEC format
+						relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+							strings.ToUpper(relatedKindSingularFromParentGVR),
+							strings.ToUpper(kindANameSingular)))
+
+						// Create potential kinds entries
+						var kindAFull string
+						if gvrA.Group != "" {
+							kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
+						} else {
+							kindAFull = "core." + ruleKindA
+						}
+
+						var kindBFullName string
+						if parentGVR.Group != "" {
+							kindBFullName = fmt.Sprintf("%s.%s", parentGVR.Resource, parentGVR.Group)
+						} else {
+							kindBFullName = "core." + ruleKindB
+						}
+
+						if tempPotentialKinds[kindAFull] == nil {
+							tempPotentialKinds[kindAFull] = make(map[string]bool)
+						}
+						if tempPotentialKinds[kindBFullName] == nil {
+							tempPotentialKinds[kindBFullName] = make(map[string]bool)
+						}
+						tempPotentialKinds[kindAFull][kindBFullName] = true
+						tempPotentialKinds[kindBFullName][kindAFull] = true
+
+						fieldA := "$." + fieldPath  // Path to the "name" field itself
+						fieldB := "$.metadata.name" // Standard target
+
+						debugLog("Creating new relationship rule for: %s -> %s with fields: %s -> %s for relType: %s", ruleKindA, ruleKindB, fieldA, fieldB, relType)
+						criterion := MatchCriterion{
+							FieldA:         fieldA,
+							FieldB:         fieldB,
+							ComparisonType: ExactMatch,
+						}
+
+						// Create new rule
+						debugLog("Creating new relationship rule for: %s -> %s", ruleKindA, ruleKindB)
 						rule := RelationshipRule{
 							KindA:         ruleKindA,
 							KindB:         ruleKindB,
@@ -259,6 +274,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 						relationshipRules = append(relationshipRules, rule)
 						relationshipCount++
 					}
+
 					processedThisField = true // Mark as processed by parent GVR logic
 				}
 			}
@@ -811,4 +827,35 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	resultMapMutex.Unlock()
 
 	return filteredA || filteredB, nil
+}
+
+// New helper function to find an existing relationship rule for given kinds, using GVR resolution
+func findExistingRelationshipRule(kindA, kindB string, provider provider.Provider) (int, bool) {
+	kindAGVR, errA := provider.FindGVR(kindA)
+	kindBGVR, errB := provider.FindGVR(kindB)
+
+	if errA != nil || errB != nil {
+		return -1, false
+	}
+
+	for i, rule := range relationshipRules {
+		// Skip special rules like NAMESPACE_HAS_RESOURCE
+		if rule.Relationship == NamespaceHasResource {
+			continue
+		}
+
+		ruleKindAGVR, errRA := provider.FindGVR(rule.KindA)
+		ruleKindBGVR, errRB := provider.FindGVR(rule.KindB)
+
+		if errRA != nil || errRB != nil {
+			continue
+		}
+
+		// Check if this rule connects the same resource kinds (in same order)
+		if ruleKindAGVR == kindAGVR && ruleKindBGVR == kindBGVR {
+			return i, true
+		}
+	}
+
+	return -1, false
 }
