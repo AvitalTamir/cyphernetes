@@ -529,7 +529,7 @@ func GetRelationships() map[string][]string {
 	return relationships
 }
 
-// New helper function to find all relationship rules between two kinds
+// Modified to handle rules with similar relationship types
 func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
 	var matchingRules []RelationshipRule
 
@@ -561,6 +561,61 @@ func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
 	})
 
 	return matchingRules
+}
+
+// Helper function to check if two relationship rules relate to the same resources
+// without requiring exact type name matching
+func areRelatedRules(ruleA, ruleB RelationshipRule, provider provider.Provider) bool {
+	// If the kinds and direction are the same, they are related
+	if (strings.EqualFold(ruleA.KindA, ruleB.KindA) && strings.EqualFold(ruleA.KindB, ruleB.KindB)) ||
+		(strings.EqualFold(ruleA.KindA, ruleB.KindB) && strings.EqualFold(ruleA.KindB, ruleB.KindA)) {
+		return true
+	}
+
+	// Try to resolve the GVRs for both rules
+	// This will handle cases where one rule uses "configmap" and another uses "configmaps"
+	// since the Kubernetes API will resolve both to the same GVR
+	kindA1, _ := provider.FindGVR(ruleA.KindA)
+	kindB1, _ := provider.FindGVR(ruleA.KindB)
+	kindA2, _ := provider.FindGVR(ruleB.KindA)
+	kindB2, _ := provider.FindGVR(ruleB.KindB)
+
+	// If the resolved GVRs match in any direction, the rules are related
+	return (kindA1 == kindA2 && kindB1 == kindB2) || (kindA1 == kindB2 && kindB1 == kindA2)
+}
+
+// Consolidate matching criteria from multiple rules into a single rule
+func consolidateMatchingRules(rules []RelationshipRule, provider provider.Provider) RelationshipRule {
+	if len(rules) == 0 {
+		return RelationshipRule{}
+	}
+
+	// Start with the first rule (highest priority one)
+	consolidated := rules[0]
+
+	// For each additional rule, check if it relates to the same resources
+	for i := 1; i < len(rules); i++ {
+		// Use the provider to determine if the rules connect the same resources
+		if areRelatedRules(consolidated, rules[i], provider) {
+			// Add each criterion from the similar rule if it's not already present
+			for _, crit := range rules[i].MatchCriteria {
+				alreadyExists := false
+				for _, existingCrit := range consolidated.MatchCriteria {
+					if existingCrit.FieldA == crit.FieldA &&
+						existingCrit.FieldB == crit.FieldB &&
+						existingCrit.ComparisonType == crit.ComparisonType {
+						alreadyExists = true
+						break
+					}
+				}
+				if !alreadyExists {
+					consolidated.MatchCriteria = append(consolidated.MatchCriteria, crit)
+				}
+			}
+		}
+	}
+
+	return consolidated
 }
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
@@ -605,7 +660,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		relType = NamespaceHasResource
 	}
 
-	// Find all possible rules between these kinds instead of just one
+	// Find all possible rules between these kinds
 	if relType == "" {
 		matchingRules := findRelationshipRulesBetweenKinds(leftKind.Resource, rightKind.Resource)
 
@@ -614,8 +669,28 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 			return false, fmt.Errorf("relationship type not found between %s and %s", leftKind.Resource, rightKind.Resource)
 		}
 
-		// Use the highest priority rule's relationship type (first one after sorting)
-		relType = matchingRules[0].Relationship
+		// Check if we have multiple rules to consolidate
+		if len(matchingRules) > 1 {
+			// Consolidate criteria from related rules
+			consolidatedRule := consolidateMatchingRules(matchingRules, q.provider)
+			// Use the consolidated rule's relationship type
+			relType = consolidatedRule.Relationship
+
+			// Replace the rule in relationshipRules (temporarily, just for this query)
+			for i, rule := range relationshipRules {
+				if rule.Relationship == relType {
+					// Create a copy to avoid modifying the global rule
+					tempRule := relationshipRules[i]
+					tempRule.MatchCriteria = consolidatedRule.MatchCriteria
+					relationshipRules[i] = tempRule
+					break
+				}
+			}
+		} else {
+			// Just one rule, use its relationship type
+			relType = matchingRules[0].Relationship
+		}
+
 		debugLog("Selected relationship type %s from %d possible rules between %s and %s",
 			relType, len(matchingRules), leftKind.Resource, rightKind.Resource)
 	}
