@@ -183,10 +183,10 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 				if parentGVR != (schema.GroupVersionResource{}) {
 					relatedKindSingularFromParentGVR := parentGVR.Resource
 
-					// Proceed with creating/updating the dynamic rule
-					relType := RelationshipType(fmt.Sprintf("%s_REFERENCES_%s_BY_PARENT_FIELD",
-						strings.ToUpper(gvrA.Resource),
-						strings.ToUpper(relatedKindSingularFromParentGVR)))
+					// Use the standard INSPEC relationship format instead of creating a special BY_PARENT_FIELD rule
+					relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+						strings.ToUpper(relatedKindSingularFromParentGVR),
+						strings.ToUpper(kindANameSingular)))
 
 					ruleKindA := strings.ToLower(gvrA.Resource)
 					ruleKindB := strings.ToLower(relatedKindSingularFromParentGVR)
@@ -217,7 +217,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					fieldA := "$." + fieldPath  // Path to the "name" field itself
 					fieldB := "$.metadata.name" // Standard target
 
-					debugLog("Creating relationship rule (parent GVR): %s -> %s with fields: %s -> %s for relType: %s", ruleKindA, ruleKindB, fieldA, fieldB, relType)
+					debugLog("Creating relationship rule (parent GVR) for: %s -> %s with fields: %s -> %s for relType: %s", ruleKindA, ruleKindB, fieldA, fieldB, relType)
 					criterion := MatchCriterion{
 						FieldA:         fieldA,
 						FieldB:         fieldB,
@@ -259,7 +259,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 						relationshipRules = append(relationshipRules, rule)
 						relationshipCount++
 					}
-					processedThisField = true // Mark as processed by parent GVR logic (or intentionally skipped section)
+					processedThisField = true // Mark as processed by parent GVR logic
 				}
 			}
 
