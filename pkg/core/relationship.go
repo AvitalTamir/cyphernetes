@@ -131,6 +131,9 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	// Map to collect potential kinds before sorting
 	tempPotentialKinds := make(map[string]map[string]bool)
 
+	// Cache for parent field GVR resolution within this function run
+	parentGVRCache := make(map[string]schema.GroupVersionResource)
+
 	for kindA, fields := range resourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
 		if kindANameSingular == "" {
@@ -159,99 +162,193 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		for _, fieldPath := range fields {
 			parts := strings.Split(fieldPath, ".")
 			fieldName := parts[len(parts)-1]
+			processedThisField := false
 
-			relatedKindSingular := ""
-			relSpecType := ""
+			// New logic: Check for "name" field with a GVR parent
+			if fieldName == "name" && len(parts) > 1 {
+				parentFieldName := parts[len(parts)-2]
 
-			if nameOrKeyRefFieldRegex.MatchString(fieldName) {
-				relatedKindSingular = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$1")
-				relSpecType = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$2")
-			} else if refFieldRegex.MatchString(fieldName) {
-				relatedKindSingular = refFieldRegex.ReplaceAllString(fieldName, "$1")
-				relSpecType = refFieldRegex.ReplaceAllString(fieldName, "$2")
-			} else {
-				continue
-			}
+				parentGVR, foundInCache := parentGVRCache[parentFieldName]
+				if !foundInCache {
+					var resolveErr error
+					parentGVR, resolveErr = tryResolveGVR(provider, parentFieldName)
+					if resolveErr == nil {
+						parentGVRCache[parentFieldName] = parentGVR // Cache success
+					} else {
+						// Cache failure by storing an empty GVR.
+						// This prevents re-attempts for non-GVR parent field names.
+						parentGVRCache[parentFieldName] = schema.GroupVersionResource{}
+					}
+				}
 
-			// Get GVR for related kind, handling ambiguity
-			gvr, err := tryResolveGVR(provider, relatedKindSingular)
-			if err != nil {
-				continue
-			}
+				// Check if a valid GVR was found for the parent field
+				if parentGVR != (schema.GroupVersionResource{}) {
+					relatedKindSingularFromParentGVR := parentGVR.Resource
 
-			// Important: Keep the array notation in the field path
-			fullFieldPath := fieldPath
-			if relSpecType == "Ref" || relSpecType == "KeyRef" {
-				fullFieldPath = fieldPath + ".name"
-			}
-			debugLog("Using field path: %s", fullFieldPath)
+					relType := RelationshipType(fmt.Sprintf("%s_REFERENCES_%s_BY_PARENT_FIELD",
+						strings.ToUpper(gvrA.Resource),
+						strings.ToUpper(relatedKindSingularFromParentGVR)))
 
-			relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
-				strings.ToUpper(relatedKindSingular),
-				strings.ToUpper(kindANameSingular)))
+					ruleKindA := strings.ToLower(gvrA.Resource)
+					ruleKindB := strings.ToLower(relatedKindSingularFromParentGVR)
 
-			kindA := strings.ToLower(gvrA.Resource)
-			kindB := strings.ToLower(gvr.Resource)
-			kindAFull := kindA
-			kindBFull := kindB
-			if gvrA.Group != "" {
-				kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
-			} else {
-				kindAFull = "core." + kindA
-			}
-			if gvr.Group != "" {
-				kindBFull = fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group)
-			} else {
-				kindBFull = "core." + kindB
-			}
+					kindAFull := gvrA.Resource
+					if gvrA.Group != "" {
+						kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
+					} else {
+						kindAFull = "core." + ruleKindA
+					}
 
-			// Update potential kinds cache for both directions
-			if tempPotentialKinds[kindAFull] == nil {
-				tempPotentialKinds[kindAFull] = make(map[string]bool)
-			}
-			if tempPotentialKinds[kindBFull] == nil {
-				tempPotentialKinds[kindBFull] = make(map[string]bool)
-			}
-			tempPotentialKinds[kindAFull][kindBFull] = true
-			tempPotentialKinds[kindBFull][kindAFull] = true
+					kindBFullName := parentGVR.Resource
+					if parentGVR.Group != "" {
+						kindBFullName = fmt.Sprintf("%s.%s", parentGVR.Resource, parentGVR.Group)
+					} else {
+						kindBFullName = "core." + ruleKindB
+					}
 
-			// Keep the array notation in the JsonPath
-			fieldA := "$." + fullFieldPath
-			fieldB := "$.metadata.name"
+					if tempPotentialKinds[kindAFull] == nil {
+						tempPotentialKinds[kindAFull] = make(map[string]bool)
+					}
+					if tempPotentialKinds[kindBFullName] == nil {
+						tempPotentialKinds[kindBFullName] = make(map[string]bool)
+					}
+					tempPotentialKinds[kindAFull][kindBFullName] = true
+					tempPotentialKinds[kindBFullName][kindAFull] = true
 
-			debugLog("Creating relationship rule: %s -> %s with fields: %s -> %s", kindA, kindB, fieldA, fieldB)
-			criterion := MatchCriterion{
-				FieldA:         fieldA,
-				FieldB:         fieldB,
-				ComparisonType: ExactMatch,
-			}
+					fieldA := "$." + fieldPath  // Path to the "name" field itself
+					fieldB := "$.metadata.name" // Standard target
 
-			// Check for existing rule and add/create as before
-			existingRuleIndex := -1
-			for i, r := range relationshipRules {
-				if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
-					existingRuleIndex = i
-					break
+					debugLog("Creating relationship rule (parent GVR): %s -> %s with fields: %s -> %s for relType: %s", ruleKindA, ruleKindB, fieldA, fieldB, relType)
+					criterion := MatchCriterion{
+						FieldA:         fieldA,
+						FieldB:         fieldB,
+						ComparisonType: ExactMatch,
+					}
+
+					existingRuleIndex := -1
+					for i, r := range relationshipRules {
+						if r.KindA == ruleKindA && r.KindB == ruleKindB && r.Relationship == relType {
+							existingRuleIndex = i
+							break
+						}
+					}
+
+					if existingRuleIndex >= 0 {
+						debugLog("Adding criterion to existing rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
+						relationshipRules[existingRuleIndex].MatchCriteria = append(
+							relationshipRules[existingRuleIndex].MatchCriteria,
+							criterion,
+						)
+					} else {
+						debugLog("Creating new relationship rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
+						rule := RelationshipRule{
+							KindA:         ruleKindA,
+							KindB:         ruleKindB,
+							Relationship:  relType,
+							MatchCriteria: []MatchCriterion{criterion},
+						}
+						relationshipRules = append(relationshipRules, rule)
+						relationshipCount++
+					}
+					processedThisField = true // Mark as processed
 				}
 			}
 
-			if existingRuleIndex >= 0 {
-				debugLog("Adding criterion to existing rule for: %s -> %s", kindA, kindB)
-				relationshipRules[existingRuleIndex].MatchCriteria = append(
-					relationshipRules[existingRuleIndex].MatchCriteria,
-					criterion,
-				)
-			} else {
-				debugLog("Creating new relationship rule for: %s -> %s", kindA, kindB)
-				// Create new rule
-				rule := RelationshipRule{
-					KindA:         kindA,
-					KindB:         kindB,
-					Relationship:  relType,
-					MatchCriteria: []MatchCriterion{criterion},
+			// Original logic for fields ending with Name, KeyRef, or Ref
+			if !processedThisField {
+				relatedKindSingular := ""
+				relSpecType := ""
+
+				if nameOrKeyRefFieldRegex.MatchString(fieldName) {
+					relatedKindSingular = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$1")
+					relSpecType = nameOrKeyRefFieldRegex.ReplaceAllString(fieldName, "$2")
+				} else if refFieldRegex.MatchString(fieldName) {
+					relatedKindSingular = refFieldRegex.ReplaceAllString(fieldName, "$1")
+					relSpecType = refFieldRegex.ReplaceAllString(fieldName, "$2")
+				} else {
+					continue
 				}
-				relationshipRules = append(relationshipRules, rule)
-				relationshipCount++
+
+				// Get GVR for related kind, handling ambiguity
+				gvr, err := tryResolveGVR(provider, relatedKindSingular)
+				if err != nil {
+					continue
+				}
+
+				// Important: Keep the array notation in the field path
+				fullFieldPath := fieldPath
+				if relSpecType == "Ref" || relSpecType == "KeyRef" {
+					fullFieldPath = fieldPath + ".name"
+				}
+				debugLog("Using field path: %s", fullFieldPath)
+
+				relType := RelationshipType(fmt.Sprintf("%s_INSPEC_%s",
+					strings.ToUpper(relatedKindSingular),
+					strings.ToUpper(kindANameSingular)))
+
+				kindA := strings.ToLower(gvrA.Resource)
+				kindB := strings.ToLower(gvr.Resource)
+				kindAFull := kindA
+				kindBFull := kindB
+				if gvrA.Group != "" {
+					kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
+				} else {
+					kindAFull = "core." + kindA
+				}
+				if gvr.Group != "" {
+					kindBFull = fmt.Sprintf("%s.%s", gvr.Resource, gvr.Group)
+				} else {
+					kindBFull = "core." + kindB
+				}
+
+				// Update potential kinds cache for both directions
+				if tempPotentialKinds[kindAFull] == nil {
+					tempPotentialKinds[kindAFull] = make(map[string]bool)
+				}
+				if tempPotentialKinds[kindBFull] == nil {
+					tempPotentialKinds[kindBFull] = make(map[string]bool)
+				}
+				tempPotentialKinds[kindAFull][kindBFull] = true
+				tempPotentialKinds[kindBFull][kindAFull] = true
+
+				// Keep the array notation in the JsonPath
+				fieldA := "$." + fullFieldPath
+				fieldB := "$.metadata.name"
+
+				debugLog("Creating relationship rule: %s -> %s with fields: %s -> %s", kindA, kindB, fieldA, fieldB)
+				criterion := MatchCriterion{
+					FieldA:         fieldA,
+					FieldB:         fieldB,
+					ComparisonType: ExactMatch,
+				}
+
+				// Check for existing rule and add/create as before
+				existingRuleIndex := -1
+				for i, r := range relationshipRules {
+					if r.KindA == kindA && r.KindB == kindB && r.Relationship == relType {
+						existingRuleIndex = i
+						break
+					}
+				}
+
+				if existingRuleIndex >= 0 {
+					debugLog("Adding criterion to existing rule for: %s -> %s", kindA, kindB)
+					relationshipRules[existingRuleIndex].MatchCriteria = append(
+						relationshipRules[existingRuleIndex].MatchCriteria,
+						criterion,
+					)
+				} else {
+					debugLog("Creating new relationship rule for: %s -> %s", kindA, kindB)
+					// Create new rule
+					rule := RelationshipRule{
+						KindA:         kindA,
+						KindB:         kindB,
+						Relationship:  relType,
+						MatchCriteria: []MatchCriterion{criterion},
+					}
+					relationshipRules = append(relationshipRules, rule)
+					relationshipCount++
+				}
 			}
 		}
 
