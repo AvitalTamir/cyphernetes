@@ -135,6 +135,35 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	// Cache for parent field GVR resolution within this function run
 	parentGVRCache := make(map[string]schema.GroupVersionResource)
 
+	// Pre-cache all GVRs for faster lookups
+	gvrCache := make(map[string]schema.GroupVersionResource)
+
+	// First, cache all the kinds we'll be resolving
+	// Add existing rule kinds to ensure we have everything
+	kindsToCache := make(map[string]bool)
+	for kindA := range resourceSpecs {
+		kindANameSingular := extractKindFromSchemaName(kindA)
+		if kindANameSingular != "" {
+			kindsToCache[strings.ToLower(kindANameSingular)] = true
+		}
+	}
+
+	// Add existing rule kinds
+	for _, rule := range relationshipRules {
+		kindsToCache[rule.KindA] = true
+		kindsToCache[rule.KindB] = true
+	}
+
+	// Populate the GVR cache
+	for kind := range kindsToCache {
+		gvr, err := tryResolveGVR(provider, kind)
+		if err == nil {
+			gvrCache[kind] = gvr
+		}
+	}
+
+	debugLog("Pre-cached %d kind GVR resolutions", len(gvrCache))
+
 	for kindA, fields := range resourceSpecs {
 		kindANameSingular := extractKindFromSchemaName(kindA)
 		if kindANameSingular == "" {
@@ -148,6 +177,10 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 			processed++
 			continue
 		}
+
+		// Add the resolved GVR to the cache
+		gvrCache[strings.ToLower(kindANameSingular)] = gvrA
+		gvrCache[strings.ToLower(gvrA.Resource)] = gvrA
 
 		// Update progress bar
 		progress := (processed * 100) / totalKinds
@@ -175,6 +208,9 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					parentGVR, resolveErr = tryResolveGVR(provider, parentFieldName)
 					if resolveErr == nil {
 						parentGVRCache[parentFieldName] = parentGVR // Cache success
+						// Add to the main GVR cache
+						gvrCache[strings.ToLower(parentFieldName)] = parentGVR
+						gvrCache[strings.ToLower(parentGVR.Resource)] = parentGVR
 					} else {
 						parentGVRCache[parentFieldName] = schema.GroupVersionResource{} // Cache failure
 					}
@@ -187,7 +223,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					ruleKindB := strings.ToLower(relatedKindSingularFromParentGVR)
 
 					// First, check if a relationship rule already exists between these kinds
-					existingRuleIndex, found := findExistingRelationshipRule(ruleKindA, ruleKindB, provider)
+					existingRuleIndex, found := findExistingRelationshipRule(ruleKindA, ruleKindB, gvrCache)
 
 					if found {
 						// Use the existing relationship type for consistency
@@ -829,12 +865,13 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	return filteredA || filteredB, nil
 }
 
-// New helper function to find an existing relationship rule for given kinds, using GVR resolution
-func findExistingRelationshipRule(kindA, kindB string, provider provider.Provider) (int, bool) {
-	kindAGVR, errA := provider.FindGVR(kindA)
-	kindBGVR, errB := provider.FindGVR(kindB)
+// Move findExistingRelationshipRule to use a cache of GVR resolutions
+func findExistingRelationshipRule(kindA, kindB string, gvrCache map[string]schema.GroupVersionResource) (int, bool) {
+	// Get GVRs from cache instead of making API calls
+	kindAGVR, okA := gvrCache[kindA]
+	kindBGVR, okB := gvrCache[kindB]
 
-	if errA != nil || errB != nil {
+	if !okA || !okB {
 		return -1, false
 	}
 
@@ -844,10 +881,11 @@ func findExistingRelationshipRule(kindA, kindB string, provider provider.Provide
 			continue
 		}
 
-		ruleKindAGVR, errRA := provider.FindGVR(rule.KindA)
-		ruleKindBGVR, errRB := provider.FindGVR(rule.KindB)
+		// Get rule GVRs from cache
+		ruleKindAGVR, okRA := gvrCache[rule.KindA]
+		ruleKindBGVR, okRB := gvrCache[rule.KindB]
 
-		if errRA != nil || errRB != nil {
+		if !okRA || !okRB {
 			continue
 		}
 
