@@ -540,7 +540,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 				continue
 			}
 			if !disableGraphOutput {
-				graphAscii, err := drawGraph(graph, result)
+				graphAscii, err := drawGraph(graph)
 				if err != nil {
 					fmt.Printf("Error >> %s\n", err)
 				} else {
@@ -619,6 +619,12 @@ func processQuery(query string) (string, core.Graph, error) {
 		}
 
 		buildDataAndGraph(resultMap, &result, &graph)
+	}
+
+	// Sanitize the graph
+	graph, err = sanitizeGraph(graph, result)
+	if err != nil {
+		return "", core.Graph{}, fmt.Errorf("error sanitizing graph: %w", err)
 	}
 
 	execTime = time.Since(startTime)
