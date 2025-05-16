@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -175,16 +176,14 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					if resolveErr == nil {
 						parentGVRCache[parentFieldName] = parentGVR // Cache success
 					} else {
-						// Cache failure by storing an empty GVR.
-						// This prevents re-attempts for non-GVR parent field names.
-						parentGVRCache[parentFieldName] = schema.GroupVersionResource{}
+						parentGVRCache[parentFieldName] = schema.GroupVersionResource{} // Cache failure
 					}
 				}
 
-				// Check if a valid GVR was found for the parent field
 				if parentGVR != (schema.GroupVersionResource{}) {
 					relatedKindSingularFromParentGVR := parentGVR.Resource
 
+					// Proceed with creating/updating the dynamic rule
 					relType := RelationshipType(fmt.Sprintf("%s_REFERENCES_%s_BY_PARENT_FIELD",
 						strings.ToUpper(gvrA.Resource),
 						strings.ToUpper(relatedKindSingularFromParentGVR)))
@@ -192,14 +191,14 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					ruleKindA := strings.ToLower(gvrA.Resource)
 					ruleKindB := strings.ToLower(relatedKindSingularFromParentGVR)
 
-					kindAFull := gvrA.Resource
+					var kindAFull string
 					if gvrA.Group != "" {
 						kindAFull = fmt.Sprintf("%s.%s", gvrA.Resource, gvrA.Group)
 					} else {
 						kindAFull = "core." + ruleKindA
 					}
 
-					kindBFullName := parentGVR.Resource
+					var kindBFullName string
 					if parentGVR.Group != "" {
 						kindBFullName = fmt.Sprintf("%s.%s", parentGVR.Resource, parentGVR.Group)
 					} else {
@@ -235,10 +234,20 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 
 					if existingRuleIndex >= 0 {
 						debugLog("Adding criterion to existing rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
-						relationshipRules[existingRuleIndex].MatchCriteria = append(
-							relationshipRules[existingRuleIndex].MatchCriteria,
-							criterion,
-						)
+						// Prevent adding duplicate criterion
+						alreadyExists := false
+						for _, existingCrit := range relationshipRules[existingRuleIndex].MatchCriteria {
+							if existingCrit.FieldA == criterion.FieldA && existingCrit.FieldB == criterion.FieldB && existingCrit.ComparisonType == criterion.ComparisonType {
+								alreadyExists = true
+								break
+							}
+						}
+						if !alreadyExists {
+							relationshipRules[existingRuleIndex].MatchCriteria = append(
+								relationshipRules[existingRuleIndex].MatchCriteria,
+								criterion,
+							)
+						}
 					} else {
 						debugLog("Creating new relationship rule (parent GVR) for: %s -> %s", ruleKindA, ruleKindB)
 						rule := RelationshipRule{
@@ -250,7 +259,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 						relationshipRules = append(relationshipRules, rule)
 						relationshipCount++
 					}
-					processedThisField = true // Mark as processed
+					processedThisField = true // Mark as processed by parent GVR logic (or intentionally skipped section)
 				}
 			}
 
@@ -520,6 +529,40 @@ func GetRelationships() map[string][]string {
 	return relationships
 }
 
+// New helper function to find all relationship rules between two kinds
+func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
+	var matchingRules []RelationshipRule
+
+	for _, rule := range relationshipRules {
+		// Check direct match (order matters)
+		if strings.EqualFold(rule.KindA, kindA) && strings.EqualFold(rule.KindB, kindB) {
+			matchingRules = append(matchingRules, rule)
+		}
+		// Check reverse match (order matters)
+		if strings.EqualFold(rule.KindA, kindB) && strings.EqualFold(rule.KindB, kindA) {
+			matchingRules = append(matchingRules, rule)
+		}
+	}
+
+	// Sort rules by priority:
+	// 1. Hardcoded/special relationships first (those not ending with _BY_PARENT_FIELD)
+	// 2. Dynamically discovered relationships last
+	slices.SortFunc(matchingRules, func(a, b RelationshipRule) int {
+		aIsDynamic := strings.HasSuffix(string(a.Relationship), "_BY_PARENT_FIELD")
+		bIsDynamic := strings.HasSuffix(string(b.Relationship), "_BY_PARENT_FIELD")
+
+		if aIsDynamic && !bIsDynamic {
+			return 1 // a comes after b
+		}
+		if !aIsDynamic && bIsDynamic {
+			return -1 // a comes before b
+		}
+		return 0 // maintain relative order
+	})
+
+	return matchingRules
+}
+
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
 	debugLog(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
@@ -557,22 +600,24 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 		return false, fmt.Errorf("error finding API resource >> %s", err)
 	}
 
+	// Namespace special case (handled first)
 	if rightKind.Resource == "namespaces" || leftKind.Resource == "namespaces" {
 		relType = NamespaceHasResource
 	}
 
+	// Find all possible rules between these kinds instead of just one
 	if relType == "" {
-		for _, resourceRelationship := range relationshipRules {
-			if (strings.EqualFold(leftKind.Resource, resourceRelationship.KindA) && strings.EqualFold(rightKind.Resource, resourceRelationship.KindB)) ||
-				(strings.EqualFold(rightKind.Resource, resourceRelationship.KindA) && strings.EqualFold(leftKind.Resource, resourceRelationship.KindB)) {
-				relType = resourceRelationship.Relationship
-			}
-		}
-	}
+		matchingRules := findRelationshipRulesBetweenKinds(leftKind.Resource, rightKind.Resource)
 
-	if relType == "" {
-		// no relationship type found, error out
-		return false, fmt.Errorf("relationship type not found between %s and %s", leftKind, rightKind)
+		if len(matchingRules) == 0 {
+			// No relationship type found, error out
+			return false, fmt.Errorf("relationship type not found between %s and %s", leftKind.Resource, rightKind.Resource)
+		}
+
+		// Use the highest priority rule's relationship type (first one after sorting)
+		relType = matchingRules[0].Relationship
+		debugLog("Selected relationship type %s from %d possible rules between %s and %s",
+			relType, len(matchingRules), leftKind.Resource, rightKind.Resource)
 	}
 
 	rule, err := findRuleByRelationshipType(relType)
