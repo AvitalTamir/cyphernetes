@@ -336,7 +336,6 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 					continue
 				}
 
-				// Important: Keep the array notation in the field path
 				fullFieldPath := fieldPath
 				if relSpecType == "Ref" || relSpecType == "KeyRef" {
 					fullFieldPath = fieldPath + ".name"
@@ -581,7 +580,6 @@ func GetRelationships() map[string][]string {
 	return relationships
 }
 
-// Modified to handle rules with similar relationship types
 func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
 	var matchingRules []RelationshipRule
 
