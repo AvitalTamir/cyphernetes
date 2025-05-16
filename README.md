@@ -177,6 +177,9 @@ Cyphernetes is open-sourced under the Apache 2.0 license. See the [LICENSE](LICE
 
 * _Initial work_ - [Avital Tamir](https://github.com/avitaltamir)
 * _Project maintainer_ - [Naor Peled](https://github.com/naorpeled)
-* _Enhancements, Bug fixes_ - [James Kim](https://github.com/jameskim0987)
-* _Enhancements, Bug fixes_ - [Vinicius Artur](https://github.com/viniciusartur)
-* _Improvements_ - [Noé Tarbouriech](https://github.com/noetarbouriech)
+* _Enhancements, Bug fixes and Improvements:_
+  * [James Kim](https://github.com/jameskim0987)
+  *  [Vinicius Artur](https://github.com/viniciusartur)
+  *  [Noé Tarbouriech](https://github.com/noetarbouriech)
+  *  [Michael Darin](https://github.com/mdarin)
+
