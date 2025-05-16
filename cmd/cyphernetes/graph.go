@@ -79,12 +79,7 @@ func mergeGraphs(graph core.Graph, newGraph core.Graph) core.Graph {
 	return graph
 }
 
-func drawGraph(graph core.Graph, result string) (string, error) {
-	graph, err := sanitizeGraph(graph, result)
-	if err != nil {
-		return "", fmt.Errorf("error sanitizing graph: %w", err)
-	}
-
+func drawGraph(graph core.Graph) (string, error) {
 	var graphString strings.Builder
 	graphString.WriteString("graph {\n")
 	if graphLayoutLR {
