@@ -106,6 +106,14 @@ func handleQuery(c *gin.Context) {
 		return
 	}
 
+	// Sanitize the graph before marshalling
+	cleanGraph, err := sanitizeGraph(result.Graph, string(resultJson))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error sanitizing graph: %v", err)})
+		return
+	}
+	result.Graph = cleanGraph
+
 	graphJson, err := json.Marshal(result.Graph)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error marshaling graph: %v", err)})

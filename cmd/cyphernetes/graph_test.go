@@ -84,9 +84,8 @@ func TestDrawGraph(t *testing.T) {
 			{From: "Pod/pod1", To: "Service/svc1", Type: "EXPOSES"},
 		},
 	}
-	result := `{"Pod":[{"name":"pod1"}],"Service":[{"name":"svc1"}]}`
 
-	_, err := drawGraph(graph, result)
+	_, err := drawGraph(graph)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

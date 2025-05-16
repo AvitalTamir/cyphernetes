@@ -66,7 +66,7 @@ func executeMacro(input string) (string, error) {
 	execTime = time.Since(startTime)
 
 	if !disableGraphOutput {
-		graphAscii, err := drawGraph(graph, strings.Join(results, "\n"))
+		graphAscii, err := drawGraph(graph)
 		if err != nil {
 			return "", fmt.Errorf("error drawing graph: %w", err)
 		}
