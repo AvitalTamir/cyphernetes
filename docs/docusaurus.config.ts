@@ -118,6 +118,15 @@ const config: Config = {
           ],
         },
         {
+          title: "Social",
+          items: [
+            {
+              label: "LinkedIn",
+              href: "https://www.linkedin.com/company/cyphernetes",
+            },
+          ],
+        },
+        {
           title: "Contact",
           items: [
             {
