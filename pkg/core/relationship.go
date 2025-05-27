@@ -148,6 +148,9 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		}
 	}
 
+	// Add Argo Application relationships
+	AddArgoRelationships(provider)
+
 	// Add existing rule kinds
 	for _, rule := range relationshipRules {
 		kindsToCache[rule.KindA] = true
@@ -582,7 +585,6 @@ func GetRelationships() map[string][]string {
 
 func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
 	var matchingRules []RelationshipRule
-
 	for _, rule := range relationshipRules {
 		// Check direct match (order matters)
 		if strings.EqualFold(rule.KindA, kindA) && strings.EqualFold(rule.KindB, kindB) {
@@ -894,4 +896,25 @@ func findExistingRelationshipRule(kindA, kindB string, gvrCache map[string]schem
 	}
 
 	return -1, false
+}
+
+func AddArgoRelationships(provider provider.Provider) {
+	for _, gvrName := range provider.GetKnownResourceKinds() {
+		if strings.ToLower(gvrName) == "bindings" || strings.Contains(strings.ToLower(gvrName), "review") {
+			continue
+		}
+		regexRule := RelationshipRule{
+			KindA: strings.ToLower(gvrName),
+			KindB: "applications",
+			MatchCriteria: []MatchCriterion{
+				{
+					FieldA:         "$.metadata.annotations.argocd\\.argoproj\\.io/tracking-id",
+					FieldB:         "$.metadata.name",
+					ComparisonType: StringContains,
+				},
+			},
+			Relationship: RelationshipType(fmt.Sprintf("%s_%s", "ARGO_APP", strings.ToUpper(gvrName))),
+		}
+		relationshipRules = append(relationshipRules, regexRule)
+	}
 }

@@ -36,18 +36,19 @@ type APIServerProviderConfig struct {
 }
 
 type APIServerProvider struct {
-	clientset       kubernetes.Interface
-	dynamicClient   dynamic.Interface
-	gvrCache        map[string]schema.GroupVersionResource
-	gvrCacheMutex   sync.RWMutex
-	openAPIDoc      *openapi_v3.Document
-	requestChannel  chan *apiRequest
-	semaphore       chan struct{}
-	resourceMutex   sync.RWMutex
-	dryRun          bool
-	quietMode       bool
-	namespacedCache map[string]bool
-	namespacedMutex sync.RWMutex
+	clientset          kubernetes.Interface
+	dynamicClient      dynamic.Interface
+	gvrCache           map[string]schema.GroupVersionResource
+	gvrCacheMutex      sync.RWMutex
+	openAPIDoc         *openapi_v3.Document
+	requestChannel     chan *apiRequest
+	semaphore          chan struct{}
+	resourceMutex      sync.RWMutex
+	dryRun             bool
+	quietMode          bool
+	namespacedCache    map[string]bool
+	namespacedMutex    sync.RWMutex
+	knownResourceKinds []string
 }
 
 type apiRequest struct {
@@ -106,14 +107,15 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	}
 
 	provider := &APIServerProvider{
-		clientset:       clientset,
-		dynamicClient:   dynamicClient,
-		gvrCache:        make(map[string]schema.GroupVersionResource),
-		requestChannel:  make(chan *apiRequest),
-		semaphore:       make(chan struct{}, 1),
-		dryRun:          config.DryRun,
-		quietMode:       config.QuietMode,
-		namespacedCache: make(map[string]bool),
+		clientset:          clientset,
+		dynamicClient:      dynamicClient,
+		gvrCache:           make(map[string]schema.GroupVersionResource),
+		requestChannel:     make(chan *apiRequest),
+		semaphore:          make(chan struct{}, 1),
+		dryRun:             config.DryRun,
+		quietMode:          config.QuietMode,
+		namespacedCache:    make(map[string]bool),
+		knownResourceKinds: make([]string, 0),
 	}
 
 	if config.DryRun {
@@ -151,11 +153,12 @@ func NewAPIServerProviderWithConfig(kubeConfig clientcmd.ClientConfig) (provider
 	}
 
 	provider := &APIServerProvider{
-		clientset:      clientset,
-		dynamicClient:  dynamicClient,
-		gvrCache:       make(map[string]schema.GroupVersionResource),
-		requestChannel: make(chan *apiRequest),
-		semaphore:      make(chan struct{}, 1),
+		clientset:          clientset,
+		dynamicClient:      dynamicClient,
+		gvrCache:           make(map[string]schema.GroupVersionResource),
+		requestChannel:     make(chan *apiRequest),
+		semaphore:          make(chan struct{}, 1),
+		knownResourceKinds: make([]string, 0),
 	}
 
 	// Start the request processor
@@ -1197,6 +1200,12 @@ func (p *APIServerProvider) initGVRCache() error {
 				Resource: r.Name,
 			}
 
+			// Exclude internal resources like bindings, tokenreviews etc. which has only `create` verb
+			// and does not include `get` or `list` as they cannot be queried.
+			if len(r.Verbs) > 1 {
+				p.knownResourceKinds = append(p.knownResourceKinds, r.Name)
+			}
+
 			// Store with kind as key
 			p.gvrCache[r.Kind] = gvr
 			// Store with resource name (plural) as key
@@ -1276,4 +1285,8 @@ func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource
 
 func (p *APIServerProvider) ToggleDryRun() {
 	p.dryRun = !p.dryRun
+}
+
+func (p *APIServerProvider) GetKnownResourceKinds() []string {
+	return p.knownResourceKinds
 }

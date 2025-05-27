@@ -3,14 +3,12 @@ package core
 import (
 	"fmt"
 	"strings"
-
-	"github.com/AvitalTamir/jsonpath"
 )
 
 func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion) bool {
 	switch criterion.ComparisonType {
 	case ContainsAll:
-		l, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		l, err := JsonPathCompileAndLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
 		if err != nil {
 			return false
 		}
@@ -19,7 +17,7 @@ func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion
 			return false
 		}
 
-		s, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		s, err := JsonPathCompileAndLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
 		if err != nil {
 			return false
 		}
@@ -32,11 +30,11 @@ func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion
 
 	case ExactMatch:
 		// Extract the fields
-		fieldsA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		fieldsA, err := JsonPathCompileAndLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
 		if err != nil {
 			return false
 		}
-		fieldsB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		fieldsB, err := JsonPathCompileAndLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
 		if err != nil {
 			return false
 		}
@@ -44,11 +42,11 @@ func matchByCriterion(resourceA, resourceB interface{}, criterion MatchCriterion
 
 	case StringContains:
 		// Extract the fields
-		fieldA, err := jsonpath.JsonPathLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
+		fieldA, err := JsonPathCompileAndLookup(resourceA, strings.ReplaceAll(criterion.FieldA, "[]", ""))
 		if err != nil {
 			return false
 		}
-		fieldB, err := jsonpath.JsonPathLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
+		fieldB, err := JsonPathCompileAndLookup(resourceB, strings.ReplaceAll(criterion.FieldB, "[]", ""))
 		if err != nil {
 			return false
 		}
