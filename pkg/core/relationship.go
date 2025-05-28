@@ -475,7 +475,7 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	}
 	potentialKindsMutex.Unlock()
 
-	customRelationshipsCount, err := loadCustomRelationships(provider)
+	customRelationshipsCount, err := loadCustomRelationships(provider.GetKnownResourceKinds())
 	if err != nil && !CleanOutput {
 		fmt.Println("\nError loading custom relationships:", err)
 	}
@@ -515,7 +515,7 @@ func tryResolveGVR(provider provider.Provider, kind string) (schema.GroupVersion
 	return gvr, nil
 }
 
-func loadCustomRelationships(provider provider.Provider) (int, error) {
+func loadCustomRelationships(knownResourceKinds []string) (int, error) {
 	counter := 0
 	// Get user's home directory
 	home, err := os.UserHomeDir()
@@ -573,7 +573,7 @@ func loadCustomRelationships(provider provider.Provider) (int, error) {
 			if err != nil {
 				return 0, err
 			}
-			for _, gvrName := range provider.GetKnownResourceKinds() {
+			for _, gvrName := range knownResourceKinds {
 				if !globA.Match(strings.ToLower(gvrName)) {
 					continue
 				}

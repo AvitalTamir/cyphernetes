@@ -413,7 +413,7 @@ relationships:
 			}()
 
 			// Test loading custom relationships
-			_, err := loadCustomRelationships()
+			_, err := loadCustomRelationships([]string{})
 
 			if tt.expectedError {
 				if err == nil {
