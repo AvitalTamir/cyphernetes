@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
+	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -474,7 +476,12 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	}
 	potentialKindsMutex.Unlock()
 
-	customRelationshipsCount, err := loadCustomRelationships()
+	var knownResourceKinds []string
+	serverProvider, ok := provider.(*apiserver.APIServerProvider)
+	if ok {
+		knownResourceKinds = serverProvider.GetKnownResourceKinds()
+	}
+	customRelationshipsCount, err := loadCustomRelationships(knownResourceKinds)
 	if err != nil && !CleanOutput {
 		fmt.Println("\nError loading custom relationships:", err)
 	}
@@ -514,7 +521,7 @@ func tryResolveGVR(provider provider.Provider, kind string) (schema.GroupVersion
 	return gvr, nil
 }
 
-func loadCustomRelationships() (int, error) {
+func loadCustomRelationships(knownResourceKinds []string) (int, error) {
 	counter := 0
 	// Get user's home directory
 	home, err := os.UserHomeDir()
@@ -565,6 +572,28 @@ func loadCustomRelationships() (int, error) {
 			}
 		}
 
+		// if there is any glob pattern in the rule's kind, evaluate the glob pattern and
+		// find matching resource kinds that is available in the cluster.
+		if strings.ContainsAny(rule.KindA, "*?[]{}") {
+			globA, err := glob.Compile(rule.KindA)
+			if err != nil {
+				return 0, err
+			}
+			for _, gvrName := range knownResourceKinds {
+				if !globA.Match(strings.ToLower(gvrName)) {
+					continue
+				}
+				regexRule := RelationshipRule{
+					KindA:         strings.ToLower(gvrName),
+					KindB:         rule.KindB,
+					MatchCriteria: append([]MatchCriterion{}, rule.MatchCriteria...),
+					Relationship:  RelationshipType(fmt.Sprintf("%s_%s", rule.Relationship, strings.ToUpper(gvrName))),
+				}
+				counter++
+				relationshipRules = append(relationshipRules, regexRule)
+			}
+			continue
+		}
 		// Add to global relationships
 		counter++
 		AddRelationshipRule(rule)
@@ -582,7 +611,6 @@ func GetRelationships() map[string][]string {
 
 func findRelationshipRulesBetweenKinds(kindA, kindB string) []RelationshipRule {
 	var matchingRules []RelationshipRule
-
 	for _, rule := range relationshipRules {
 		// Check direct match (order matters)
 		if strings.EqualFold(rule.KindA, kindA) && strings.EqualFold(rule.KindB, kindB) {

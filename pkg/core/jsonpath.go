@@ -22,7 +22,7 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 	if !strings.HasSuffix(currentPath, ".") {
 		currentPath += "."
 	}
-	array, err := jsonpath.JsonPathLookup(data, currentPath)
+	array, err := JsonPathCompileAndLookup(data, currentPath)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func evaluateWildcardPath(resource interface{}, path string, filterValue interfa
 	}
 
 	// Get the array using the base path
-	array, err := jsonpath.JsonPathLookup(resource, basePath)
+	array, err := JsonPathCompileAndLookup(resource, basePath)
 	if err != nil {
 		return false
 	}
@@ -131,7 +131,7 @@ func evaluateWildcardPath(resource interface{}, path string, filterValue interfa
 		// Create a new path for this item
 		itemPath := "$" + remainingPath
 
-		value, err := jsonpath.JsonPathLookup(itemMap, itemPath)
+		value, err := JsonPathCompileAndLookup(itemMap, itemPath)
 		if err != nil {
 			continue
 		}
@@ -149,6 +149,7 @@ func evaluateWildcardPath(resource interface{}, path string, filterValue interfa
 	return false
 }
 
+// fixCompiledPath fixes escape characters in the query.
 func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 	i := 0
 	for i < len(compiledPath.Steps) {
@@ -163,4 +164,18 @@ func fixCompiledPath(compiledPath *jsonpath.Compiled) *jsonpath.Compiled {
 		}
 	}
 	return compiledPath
+}
+
+// JsonPathCompileAndLookup compiles the given query, fixes escape characters in the query and executes
+// the query to return the value of the query.
+func JsonPathCompileAndLookup(resource interface{}, query string) (interface{}, error) {
+	pathA, err := jsonpath.Compile(query)
+	if err != nil {
+		return nil, err
+	}
+	queriedValue, err := fixCompiledPath(pathA).Lookup(resource)
+	if err != nil {
+		return nil, err
+	}
+	return queriedValue, nil
 }

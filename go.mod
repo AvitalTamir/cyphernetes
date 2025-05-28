@@ -8,6 +8,7 @@ require (
 	github.com/AvitalTamir/jsonpath v0.0.0
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/gin-gonic/gin v1.10.0
+	github.com/gobwas/glob v0.2.3
 	github.com/google/gnostic v0.7.0
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
