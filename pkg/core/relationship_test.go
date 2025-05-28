@@ -322,11 +322,12 @@ func TestLoadCustomRelationships(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		yamlContent   string
-		expectedRules []RelationshipRule
-		expectedError bool
-		errorContains string
+		name               string
+		yamlContent        string
+		expectedRules      []RelationshipRule
+		expectedError      bool
+		errorContains      string
+		knownResourceKinds []string
 	}{
 		{
 			name: "Valid custom relationships",
@@ -395,6 +396,53 @@ relationships:
 			expectedError: true,
 			errorContains: "must be ExactMatch, ContainsAll, or StringContains",
 		},
+		{
+			name: "wildcard match with no known resource kinds",
+			yamlContent: `
+relationships:
+  - kindA: '*'
+    kindB: application
+    relationship: ARGO_APP_CHILDREN
+    matchCriteria:
+      - fieldA: "$.spec.volumes[].configMap.name"
+        fieldB: "$.metadata.name"
+        comparisonType: StringContains
+`,
+			expectedError:      false,
+			errorContains:      "",
+			expectedRules:      []RelationshipRule{},
+			knownResourceKinds: nil,
+		},
+		{
+			name: "wildcard match with pod as a known resource kind",
+			yamlContent: `
+relationships:
+  - kindA: '*'
+    kindB: application
+    relationship: ARGO_APP_CHILDREN
+    matchCriteria:
+      - fieldA: '$.metadata.annotation.argoproj\.io/tracking-id'
+        fieldB: "$.metadata.name"
+        comparisonType: StringContains
+`,
+			expectedError: false,
+			errorContains: "",
+			expectedRules: []RelationshipRule{
+				{
+					KindA:        "pod",
+					KindB:        "application",
+					Relationship: "ARGO_APP_CHILDREN_POD",
+					MatchCriteria: []MatchCriterion{
+						{
+							FieldA:         "$.metadata.annotation.argoproj\\.io/tracking-id",
+							FieldB:         "$.metadata.name",
+							ComparisonType: StringContains,
+						},
+					},
+				},
+			},
+			knownResourceKinds: []string{"Pod"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -413,7 +461,7 @@ relationships:
 			}()
 
 			// Test loading custom relationships
-			_, err := loadCustomRelationships([]string{})
+			_, err := loadCustomRelationships(tt.knownResourceKinds)
 
 			if tt.expectedError {
 				if err == nil {
