@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gobwas/glob"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -475,7 +476,12 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	}
 	potentialKindsMutex.Unlock()
 
-	customRelationshipsCount, err := loadCustomRelationships(provider.GetKnownResourceKinds())
+	var knownResourceKinds []string
+	serverProvider, ok := provider.(*apiserver.APIServerProvider)
+	if ok {
+		knownResourceKinds = serverProvider.GetKnownResourceKinds()
+	}
+	customRelationshipsCount, err := loadCustomRelationships(knownResourceKinds)
 	if err != nil && !CleanOutput {
 		fmt.Println("\nError loading custom relationships:", err)
 	}

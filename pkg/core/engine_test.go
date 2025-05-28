@@ -45,10 +45,6 @@ func (m *MockProvider) ToggleDryRun() {
 	// do nothing
 }
 
-func (m *MockProvider) GetKnownResourceKinds() []string {
-	return []string{}
-}
-
 func TestJsonPath(t *testing.T) {
 	jsonString := `{
 		"d": [

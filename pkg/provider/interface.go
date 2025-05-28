@@ -18,7 +18,6 @@ type Provider interface {
 	FindGVR(kind string) (schema.GroupVersionResource, error)
 	GetOpenAPIResourceSpecs() (map[string][]string, error)
 	CreateProviderForContext(context string) (Provider, error)
-	GetKnownResourceKinds() []string
 
 	// Configuration
 	ToggleDryRun()
