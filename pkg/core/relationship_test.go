@@ -443,6 +443,66 @@ relationships:
 			},
 			knownResourceKinds: []string{"Pod"},
 		},
+		{
+			name: "glob match with [] and pod as a known resource kind",
+			yamlContent: `
+relationships:
+  - kindA: 'po[abcd]'
+    kindB: application
+    relationship: ARGO_APP_CHILDREN
+    matchCriteria:
+      - fieldA: '$.metadata.annotation.argoproj\.io/tracking-id'
+        fieldB: "$.metadata.name"
+        comparisonType: StringContains
+`,
+			expectedError: false,
+			errorContains: "",
+			expectedRules: []RelationshipRule{
+				{
+					KindA:        "pod",
+					KindB:        "application",
+					Relationship: "ARGO_APP_CHILDREN_POD",
+					MatchCriteria: []MatchCriterion{
+						{
+							FieldA:         "$.metadata.annotation.argoproj\\.io/tracking-id",
+							FieldB:         "$.metadata.name",
+							ComparisonType: StringContains,
+						},
+					},
+				},
+			},
+			knownResourceKinds: []string{"Pod"},
+		},
+		{
+			name: "glob match with ? and pod as a known resource kind",
+			yamlContent: `
+relationships:
+  - kindA: 'po?'
+    kindB: application
+    relationship: ARGO_APP_CHILDREN
+    matchCriteria:
+      - fieldA: '$.metadata.annotation.argoproj\.io/tracking-id'
+        fieldB: "$.metadata.name"
+        comparisonType: StringContains
+`,
+			expectedError: false,
+			errorContains: "",
+			expectedRules: []RelationshipRule{
+				{
+					KindA:        "pod",
+					KindB:        "application",
+					Relationship: "ARGO_APP_CHILDREN_POD",
+					MatchCriteria: []MatchCriterion{
+						{
+							FieldA:         "$.metadata.annotation.argoproj\\.io/tracking-id",
+							FieldB:         "$.metadata.name",
+							ComparisonType: StringContains,
+						},
+					},
+				},
+			},
+			knownResourceKinds: []string{"Pod"},
+		},
 	}
 
 	for _, tt := range tests {
