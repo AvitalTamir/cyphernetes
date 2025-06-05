@@ -32,6 +32,10 @@ func GetRelationshipRules() []RelationshipRule {
 	return relationshipRules
 }
 
+func SetRelationshipRules(rules []RelationshipRule) {
+	relationshipRules = rules
+}
+
 func findRuleByRelationshipType(relType RelationshipType) (RelationshipRule, error) {
 	for _, rule := range relationshipRules {
 		if rule.Relationship == relType {
@@ -105,7 +109,7 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 	return false
 }
 
-func InitializeRelationships(resourceSpecs map[string][]string, provider provider.Provider, customRelationshipRules ...RelationshipRule) {
+func InitializeRelationships(resourceSpecs map[string][]string, provider provider.Provider) {
 	if CleanOutput {
 		debugLog("Running relationship initialization in query mode (suppressing output)")
 	} else {
@@ -148,11 +152,6 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 		if kindANameSingular != "" {
 			kindsToCache[strings.ToLower(kindANameSingular)] = true
 		}
-	}
-
-	// If user provided a set of relationship rules, use that
-	if customRelationshipRules != nil && len(customRelationshipRules) > 0 {
-		relationshipRules = customRelationshipRules
 	}
 
 	// Add existing rule kinds
@@ -486,18 +485,17 @@ func InitializeRelationships(resourceSpecs map[string][]string, provider provide
 	if ok {
 		knownResourceKinds = serverProvider.GetKnownResourceKinds()
 	}
-	// Load custom relationships from a relationship rules file if there are no custom relationship rules passed.
-	suffix := ""
-	if customRelationshipRules == nil || len(customRelationshipRules) <= 0 {
-		customRelationshipsCount, err := loadCustomRelationships(knownResourceKinds)
-		if err != nil && !CleanOutput {
-			fmt.Println("\nError loading custom relationships:", err)
-		}
-		if customRelationshipsCount > 0 {
-			suffix = fmt.Sprintf(" and %d custom relationships", customRelationshipsCount)
-		}
+	customRelationshipsCount, err := loadCustomRelationships(knownResourceKinds)
+	if err != nil && !CleanOutput {
+		fmt.Println("\nError loading custom relationships:", err)
 	}
-	debugLog("Relationship initialization complete. Found %d internal relationships%s", relationshipCount, suffix)
+
+	suffix := ""
+	if customRelationshipsCount > 0 {
+		suffix = fmt.Sprintf(" and %d custom", customRelationshipsCount)
+	}
+
+	debugLog("Relationship initialization complete. Found %d internal relationships and %d custom relationships", relationshipCount, customRelationshipsCount)
 
 	if !CleanOutput {
 		fmt.Printf("\033[K\r ✔️ Initializing relationships (%d internal%s processed)\n", relationshipCount, suffix)

@@ -245,7 +245,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	return result, nil
 }
 
-func GetQueryExecutorInstance(p provider.Provider, relationshipRules ...RelationshipRule) *QueryExecutor {
+func GetQueryExecutorInstance(p provider.Provider) *QueryExecutor {
 	once.Do(func() {
 		if p == nil {
 			fmt.Println("Error creating query executor: executor error")
@@ -274,7 +274,7 @@ func GetQueryExecutorInstance(p provider.Provider, relationshipRules ...Relation
 		}
 
 		// Initialize relationships
-		InitializeRelationships(ResourceSpecs, p, relationshipRules...)
+		InitializeRelationships(ResourceSpecs, p)
 	})
 	return executorInstance
 }
