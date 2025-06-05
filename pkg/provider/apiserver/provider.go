@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"runtime"
@@ -31,6 +32,7 @@ import (
 type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
+	Kubeconfig    *rest.Config
 	DryRun        bool
 	QuietMode     bool
 }
@@ -77,10 +79,20 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 
 	// If clients are not provided, create them
 	if clientset == nil || dynamicClient == nil {
-		// First try in-cluster config
 		var restConfig *rest.Config
-		restConfig, err = rest.InClusterConfig()
-		if err != nil {
+		// If user provided configuration use that.
+		if config.Kubeconfig != nil {
+			restConfig = config.Kubeconfig
+		}
+		// First try in-cluster config
+		if restConfig == nil {
+			restConfig, err = rest.InClusterConfig()
+			if err != nil && !errors.Is(err, rest.ErrNotInCluster) {
+				return nil, fmt.Errorf("failed to create config: %v", err)
+			}
+		}
+		// If not running in-cluster, try loading from KUBECONFIG env or $HOME/.kube/config file
+		if restConfig == nil {
 			// Fall back to kubeconfig
 			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 			configOverrides := &clientcmd.ConfigOverrides{}

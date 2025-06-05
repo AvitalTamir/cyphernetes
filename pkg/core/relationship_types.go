@@ -358,3 +358,8 @@ var relationshipRules = []RelationshipRule{
 		},
 	},
 }
+
+// GetWellKnownRelationshipRules returns all well known relationships in Kubernetes API
+func GetWellKnownRelationshipRules() []RelationshipRule {
+	return relationshipRules
+}
