@@ -80,20 +80,21 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	// If clients are not provided, create them
 	if clientset == nil || dynamicClient == nil {
 		var restConfig *rest.Config
-		// If user provided configuration use that.
+		// If user provided a kubeconfig, use that.
 		if config.Kubeconfig != nil {
 			restConfig = config.Kubeconfig
 		}
-		// First try in-cluster config
+		// If caller did not provide a kubeconfig, try in-cluster config first
 		if restConfig == nil {
 			restConfig, err = rest.InClusterConfig()
 			if err != nil && !errors.Is(err, rest.ErrNotInCluster) {
 				return nil, fmt.Errorf("failed to create config: %v", err)
 			}
 		}
-		// If not running in-cluster, try loading from KUBECONFIG env or $HOME/.kube/config file
+		// If the binary is not being run inside a kubernetes cluster,
+		// nor the caller provided a kubeconfig,
+		// try loading the config from KUBECONFIG env or $HOME/.kube/config file
 		if restConfig == nil {
-			// Fall back to kubeconfig
 			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 			configOverrides := &clientcmd.ConfigOverrides{}
 			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
