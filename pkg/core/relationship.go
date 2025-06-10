@@ -32,10 +32,6 @@ func GetRelationshipRules() []RelationshipRule {
 	return relationshipRules
 }
 
-func SetRelationshipRules(rules []RelationshipRule) {
-	relationshipRules = rules
-}
-
 func findRuleByRelationshipType(relType RelationshipType) (RelationshipRule, error) {
 	for _, rule := range relationshipRules {
 		if rule.Relationship == relType {
