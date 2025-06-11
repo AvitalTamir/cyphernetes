@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"runtime"
@@ -31,6 +32,7 @@ import (
 type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
+	Kubeconfig    *rest.Config
 	DryRun        bool
 	QuietMode     bool
 }
@@ -77,11 +79,22 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 
 	// If clients are not provided, create them
 	if clientset == nil || dynamicClient == nil {
-		// First try in-cluster config
 		var restConfig *rest.Config
-		restConfig, err = rest.InClusterConfig()
-		if err != nil {
-			// Fall back to kubeconfig
+		// If user provided a kubeconfig, use that.
+		if config.Kubeconfig != nil {
+			restConfig = config.Kubeconfig
+		}
+		// If caller did not provide a kubeconfig, try in-cluster config first
+		if restConfig == nil {
+			restConfig, err = rest.InClusterConfig()
+			if err != nil && !errors.Is(err, rest.ErrNotInCluster) {
+				return nil, fmt.Errorf("failed to create config: %v", err)
+			}
+		}
+		// If the binary is not being run inside a kubernetes cluster,
+		// nor the caller provided a kubeconfig,
+		// try loading the config from KUBECONFIG env or $HOME/.kube/config file
+		if restConfig == nil {
 			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 			configOverrides := &clientcmd.ConfigOverrides{}
 			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
