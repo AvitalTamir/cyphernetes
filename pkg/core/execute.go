@@ -20,7 +20,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
-	} else if namespace != "" {
+	} else {
 		Namespace = namespace
 	}
 
