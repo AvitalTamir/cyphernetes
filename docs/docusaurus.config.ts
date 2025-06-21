@@ -49,14 +49,6 @@ const config: Config = {
   ],
 
   themeConfig: {
-    announcementBar: {
-      id: "kcd_new_york",
-      content:
-        '🎤 We\'re speaking at KCD New York! <a href="https://kcdnewyork2025.sessionize.com/session/854829" target="_blank" rel="noopener noreferrer" style="color: #818CF8; font-weight: bold;">Join us for our lightning talk</a>',
-      backgroundColor: "#1E293B",
-      textColor: "#FFFFFF",
-      isCloseable: true,
-    },
     docs: {
       sidebar: {
         hideable: true,
