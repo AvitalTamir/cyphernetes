@@ -30,6 +30,12 @@ const (
 	SUM
 	AND
 	NOT
+	ORDER
+	BY
+	LIMIT
+	SKIP
+	ASC
+	DESC
 
 	// Operators
 	EQUALS

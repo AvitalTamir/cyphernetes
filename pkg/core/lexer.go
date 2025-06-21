@@ -126,6 +126,18 @@ func (l *Lexer) NextToken() Token {
 					return Token{Type: NULL, Literal: lit}
 				case "NOT":
 					return Token{Type: NOT, Literal: lit}
+				case "ORDER":
+					return Token{Type: ORDER, Literal: lit}
+				case "BY":
+					return Token{Type: BY, Literal: lit}
+				case "LIMIT":
+					return Token{Type: LIMIT, Literal: lit}
+				case "SKIP":
+					return Token{Type: SKIP, Literal: lit}
+				case "ASC":
+					return Token{Type: ASC, Literal: lit}
+				case "DESC":
+					return Token{Type: DESC, Literal: lit}
 				case "DATETIME":
 					return Token{Type: DATETIME, Literal: "datetime"}
 				case "DURATION":
