@@ -34,6 +34,7 @@ const (
 	BY
 	LIMIT
 	SKIP
+	OFFSET
 	ASC
 	DESC
 

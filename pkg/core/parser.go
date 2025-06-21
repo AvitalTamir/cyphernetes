@@ -599,8 +599,8 @@ func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 		clause.OrderBy = orderBy
 	}
 
-	// Parse optional SKIP clause (can come before or after LIMIT)
-	if p.current.Type == SKIP {
+	// Parse optional SKIP/OFFSET clause (can come before or after LIMIT)
+	if p.current.Type == SKIP || p.current.Type == OFFSET {
 		skip, err := p.parseSkipClause()
 		if err != nil {
 			return nil, err
@@ -616,8 +616,8 @@ func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 		}
 		clause.Limit = limit
 
-		// Check for SKIP after LIMIT
-		if p.current.Type == SKIP && clause.Skip == nil {
+		// Check for SKIP/OFFSET after LIMIT
+		if (p.current.Type == SKIP || p.current.Type == OFFSET) && clause.Skip == nil {
 			skip, err := p.parseSkipClause()
 			if err != nil {
 				return nil, err
@@ -1394,23 +1394,23 @@ func (p *Parser) parseLimitClause() (*int, error) {
 	return &limitValue, nil
 }
 
-// parseSkipClause parses: SKIP number
+// parseSkipClause parses: SKIP number or OFFSET number
 func (p *Parser) parseSkipClause() (*int, error) {
-	if p.current.Type != SKIP {
-		return nil, fmt.Errorf("expected SKIP, got \"%v\"", p.current.Literal)
+	if p.current.Type != SKIP && p.current.Type != OFFSET {
+		return nil, fmt.Errorf("expected SKIP or OFFSET, got \"%v\"", p.current.Literal)
 	}
 	p.advance()
 
 	if p.current.Type != NUMBER {
-		return nil, fmt.Errorf("expected number after SKIP, got \"%v\"", p.current.Literal)
+		return nil, fmt.Errorf("expected number after SKIP/OFFSET, got \"%v\"", p.current.Literal)
 	}
 
 	skipValue, err := strconv.Atoi(p.current.Literal)
 	if err != nil {
-		return nil, fmt.Errorf("invalid SKIP value: %v", err)
+		return nil, fmt.Errorf("invalid SKIP/OFFSET value: %v", err)
 	}
 	if skipValue < 0 {
-		return nil, fmt.Errorf("SKIP value must be non-negative, got %d", skipValue)
+		return nil, fmt.Errorf("SKIP/OFFSET value must be non-negative, got %d", skipValue)
 	}
 
 	p.advance()

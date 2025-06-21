@@ -134,6 +134,8 @@ func (l *Lexer) NextToken() Token {
 					return Token{Type: LIMIT, Literal: lit}
 				case "SKIP":
 					return Token{Type: SKIP, Literal: lit}
+				case "OFFSET":
+					return Token{Type: OFFSET, Literal: lit}
 				case "ASC":
 					return Token{Type: ASC, Literal: lit}
 				case "DESC":
