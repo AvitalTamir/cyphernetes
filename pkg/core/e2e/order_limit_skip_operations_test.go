@@ -95,7 +95,7 @@ var _ = Describe("ORDER BY, LIMIT, and SKIP Operations", func() {
 
 		// Query for all deployment -> replicaset relationships
 		ast, err := core.ParseQuery(`
-			MATCH (d:Deployment)->(rs:ReplicaSet)
+			MATCH (d:Deployment {version: "v1"})->(rs:ReplicaSet)
 			RETURN d.metadata.name AS deployment_name, rs.metadata.name AS replicaset_name
 		`)
 		Expect(err).NotTo(HaveOccurred())
@@ -118,7 +118,7 @@ var _ = Describe("ORDER BY, LIMIT, and SKIP Operations", func() {
 
 		By("Executing query with LIMIT 2 to test pattern match limiting")
 		ast, err = core.ParseQuery(`
-			MATCH (d:Deployment)->(rs:ReplicaSet)
+			MATCH (d:Deployment {version: "v1"})->(rs:ReplicaSet)
 			RETURN d.metadata.name AS deployment_name, rs.metadata.name AS replicaset_name
 			LIMIT 2
 		`)
@@ -142,7 +142,7 @@ var _ = Describe("ORDER BY, LIMIT, and SKIP Operations", func() {
 
 		By("Executing query with SKIP 1 LIMIT 1")
 		ast, err = core.ParseQuery(`
-			MATCH (d:Deployment)->(rs:ReplicaSet)
+			MATCH (d:Deployment {version: "v1"})->(rs:ReplicaSet)
 			RETURN d.metadata.name AS deployment_name, rs.metadata.name AS replicaset_name
 			SKIP 1 LIMIT 1
 		`)
@@ -162,7 +162,7 @@ var _ = Describe("ORDER BY, LIMIT, and SKIP Operations", func() {
 
 		By("Testing ORDER BY with pattern matching")
 		ast, err = core.ParseQuery(`
-			MATCH (d:Deployment)->(rs:ReplicaSet)
+			MATCH (d:Deployment {version: "v1"})->(rs:ReplicaSet)
 			RETURN d.metadata.name AS deployment_name, rs.metadata.name AS replicaset_name
 			ORDER BY deployment_name DESC
 			LIMIT 2
@@ -265,5 +265,6 @@ var _ = Describe("ORDER BY, LIMIT, and SKIP Operations", func() {
 		for _, pod := range pods {
 			Expect(k8sClient.Delete(ctx, pod)).Should(Succeed())
 		}
+
 	})
 })

@@ -630,6 +630,9 @@ var _ = Describe("Basic Query Operations", func() {
 		deployments, ok = result.Data["d"].([]interface{})
 		Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
 		Expect(deployments).To(BeEmpty(), "Expected no deployments")
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
 
 	It("Should handle invalid pattern matching queries correctly", func() {
