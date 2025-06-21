@@ -89,11 +89,6 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 		return false
 	}
 
-	ns1, ok1 := metadata1["namespace"].(string)
-	if !ok1 {
-		ns1 = ""
-	}
-
 	for _, res := range resources {
 		metadata2, ok2 := res["metadata"].(map[string]interface{})
 		if !ok2 {
@@ -103,11 +98,7 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 		if !ok2 {
 			continue
 		}
-		ns2, _ := metadata2["namespace"].(string)
-		if !ok2 {
-			ns2 = ""
-		}
-		if name1 == name2 && ns1 == ns2 {
+		if name1 == name2 {
 			return true
 		}
 	}
