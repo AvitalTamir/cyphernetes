@@ -1780,3 +1780,210 @@ func TestTemporalExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestParseOrderByLimitSkip(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *Expression
+	}{
+		{
+			name:  "RETURN with ORDER BY",
+			input: "MATCH (p:Pod) RETURN p.metadata.name AS name ORDER BY name",
+			expected: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "Pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name", Alias: "name"},
+						},
+						OrderBy: []*OrderByItem{
+							{Field: "name", Direction: "ASC"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "RETURN with ORDER BY DESC",
+			input: "MATCH (p:Pod) RETURN p.metadata.name AS name ORDER BY name DESC",
+			expected: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "Pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name", Alias: "name"},
+						},
+						OrderBy: []*OrderByItem{
+							{Field: "name", Direction: "DESC"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "RETURN with LIMIT",
+			input: "MATCH (p:Pod) RETURN p.metadata.name AS name LIMIT 10",
+			expected: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "Pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name", Alias: "name"},
+						},
+						Limit: intPtr(10),
+					},
+				},
+			},
+		},
+		{
+			name:  "RETURN with SKIP",
+			input: "MATCH (p:Pod) RETURN p.metadata.name AS name SKIP 5",
+			expected: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "Pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.metadata.name", Alias: "name"},
+						},
+						Skip: intPtr(5),
+					},
+				},
+			},
+		},
+		{
+			name:  "RETURN with ORDER BY, LIMIT, and SKIP",
+			input: "MATCH (p:Pod) RETURN SUM {p.containers[*].resources.requests.cpu} AS totalCPU ORDER BY totalCPU DESC LIMIT 10 SKIP 5",
+			expected: &Expression{
+				Clauses: []Clause{
+					&MatchClause{
+						Nodes: []*NodePattern{
+							{
+								ResourceProperties: &ResourceProperties{
+									Name: "p",
+									Kind: "Pod",
+								},
+							},
+						},
+						Relationships: []*Relationship{},
+					},
+					&ReturnClause{
+						Items: []*ReturnItem{
+							{JsonPath: "p.containers[*].resources.requests.cpu", Alias: "totalCPU", Aggregate: "SUM"},
+						},
+						OrderBy: []*OrderByItem{
+							{Field: "totalCPU", Direction: "DESC"},
+						},
+						Limit: intPtr(10),
+						Skip:  intPtr(5),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewParser(tt.input)
+			result, err := parser.Parse()
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			if len(result.Clauses) != len(tt.expected.Clauses) {
+				t.Errorf("Expected %d clauses, got %d", len(tt.expected.Clauses), len(result.Clauses))
+				return
+			}
+
+			// Check ReturnClause specifically
+			if len(result.Clauses) >= 2 {
+				returnClause, ok := result.Clauses[1].(*ReturnClause)
+				if !ok {
+					t.Errorf("Expected ReturnClause, got %T", result.Clauses[1])
+					return
+				}
+
+				expectedReturn, ok := tt.expected.Clauses[1].(*ReturnClause)
+				if !ok {
+					t.Errorf("Expected ReturnClause in test case")
+					return
+				}
+
+				// Check ORDER BY
+				if len(returnClause.OrderBy) != len(expectedReturn.OrderBy) {
+					t.Errorf("Expected %d ORDER BY items, got %d", len(expectedReturn.OrderBy), len(returnClause.OrderBy))
+				}
+
+				for i, orderBy := range returnClause.OrderBy {
+					if i < len(expectedReturn.OrderBy) {
+						if orderBy.Field != expectedReturn.OrderBy[i].Field {
+							t.Errorf("Expected ORDER BY field %s, got %s", expectedReturn.OrderBy[i].Field, orderBy.Field)
+						}
+						if orderBy.Direction != expectedReturn.OrderBy[i].Direction {
+							t.Errorf("Expected ORDER BY direction %s, got %s", expectedReturn.OrderBy[i].Direction, orderBy.Direction)
+						}
+					}
+				}
+
+				// Check LIMIT
+				if (returnClause.Limit == nil) != (expectedReturn.Limit == nil) {
+					t.Errorf("LIMIT mismatch: expected %v, got %v", expectedReturn.Limit, returnClause.Limit)
+				} else if returnClause.Limit != nil && *returnClause.Limit != *expectedReturn.Limit {
+					t.Errorf("Expected LIMIT %d, got %d", *expectedReturn.Limit, *returnClause.Limit)
+				}
+
+				// Check SKIP
+				if (returnClause.Skip == nil) != (expectedReturn.Skip == nil) {
+					t.Errorf("SKIP mismatch: expected %v, got %v", expectedReturn.Skip, returnClause.Skip)
+				} else if returnClause.Skip != nil && *returnClause.Skip != *expectedReturn.Skip {
+					t.Errorf("Expected SKIP %d, got %d", *expectedReturn.Skip, *returnClause.Skip)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to create int pointers
+func intPtr(i int) *int {
+	return &i
+}
