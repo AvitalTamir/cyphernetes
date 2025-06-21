@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // ColumnarData represents query results in a columnar format optimized for sorting and limiting
@@ -108,27 +109,19 @@ func (cd *ColumnarData) OrderBy(orderItems []*OrderByItem) error {
 			var valueI, valueJ interface{}
 
 			// Look for the field in pattern i
-			for _, row := range patterns[i].Data {
-				for colIdx, colName := range cd.Columns {
-					if colName == field && colIdx < len(row) {
-						valueI = row[colIdx]
-						break
-					}
-				}
-				if valueI != nil {
+			for rowIdx, row := range patterns[i].Data {
+				value := cd.extractFieldValue(field, row, patterns[i].NodeIds[rowIdx])
+				if value != nil {
+					valueI = value
 					break
 				}
 			}
 
 			// Look for the field in pattern j
-			for _, row := range patterns[j].Data {
-				for colIdx, colName := range cd.Columns {
-					if colName == field && colIdx < len(row) {
-						valueJ = row[colIdx]
-						break
-					}
-				}
-				if valueJ != nil {
+			for rowIdx, row := range patterns[j].Data {
+				value := cd.extractFieldValue(field, row, patterns[j].NodeIds[rowIdx])
+				if value != nil {
+					valueJ = value
 					break
 				}
 			}
@@ -136,9 +129,9 @@ func (cd *ColumnarData) OrderBy(orderItems []*OrderByItem) error {
 			cmp := compareOrderValues(valueI, valueJ)
 			if cmp != 0 {
 				if orderItem.Direction == "DESC" {
-					return cmp > 0
+					return cmp > 0 // If valueI > valueJ, pattern i should come first (DESC order)
 				}
-				return cmp < 0
+				return cmp < 0 // If valueI < valueJ, pattern i should come first (ASC order)
 			}
 		}
 		return false
@@ -149,11 +142,12 @@ func (cd *ColumnarData) OrderBy(orderItems []*OrderByItem) error {
 	cd.NodeIds = []string{}
 	cd.PatternMatchIds = []int{}
 
-	for _, pattern := range patterns {
+	for patternIndex, pattern := range patterns {
 		for i := range pattern.Rows {
 			cd.Rows = append(cd.Rows, pattern.Data[i])
 			cd.NodeIds = append(cd.NodeIds, pattern.NodeIds[i])
-			cd.PatternMatchIds = append(cd.PatternMatchIds, pattern.Id)
+			// Use the new pattern index as the PatternMatchId to maintain sorted order
+			cd.PatternMatchIds = append(cd.PatternMatchIds, patternIndex)
 		}
 	}
 
@@ -263,6 +257,81 @@ func (cd *ColumnarData) ConvertToQueryResult() map[string]interface{} {
 	}
 
 	return result
+}
+
+// extractFieldValue extracts a field value from a row, handling both simple column names and JSON paths
+func (cd *ColumnarData) extractFieldValue(field string, row []interface{}, nodeId string) interface{} {
+	// First try exact column match (for aliases)
+	for colIdx, colName := range cd.Columns {
+		if colName == field && colIdx < len(row) {
+			return row[colIdx]
+		}
+	}
+
+	// If no exact match, check if this is a JSON path that should match one of our columns
+	// For ORDER BY d.metadata.name, we need to find the appropriate column
+	// This is a bit complex because we need to reconstruct the data and navigate the path
+
+	// For now, let's try a simpler approach:
+	// Build a map from the row data and navigate using the JSON path
+	dataMap := make(map[string]interface{})
+	for i, col := range cd.Columns {
+		if i < len(row) {
+			dataMap[col] = row[i]
+		}
+	}
+
+	// If field starts with a node identifier (like "d.metadata.name"), navigate the structure
+	if len(field) > 2 && field[1] == '.' {
+		// Extract node prefix (e.g., "d" from "d.metadata.name")
+		nodePrefix := field[:1]
+		path := field[2:] // Remove "d."
+
+		// Check if this row corresponds to the right node
+		if nodeId == nodePrefix {
+			// Navigate the path in the dataMap
+			return navigateJSONPath(dataMap, path)
+		}
+	}
+
+	return nil
+}
+
+// navigateJSONPath navigates a JSON path within a data structure
+func navigateJSONPath(data map[string]interface{}, path string) interface{} {
+	if path == "" {
+		return data
+	}
+
+	parts := strings.Split(path, ".")
+	current := data
+
+	for i, part := range parts {
+		if current == nil {
+			return nil
+		}
+
+		if i == len(parts)-1 {
+			// Last part, return the value
+			if val, exists := current[part]; exists {
+				return val
+			}
+			return nil
+		}
+
+		// Navigate deeper
+		if val, exists := current[part]; exists {
+			if nextMap, ok := val.(map[string]interface{}); ok {
+				current = nextMap
+			} else {
+				return nil
+			}
+		} else {
+			return nil
+		}
+	}
+
+	return nil
 }
 
 // compareOrderValues compares two values and returns -1, 0, or 1

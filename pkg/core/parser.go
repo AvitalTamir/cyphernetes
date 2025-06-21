@@ -1334,8 +1334,22 @@ func (p *Parser) parseOrderByClause() ([]*OrderByItem, error) {
 			return nil, fmt.Errorf("expected field name in ORDER BY, got \"%v\"", p.current.Literal)
 		}
 
-		field := p.current.Literal
+		// Parse JSON path like in parseReturnItems
+		var field strings.Builder
+		field.WriteString(p.current.Literal)
 		p.advance()
+
+		// Handle JSON path with dots (e.g., "d.metadata.name")
+		for p.current.Type == DOT {
+			field.WriteString(".")
+			p.advance()
+
+			if p.current.Type != IDENT {
+				return nil, fmt.Errorf("expected identifier after dot in ORDER BY field, got \"%v\"", p.current.Literal)
+			}
+			field.WriteString(p.current.Literal)
+			p.advance()
+		}
 
 		direction := "ASC" // Default direction
 		if p.current.Type == ASC || p.current.Type == DESC {
@@ -1344,7 +1358,7 @@ func (p *Parser) parseOrderByClause() ([]*OrderByItem, error) {
 		}
 
 		orderByItems = append(orderByItems, &OrderByItem{
-			Field:     field,
+			Field:     field.String(),
 			Direction: direction,
 		})
 
