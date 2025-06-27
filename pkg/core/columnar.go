@@ -269,10 +269,6 @@ func (cd *ColumnarData) extractFieldValue(field string, row []interface{}, nodeI
 	}
 
 	// If no exact match, check if this is a JSON path that should match one of our columns
-	// For ORDER BY d.metadata.name, we need to find the appropriate column
-	// This is a bit complex because we need to reconstruct the data and navigate the path
-
-	// For now, let's try a simpler approach:
 	// Build a map from the row data and navigate using the JSON path
 	dataMap := make(map[string]interface{})
 	for i, col := range cd.Columns {
@@ -281,7 +277,6 @@ func (cd *ColumnarData) extractFieldValue(field string, row []interface{}, nodeI
 		}
 	}
 
-	// If field starts with a node identifier (like "d.metadata.name"), navigate the structure
 	if len(field) > 2 && field[1] == '.' {
 		// Extract node prefix (e.g., "d" from "d.metadata.name")
 		nodePrefix := field[:1]
