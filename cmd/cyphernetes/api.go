@@ -80,7 +80,7 @@ func handleQuery(c *gin.Context) {
 	}
 
 	// Execute the query
-	result, err := executor.Execute(ast, "")
+	result, err := executor.Execute(ast, core.Namespace)
 	if err != nil {
 		fmt.Printf("Execution error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error executing query: %v", err)})

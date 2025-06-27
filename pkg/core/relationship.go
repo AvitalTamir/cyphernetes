@@ -89,6 +89,10 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 		return false
 	}
 
+	// Get namespace for the resource being checked
+	ns1, _ := metadata1["namespace"].(string)
+	// If no namespace is set, treat as empty string (cluster-scoped or default)
+
 	for _, res := range resources {
 		metadata2, ok2 := res["metadata"].(map[string]interface{})
 		if !ok2 {
@@ -98,7 +102,13 @@ func containsResource(resources []map[string]interface{}, resource map[string]in
 		if !ok2 {
 			continue
 		}
-		if name1 == name2 {
+
+		// Get namespace for the resource in the list
+		ns2, _ := metadata2["namespace"].(string)
+		// If no namespace is set, treat as empty string (cluster-scoped or default)
+
+		// Resources are considered the same if both name AND namespace match
+		if name1 == name2 && ns1 == ns2 {
 			return true
 		}
 	}
