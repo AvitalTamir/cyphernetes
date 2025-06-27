@@ -17,10 +17,17 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	// Reset match nodes at the start of each query
 	q.matchNodes = nil
 
+	// Store the original namespace to restore it later
+	originalNamespace := Namespace
+	defer func() {
+		Namespace = originalNamespace
+	}()
+
 	if AllNamespaces {
 		Namespace = ""
 		AllNamespaces = false // to reset value
-	} else if namespace != "" {
+	} else {
+		// Always set the namespace for this query execution, even if empty
 		Namespace = namespace
 	}
 

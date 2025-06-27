@@ -690,7 +690,7 @@ func executeStatement(query string) (string, error) {
 		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
 
-	results, err := executor.Execute(ast, "")
+	results, err := executor.Execute(ast, core.Namespace)
 	if err != nil {
 		return "", fmt.Errorf("error executing query >> %s", err)
 	}
