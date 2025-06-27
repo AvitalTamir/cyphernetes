@@ -314,10 +314,25 @@ func (r *DynamicOperatorReconciler) handleExecution(ctx context.Context, dynamic
 
 	name := getName(obj)
 
-	// Always process operations immediately
-	handler(ctx, dynamicOperator, obj, dynamicOperator.ObjectMeta.Namespace)
+	// Get the actual namespace of the resource being processed
+	// This ensures consistency with the informer which watches dynamicOperator.Spec.Namespace
+	u, ok := obj.(*unstructured.Unstructured)
+	var resourceNamespace string
+	if ok {
+		resourceNamespace = u.GetNamespace()
+		// If the resource has no namespace (cluster-scoped), use the spec namespace
+		if resourceNamespace == "" {
+			resourceNamespace = dynamicOperator.Spec.Namespace
+		}
+	} else {
+		// Fallback to the spec namespace if we can't determine the resource namespace
+		resourceNamespace = dynamicOperator.Spec.Namespace
+	}
 
-	log.Log.Info("Handler execution completed", "action", action, "resource", name)
+	// Always process operations immediately
+	handler(ctx, dynamicOperator, obj, resourceNamespace)
+
+	log.Log.Info("Handler execution completed", "action", action, "resource", name, "namespace", resourceNamespace)
 }
 
 func (r *DynamicOperatorReconciler) handleCreate(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, namespace string) {
