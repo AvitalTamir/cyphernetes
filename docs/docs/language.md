@@ -690,6 +690,111 @@ RETURN SUM { p.spec.containers[*].resources.requests.cpu } AS totalCPUReq,
 }
 ```
 
+## Result Ordering and Pagination
+
+Cyphernetes supports ordering, limiting, and paginating query results using `ORDER BY`, `LIMIT`, `SKIP`, and `OFFSET` clauses.
+
+### Ordering Results with ORDER BY
+
+You can sort query results using the `ORDER BY` clause. It supports sorting by any field accessible via JSONPath or by aliases defined with `AS`.
+
+```graphql
+// Order deployments by name in ascending order (default)
+MATCH (d:Deployment)
+RETURN d.metadata.name AS name, d.spec.replicas AS replicas
+ORDER BY name
+```
+
+```graphql
+// Order deployments by replica count in descending order
+MATCH (d:Deployment)
+RETURN d.metadata.name AS name, d.spec.replicas AS replicas
+ORDER BY replicas DESC
+```
+
+```graphql
+// Order by JSON path directly
+MATCH (d:Deployment)
+RETURN d.metadata.name, d.spec.replicas
+ORDER BY d.metadata.name DESC
+```
+
+You can specify multiple sort fields:
+
+```graphql
+MATCH (d:Deployment)
+RETURN d.metadata.name, d.spec.replicas, d.metadata.namespace
+ORDER BY d.metadata.namespace ASC, d.spec.replicas DESC
+```
+
+### Limiting Results with LIMIT
+
+Use `LIMIT` to restrict the number of results returned:
+
+```graphql
+// Get the 5 most recent deployments
+MATCH (d:Deployment)
+RETURN d.metadata.name, d.metadata.creationTimestamp
+ORDER BY d.metadata.creationTimestamp DESC
+LIMIT 5
+```
+
+### Skipping Results with SKIP and OFFSET
+
+Use `SKIP` or `OFFSET` to skip a specified number of results. Both keywords are aliases and work identically:
+
+```graphql
+// Skip the first 10 deployments
+MATCH (d:Deployment)
+RETURN d.metadata.name
+ORDER BY d.metadata.name
+SKIP 10
+```
+
+```graphql
+// OFFSET is an alias for SKIP
+MATCH (d:Deployment)
+RETURN d.metadata.name
+ORDER BY d.metadata.name
+OFFSET 10
+```
+
+### Combining ORDER BY, LIMIT, and SKIP
+
+You can combine these clauses for pagination:
+
+```graphql
+// Get the second page of deployments (items 11-20)
+MATCH (d:Deployment)
+RETURN d.metadata.name AS name, d.spec.replicas AS replicas
+ORDER BY name
+SKIP 10
+LIMIT 10
+```
+
+The order of `LIMIT` and `SKIP`/`OFFSET` can be reversed:
+
+```graphql
+// This is equivalent to the above query
+MATCH (d:Deployment)
+RETURN d.metadata.name AS name, d.spec.replicas AS replicas
+ORDER BY name
+LIMIT 10
+OFFSET 10
+```
+
+### Relationship Pattern Ordering
+
+Ordering also works with relationship patterns:
+
+```graphql
+// Find deployment->pod relationships, ordered by pod name
+MATCH (d:Deployment)->(rs:ReplicaSet)->(p:Pod)
+RETURN d.metadata.name AS deployment, p.metadata.name AS pod
+ORDER BY pod DESC
+LIMIT 5
+```
+
 ## Temporal Expressions
 
 Cyphernetes supports temporal expressions for filtering resources based on their creation or modification times.

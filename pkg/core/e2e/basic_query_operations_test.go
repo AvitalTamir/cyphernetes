@@ -600,7 +600,7 @@ var _ = Describe("Basic Query Operations", func() {
 
 		// Query to find deployments that do not have a replicaset that has a pod
 		ast, err := core.ParseQuery(`
-			MATCH (d:Deployment)
+			MATCH (d:Deployment {app: "pattern-test"})
 			WHERE NOT (d)->(:ReplicaSet)->(:Pod)
 			RETURN d
 		`)
@@ -617,7 +617,7 @@ var _ = Describe("Basic Query Operations", func() {
 
 		// Query to find deployments that have a replicaset that has a pod
 		ast, err = core.ParseQuery(`
-			MATCH (d:Deployment)
+			MATCH (d:Deployment {app: "pattern-test"})
 			WHERE (d)->(:ReplicaSet)->(:Pod)
 			RETURN d
 		`)
@@ -630,6 +630,9 @@ var _ = Describe("Basic Query Operations", func() {
 		deployments, ok = result.Data["d"].([]interface{})
 		Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
 		Expect(deployments).To(BeEmpty(), "Expected no deployments")
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, testDeployment)).Should(Succeed())
 	})
 
 	It("Should handle invalid pattern matching queries correctly", func() {

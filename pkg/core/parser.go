@@ -576,7 +576,7 @@ func (p *Parser) parseDeleteClause() (*DeleteClause, error) {
 	return &DeleteClause{NodeIds: nodeIds}, nil
 }
 
-// parseReturnClause parses: RETURN ReturnItems
+// parseReturnClause parses: RETURN ReturnItems [ORDER BY OrderItems] [LIMIT number] [SKIP/OFFSET number]
 func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 	if p.current.Type != RETURN {
 		return nil, fmt.Errorf("expected RETURN, got \"%v\"", p.current.Literal)
@@ -588,7 +588,45 @@ func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 		return nil, err
 	}
 
-	return &ReturnClause{Items: items}, nil
+	clause := &ReturnClause{Items: items}
+
+	// Parse optional ORDER BY clause
+	if p.current.Type == ORDER {
+		orderBy, err := p.parseOrderByClause()
+		if err != nil {
+			return nil, err
+		}
+		clause.OrderBy = orderBy
+	}
+
+	// Parse optional SKIP/OFFSET clause (can come before or after LIMIT)
+	if p.current.Type == SKIP || p.current.Type == OFFSET {
+		skip, err := p.parseSkipClause()
+		if err != nil {
+			return nil, err
+		}
+		clause.Skip = skip
+	}
+
+	// Parse optional LIMIT clause
+	if p.current.Type == LIMIT {
+		limit, err := p.parseLimitClause()
+		if err != nil {
+			return nil, err
+		}
+		clause.Limit = limit
+
+		// Check for SKIP/OFFSET after LIMIT
+		if (p.current.Type == SKIP || p.current.Type == OFFSET) && clause.Skip == nil {
+			skip, err := p.parseSkipClause()
+			if err != nil {
+				return nil, err
+			}
+			clause.Skip = skip
+		}
+	}
+
+	return clause, nil
 }
 
 // parseReturnItems parses a list of return items
@@ -1275,4 +1313,106 @@ func hasKindlessNodes(nodes []*NodePattern) bool {
 		}
 	}
 	return false
+}
+
+// parseOrderByClause parses: ORDER BY field [ASC|DESC] [, field [ASC|DESC]]...
+func (p *Parser) parseOrderByClause() ([]*OrderByItem, error) {
+	if p.current.Type != ORDER {
+		return nil, fmt.Errorf("expected ORDER, got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	if p.current.Type != BY {
+		return nil, fmt.Errorf("expected BY after ORDER, got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	var orderByItems []*OrderByItem
+
+	for {
+		if p.current.Type != IDENT {
+			return nil, fmt.Errorf("expected field name in ORDER BY, got \"%v\"", p.current.Literal)
+		}
+
+		// Parse JSON path like in parseReturnItems
+		var field strings.Builder
+		field.WriteString(p.current.Literal)
+		p.advance()
+
+		// Handle JSON path with dots (e.g., "d.metadata.name")
+		for p.current.Type == DOT {
+			field.WriteString(".")
+			p.advance()
+
+			if p.current.Type != IDENT {
+				return nil, fmt.Errorf("expected identifier after dot in ORDER BY field, got \"%v\"", p.current.Literal)
+			}
+			field.WriteString(p.current.Literal)
+			p.advance()
+		}
+
+		direction := "ASC" // Default direction
+		if p.current.Type == ASC || p.current.Type == DESC {
+			direction = strings.ToUpper(p.current.Literal)
+			p.advance()
+		}
+
+		orderByItems = append(orderByItems, &OrderByItem{
+			Field:     field.String(),
+			Direction: direction,
+		})
+
+		if p.current.Type != COMMA {
+			break
+		}
+		p.advance()
+	}
+
+	return orderByItems, nil
+}
+
+// parseLimitClause parses: LIMIT number
+func (p *Parser) parseLimitClause() (*int, error) {
+	if p.current.Type != LIMIT {
+		return nil, fmt.Errorf("expected LIMIT, got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	if p.current.Type != NUMBER {
+		return nil, fmt.Errorf("expected number after LIMIT, got \"%v\"", p.current.Literal)
+	}
+
+	limitValue, err := strconv.Atoi(p.current.Literal)
+	if err != nil {
+		return nil, fmt.Errorf("invalid LIMIT value: %v", err)
+	}
+	if limitValue < 0 {
+		return nil, fmt.Errorf("LIMIT value must be non-negative, got %d", limitValue)
+	}
+
+	p.advance()
+	return &limitValue, nil
+}
+
+// parseSkipClause parses: SKIP number or OFFSET number
+func (p *Parser) parseSkipClause() (*int, error) {
+	if p.current.Type != SKIP && p.current.Type != OFFSET {
+		return nil, fmt.Errorf("expected SKIP or OFFSET, got \"%v\"", p.current.Literal)
+	}
+	p.advance()
+
+	if p.current.Type != NUMBER {
+		return nil, fmt.Errorf("expected number after SKIP/OFFSET, got \"%v\"", p.current.Literal)
+	}
+
+	skipValue, err := strconv.Atoi(p.current.Literal)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SKIP/OFFSET value: %v", err)
+	}
+	if skipValue < 0 {
+		return nil, fmt.Errorf("SKIP/OFFSET value must be non-negative, got %d", skipValue)
+	}
+
+	p.advance()
+	return &skipValue, nil
 }

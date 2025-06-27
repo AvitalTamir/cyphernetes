@@ -720,6 +720,14 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 			}
 
+			// Apply ORDER BY, LIMIT, and SKIP if specified
+			if len(c.OrderBy) > 0 || c.Limit != nil || c.Skip != nil {
+				err := q.applyColumnarOperations(c, results)
+				if err != nil {
+					return *results, fmt.Errorf("error applying columnar operations: %w", err)
+				}
+			}
+
 		default:
 			return *results, fmt.Errorf("unknown clause type: %T", c)
 		}
@@ -731,4 +739,114 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	resultCache = make(map[string]interface{})
 	resultMap = make(map[string]interface{})
 	return *results, nil
+}
+
+// applyColumnarOperations converts QueryResult to columnar format, applies operations, and converts back
+func (q *QueryExecutor) applyColumnarOperations(c *ReturnClause, results *QueryResult) error {
+	// Convert results to columnar format
+	columnarData := NewColumnarData()
+
+	// Determine if we need to group by pattern matches or treat each resource individually
+	// For now, we'll use a simple heuristic: if there are multiple node types with the same number of items,
+	// we'll assume they form pattern matches. Otherwise, treat each resource individually.
+
+	nodeIds := []string{}
+	nodeSizes := make(map[string]int)
+
+	// Get all node IDs and their sizes
+	for nodeId, nodeData := range results.Data {
+		if nodeId == "aggregate" {
+			continue
+		}
+		nodeIds = append(nodeIds, nodeId)
+		if nodeDataSlice, ok := nodeData.([]interface{}); ok {
+			nodeSizes[nodeId] = len(nodeDataSlice)
+		}
+	}
+
+	// Check if we have potential pattern matches (multiple nodes with same size > 1)
+	hasPatternMatches := false
+	if len(nodeIds) > 1 {
+		var commonSize int = -1
+		for _, size := range nodeSizes {
+			if size > 1 {
+				if commonSize == -1 {
+					commonSize = size
+				} else if commonSize == size {
+					hasPatternMatches = true
+					break
+				}
+			}
+		}
+	}
+
+	if hasPatternMatches {
+		// Process as pattern matches - each index across all nodes forms one pattern
+		maxSize := 0
+		for _, size := range nodeSizes {
+			if size > maxSize {
+				maxSize = size
+			}
+		}
+
+		// For each pattern index, add all related resources
+		for patternIdx := 0; patternIdx < maxSize; patternIdx++ {
+			for _, nodeId := range nodeIds {
+				if nodeDataSlice, ok := results.Data[nodeId].([]interface{}); ok {
+					if patternIdx < len(nodeDataSlice) {
+						if itemMap, ok := nodeDataSlice[patternIdx].(map[string]interface{}); ok {
+							columnarData.AddRow(itemMap, nodeId, patternIdx)
+						}
+					}
+				}
+			}
+		}
+	} else {
+		// Process individual resources - each resource gets its own pattern ID
+		patternId := 0
+		for nodeId, nodeData := range results.Data {
+			if nodeId == "aggregate" {
+				continue
+			}
+
+			if nodeDataSlice, ok := nodeData.([]interface{}); ok {
+				for _, item := range nodeDataSlice {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						columnarData.AddRow(itemMap, nodeId, patternId)
+						patternId++
+					}
+				}
+			}
+		}
+	}
+
+	// Process aggregate data
+	if aggregateData, exists := results.Data["aggregate"]; exists {
+		if aggregateMap, ok := aggregateData.(map[string]interface{}); ok {
+			columnarData.AddRow(aggregateMap, "aggregate", -1) // Special pattern ID for aggregates
+		}
+	}
+
+	// Apply ORDER BY
+	if len(c.OrderBy) > 0 {
+		err := columnarData.OrderBy(c.OrderBy)
+		if err != nil {
+			return fmt.Errorf("error applying ORDER BY: %w", err)
+		}
+	}
+
+	// Apply SKIP
+	if c.Skip != nil && *c.Skip > 0 {
+		columnarData.Skip(*c.Skip)
+	}
+
+	// Apply LIMIT
+	if c.Limit != nil && *c.Limit > 0 {
+		columnarData.Limit(*c.Limit)
+	}
+
+	// Convert back to QueryResult format
+	results.Data = columnarData.ConvertToQueryResult()
+
+	return nil
 }
