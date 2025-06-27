@@ -576,7 +576,7 @@ func (p *Parser) parseDeleteClause() (*DeleteClause, error) {
 	return &DeleteClause{NodeIds: nodeIds}, nil
 }
 
-// parseReturnClause parses: RETURN ReturnItems [ORDER BY OrderItems] [LIMIT number] [SKIP number]
+// parseReturnClause parses: RETURN ReturnItems [ORDER BY OrderItems] [LIMIT number] [SKIP/OFFSET number]
 func (p *Parser) parseReturnClause() (*ReturnClause, error) {
 	if p.current.Type != RETURN {
 		return nil, fmt.Errorf("expected RETURN, got \"%v\"", p.current.Literal)
