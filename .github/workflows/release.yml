@@ -45,7 +45,25 @@ jobs:
       env:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        make operator-manifests build-all-platforms
+        make operator-manifests build-all-platforms build-kubectl-plugin-all-platforms
+    - name: Package kubectl-cypher for release
+      run: |
+        mkdir -p release-packages
+        
+        # Package for each platform
+        for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64; do
+          mkdir -p temp-$platform
+          cp LICENSE temp-$platform/
+          if [[ $platform == *"windows"* ]]; then
+            cp dist/kubectl-cypher-$platform temp-$platform/kubectl-cypher.exe
+          else
+            cp dist/kubectl-cypher-$platform temp-$platform/kubectl-cypher
+          fi
+          cd temp-$platform
+          tar -czf ../release-packages/kubectl-cypher-$platform.tar.gz *
+          cd ..
+          rm -rf temp-$platform
+        done
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -114,3 +132,64 @@ jobs:
         asset_path: ./dist/cyphernetes-windows-arm64
         asset_name: cyphernetes-windows-arm64.exe
         asset_content_type: application/octet-stream
+
+    # kubectl-cypher plugin packages
+    - name: Upload Release Asset - kubectl-cypher Linux AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-linux-amd64.tar.gz
+        asset_name: kubectl-cypher-linux-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset - kubectl-cypher Linux ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-linux-arm64.tar.gz
+        asset_name: kubectl-cypher-linux-arm64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset - kubectl-cypher Darwin AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-darwin-amd64.tar.gz
+        asset_name: kubectl-cypher-darwin-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset - kubectl-cypher Darwin ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-darwin-arm64.tar.gz
+        asset_name: kubectl-cypher-darwin-arm64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset - kubectl-cypher Windows AMD64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-windows-amd64.tar.gz
+        asset_name: kubectl-cypher-windows-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Release Asset - kubectl-cypher Windows ARM64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PACKAGES_PUSH_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-packages/kubectl-cypher-windows-arm64.tar.gz
+        asset_name: kubectl-cypher-windows-arm64.tar.gz
+        asset_content_type: application/gzip
