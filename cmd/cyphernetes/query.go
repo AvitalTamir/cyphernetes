@@ -102,7 +102,7 @@ func runQuery(args []string, w io.Writer) {
 	}
 
 	// Execute the query against the Kubernetes API.
-	results, err := executeMethod(executor, ast, "")
+	results, err := executeMethod(executor, ast, core.Namespace)
 	if err != nil {
 		fmt.Fprintln(w, "Error executing query: ", err)
 		return
