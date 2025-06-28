@@ -128,17 +128,10 @@ kubectl cypher "MATCH (d:Deployment) WHERE d.spec.replicas > 1 RETURN d.metadata
 kubectl cypher --dry-run "MATCH (p:Pod) WHERE p.metadata.name = 'my-pod' SET p.metadata.labels.environment = 'production'"
 ```
 
-## Size Comparison
-
-The `kubectl-cypher` binary is significantly smaller than the full `cyphernetes` binary:
-
-- `kubectl-cypher`: ~64MB (query functionality only)
-- `cyphernetes`: ~72MB (includes shell, operator, web interface)
-
 ## Documentation
 
 For full Cyphernetes documentation including query syntax and examples, visit:
-https://cyphernetes.io
+https://cyphernet.es
 
 ## License
 
