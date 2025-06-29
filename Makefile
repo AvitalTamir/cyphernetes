@@ -1,5 +1,6 @@
 # Define the binary name
 BINARY_NAME=cyphernetes
+KUBECTL_PLUGIN_NAME=kubectl-cypher
 TARGET_KERNELS=darwin linux windows
 TARGET_ARCHS=amd64 arm64
 VERSION ?= dev
@@ -18,6 +19,13 @@ build: web-build
 	mkdir -p dist/
 	mv cmd/cyphernetes/${BINARY_NAME} dist/cyphernetes
 
+# Build the lean kubectl plugin
+build-kubectl-plugin:
+	@echo "👷 Building ${KUBECTL_PLUGIN_NAME}..."
+	(cd cmd/kubectl-cypher && go build -o ${KUBECTL_PLUGIN_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null)
+	mkdir -p dist/
+	mv cmd/kubectl-cypher/${KUBECTL_PLUGIN_NAME} dist/kubectl-cypher
+
 build-all-platforms:
 	@echo "👷 Building ${BINARY_NAME}..."
 	@for kernel in $(TARGET_KERNELS); do \
@@ -26,6 +34,19 @@ build-all-platforms:
 			cd cmd/cyphernetes && GOOS=$$kernel GOARCH=$$arch go build -o ${BINARY_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null; \
 			mkdir -p ../../dist/; \
 			mv ${BINARY_NAME} ../../dist/cyphernetes-$$kernel-$$arch; \
+			cd ../..; \
+		done; \
+	done
+	@echo "🎉 Done!"
+
+build-kubectl-plugin-all-platforms:
+	@echo "👷 Building ${KUBECTL_PLUGIN_NAME} for all platforms..."
+	@for kernel in $(TARGET_KERNELS); do \
+		for arch in $(TARGET_ARCHS); do \
+			echo "   - $$kernel/$$arch"; \
+			cd cmd/kubectl-cypher && GOOS=$$kernel GOARCH=$$arch go build -o ${KUBECTL_PLUGIN_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null; \
+			mkdir -p ../../dist/; \
+			mv ${KUBECTL_PLUGIN_NAME} ../../dist/kubectl-cypher-$$kernel-$$arch; \
 			cd ../..; \
 		done; \
 	done
@@ -89,13 +110,16 @@ web-run: build
 	./dist/cyphernetes web
 
 # Define a phony target for the clean command to ensure it always runs
-.PHONY: clean
-.SILENT: build test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
+.PHONY: clean build-kubectl-plugin build-kubectl-plugin-all-platforms
+.SILENT: build build-kubectl-plugin test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
 
 # Add a help command to list available targets
 help:
 	@echo "Available commands:"
-	@echo "  all          - Build the project."
-	@echo "  build        - Compile the project into a binary."
-	@echo "  test         - Run tests."
-	@echo "  clean        - Remove binary and clean up."
+	@echo "  all                                - Build the project."
+	@echo "  build                              - Compile the main project into a binary."
+	@echo "  build-kubectl-plugin               - Build the lean kubectl-cypher plugin."
+	@echo "  build-all-platforms                - Build main binary for all platforms."
+	@echo "  build-kubectl-plugin-all-platforms - Build kubectl plugin for all platforms."
+	@echo "  test                               - Run tests."
+	@echo "  clean                              - Remove binaries and clean up."
