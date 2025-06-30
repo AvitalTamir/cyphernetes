@@ -8,13 +8,7 @@ A lean kubectl plugin for executing Cyphernetes queries against Kubernetes resou
 
 ## Installation
 
-### Method 1: Via Krew (Recommended)
-
-```bash
-kubectl krew install cypher
-```
-
-### Method 2: Build from Source
+### Build from Source
 
 ```bash
 # Clone the repository
@@ -31,7 +25,7 @@ VERSION=1.0.0 make build-kubectl-plugin
 cp dist/kubectl-cypher /usr/local/bin/kubectl-cypher
 ```
 
-### Method 3: Download Pre-built Binary
+### Download Pre-built Binary
 
 Download the appropriate tar.gz package for your platform from the [releases page](https://github.com/avitaltamir/cyphernetes/releases):
 
