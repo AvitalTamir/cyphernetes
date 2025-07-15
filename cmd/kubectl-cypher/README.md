@@ -8,6 +8,14 @@ A lean kubectl plugin for executing Cyphernetes queries against Kubernetes resou
 
 ## Installation
 
+### Using `krew` (recommended)
+
+> If you don't have `krew` installed yet, [go here](https://krew.sigs.k8s.io/docs/user-guide/setup/install/)
+
+```bash
+kubectl krew install cypher
+```
+
 ### Build from Source
 
 ```bash
