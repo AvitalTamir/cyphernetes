@@ -40,7 +40,7 @@ There are multiple ways to run Cyphernetes queries:
 1. Using the web client by running `cyphernetes web` from your terminal, then visiting `http://localhost:8080`
 2. Using the interactive shell by running `cyphernetes shell` in your terminal
 3. Running a single query from the command line by running `cyphernetes query "your query"` - great for scripting and CI/CD pipelines
-4. Using the `kubectl cypher` plugin (install using Krew or download from a latest release)
+4. Using the `kubectl cypher` plugin (install using Krew or download from latest release)
 5. Creating a [Cyphernetes DynamicOperator](https://github.com/avitaltamir/cyphernetes/blob/main/operator/test/e2e/samples/dynamicoperator-ingressactivator.yaml) using the cyphernetes-operator to define powerful Kubernetes workflows on-the-fly
 6. Using the Cyphernetes API in your own Go programs.
 
