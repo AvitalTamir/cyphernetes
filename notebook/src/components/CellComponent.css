@@ -24,8 +24,18 @@
 }
 
 .cell.editing {
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: #e9ecef;
+  box-shadow: 0 0 0 3px rgba(233, 236, 239, 0.3);
+}
+
+.cell.executed-success {
+  border-color: #28a745;
+  box-shadow: 0 0 0 1px rgba(40, 167, 69, 0.1);
+}
+
+.cell.executed-error {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.1);
 }
 
 .cell-header {

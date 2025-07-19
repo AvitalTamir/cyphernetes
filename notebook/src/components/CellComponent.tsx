@@ -679,9 +679,16 @@ export const CellComponent: React.FC<CellComponentProps> = ({
     onDrop?.(cell.id)
   }
 
+  // Determine execution status
+  const getExecutionStatus = () => {
+    if (!cell.last_executed) return ''
+    if (cell.error) return 'executed-error'
+    return 'executed-success'
+  }
+
   return (
     <div 
-      className={`cell ${isEditing ? 'editing' : ''} ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+      className={`cell ${isEditing ? 'editing' : getExecutionStatus()} ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
