@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, memo } from 'react'
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
@@ -8,6 +8,53 @@ import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import './CellComponent.css'
+
+// Simple ForceGraph wrapper with debug logging
+const DebugForceGraph = memo(({ graphData, cellId }: { 
+  graphData: any, 
+  cellId: string
+}) => {
+  console.log(`🔍 ForceGraph render for cell ${cellId}`, { graphData })
+  
+  // Use the same color function as web client, but for notebook data structure
+  const getNodeColor = (node: any) => {
+    const colorMap: {[key: string]: string} = {
+      'Pod': '#4285F4',         // Google Blue
+      'Service': '#34A853',     // Google Green
+      'Deployment': '#FBBC05',  // Google Yellow
+      'StatefulSet': '#EA4335', // Google Red
+      'ConfigMap': '#8E44AD',   // Purple
+      'Secret': '#F39C12',      // Orange
+      'PersistentVolumeClaim': '#1ABC9C', // Turquoise
+      'Ingress': '#E74C3C',     // Bright Red
+      'Job': '#3498DB',         // Light Blue
+      'CronJob': '#2ECC71',     // Emerald
+      'Namespace': '#9B59B6',   // Amethyst
+      'ReplicaSet': '#E67E22',  // Carrot
+      'DaemonSet': '#16A085',   // Green Sea
+      'Endpoint': '#2980B9',    // Belize Hole
+      'Node': '#F1C40F',        // Sunflower
+    }
+    // Notebook uses 'type' field, web client uses 'kind' field
+    return colorMap[node.type] || '#aaaaaa'
+  }
+  
+  return (
+    <ForceGraph2D
+      key={`force-${cellId}`}
+      graphData={graphData}
+      nodeLabel="name"
+      nodeColor={getNodeColor}
+      linkColor={() => '#999'}
+      linkWidth={2}
+      nodeRelSize={8}
+      enableZoomInteraction={true}
+      enableNodeDrag={true}
+      width={800}
+      height={400}
+    />
+  )
+})
 
 // Dynamic node color mapping (same as web client)
 const getNodeColor = (nodeType: string): string => {
@@ -214,30 +261,17 @@ const renderPieChartView = (data: any, query?: string): React.ReactNode => {
 }
 
 // Helper function to render graph view
-const renderGraphView = (data: any, cellId?: string): React.ReactNode => {
+const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): React.ReactNode => {
   if (!data || typeof data !== 'object') {
     return <div className="empty-graph">No graph data available</div>
   }
 
   // Check if data already has graph structure
   if (data.graph && data.graph.nodes && data.graph.links) {
-    return (
-      <ForceGraph2D
-        key={`force-graph-${cellId}-${Date.now()}`}
-        graphData={data.graph}
-        nodeLabel="name"
-        nodeColor={(node: any) => node.type === 'pod' ? '#ff6b6b' : 
-                   node.type === 'service' ? '#4ecdc4' : 
-                   node.type === 'deployment' ? '#45b7d1' : '#96ceb4'}
-        linkColor={() => '#999'}
-        linkWidth={2}
-        nodeRelSize={8}
-        enableZoomInteraction={true}
-        enableNodeDrag={true}
-        width={800}
-        height={400}
-      />
-    )
+    return <DebugForceGraph 
+      graphData={data.graph} 
+      cellId={cellId || 'unknown'} 
+    />
   }
 
   // Use the graph data if available
@@ -271,21 +305,10 @@ const renderGraphView = (data: any, cellId?: string): React.ReactNode => {
       type: edge.Type || edge.type || 'relationship'
     }))
     
-    return (
-      <ForceGraph2D
-        key={`force-graph-main-${cellId}-${Date.now()}`}
-        graphData={{ nodes, links }}
-        nodeLabel="name"
-        nodeColor={(node: any) => getNodeColor(node.type)}
-        linkColor={() => '#999'}
-        linkWidth={2}
-        nodeRelSize={8}
-        enableZoomInteraction={true}
-        enableNodeDrag={true}
-        width={800}
-        height={400}
-      />
-    )
+    return <DebugForceGraph 
+      graphData={{ nodes, links }} 
+      cellId={cellId || 'unknown'} 
+    />
   }
   
   // Fallback: Try to extract nodes and relationships from Cyphernetes result data
@@ -335,21 +358,10 @@ const renderGraphView = (data: any, cellId?: string): React.ReactNode => {
     })
 
     if (nodes.length > 0) {
-      return (
-        <ForceGraph2D
-          key={`force-graph-fallback-${cellId}-${Date.now()}`}
-          graphData={{ nodes, links }}
-          nodeLabel="name"
-          nodeColor={(node: any) => getNodeColor(node.type)}
-          linkColor={() => '#999'}
-          linkWidth={2}
-          nodeRelSize={8}
-          enableZoomInteraction={true}
-          enableNodeDrag={true}
-          width={800}
-          height={400}
-        />
-      )
+      return <DebugForceGraph 
+        graphData={{ nodes, links }} 
+        cellId={cellId || 'unknown'} 
+      />
     }
   }
 
@@ -620,7 +632,7 @@ interface CellComponentProps {
   isDragOver?: boolean
 }
 
-export const CellComponent: React.FC<CellComponentProps> = ({
+const CellComponentImpl: React.FC<CellComponentProps> = ({
   cell,
   onUpdate,
   onDelete,
@@ -631,6 +643,13 @@ export const CellComponent: React.FC<CellComponentProps> = ({
   isDragging,
   isDragOver,
 }) => {
+  console.log(`🔄 CellComponent render for cell ${cell.id}`, {
+    lastExecuted: cell.last_executed,
+    isRunning: cell.is_running,
+    hasResults: !!cell.results,
+    currentMode: cell.config?.visualization_mode,
+    graphMode: cell.config?.graph_mode
+  })
   // If this is a markdown cell, use the specialized component
   if (cell.type === 'markdown') {
     return (
@@ -1305,13 +1324,13 @@ export const CellComponent: React.FC<CellComponentProps> = ({
             )}
             {currentMode === 'graph' && (
               <div className="graph-output">
-                {graphMode === 'force' && renderGraphView(cell.results, cell.id)}
+                {graphMode === 'force' && renderGraphView(cell.results, cell.id, cell.last_executed)}
                 {graphMode === 'pie' && renderPieChartView(cell.results, cell.query)}
                 {graphMode === 'tree' && (
                   <div className="tree-chart-placeholder">
                     <p>Tree visualization coming soon...</p>
                     <div className="fallback-view">
-                      {renderGraphView(cell.results, cell.id)}
+                      {renderGraphView(cell.results, cell.id, cell.last_executed)}
                     </div>
                   </div>
                 )}
@@ -1323,3 +1342,19 @@ export const CellComponent: React.FC<CellComponentProps> = ({
     </div>
   )
 }
+
+// Memoized export to prevent unnecessary re-renders
+export const CellComponent = memo(CellComponentImpl, (prevProps, nextProps) => {
+  // Only re-render if the specific cell or its state has actually changed
+  return (
+    prevProps.cell.id === nextProps.cell.id &&
+    prevProps.cell.last_executed === nextProps.cell.last_executed &&
+    prevProps.cell.is_running === nextProps.cell.is_running &&
+    JSON.stringify(prevProps.cell.results) === JSON.stringify(nextProps.cell.results) &&
+    JSON.stringify(prevProps.cell.config) === JSON.stringify(nextProps.cell.config) &&
+    prevProps.cell.query === nextProps.cell.query &&
+    prevProps.cell.error === nextProps.cell.error &&
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.isDragOver === nextProps.isDragOver
+  )
+})
