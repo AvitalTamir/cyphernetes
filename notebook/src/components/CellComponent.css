@@ -801,6 +801,52 @@
   padding: 40px;
 }
 
+/* Force graph legend styles */
+.force-graph-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.force-graph-legend {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 200px;
+  z-index: 10;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-color-box {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.legend-label {
+  font-size: 11px;
+  color: #495057;
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .cell-header {
     flex-direction: column;
@@ -851,5 +897,22 @@
     flex-direction: column;
     gap: 5px;
     text-align: center;
+  }
+
+  /* Force graph legend mobile adjustments */
+  .force-graph-legend {
+    top: 5px;
+    right: 5px;
+    padding: 8px;
+    max-width: 150px;
+  }
+
+  .legend-label {
+    font-size: 10px;
+  }
+
+  .legend-color-box {
+    width: 10px;
+    height: 10px;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, memo } from 'react'
+import React, { useState, useCallback, useEffect, memo, useRef } from 'react'
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
@@ -10,72 +10,113 @@ import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import './CellComponent.css'
 
-// Simple ForceGraph wrapper with debug logging
+// Kubernetes resource type color mapping
+const K8S_RESOURCE_COLORS: {[key: string]: string} = {
+  'Pod': '#4285F4',         // Google Blue
+  'Service': '#34A853',     // Google Green
+  'Deployment': '#FBBC05',  // Google Yellow
+  'StatefulSet': '#EA4335', // Google Red
+  'ConfigMap': '#8E44AD',   // Purple
+  'Secret': '#F39C12',      // Orange
+  'PersistentVolumeClaim': '#1ABC9C', // Turquoise
+  'Ingress': '#E74C3C',     // Bright Red
+  'Job': '#3498DB',         // Light Blue
+  'CronJob': '#2ECC71',     // Emerald
+  'Namespace': '#9B59B6',   // Amethyst
+  'ReplicaSet': '#E67E22',  // Carrot
+  'DaemonSet': '#16A085',   // Green Sea
+  'Endpoint': '#2980B9',    // Belize Hole
+  'Node': '#F1C40F',        // Sunflower
+}
+
+// Simple ForceGraph wrapper with dynamic sizing
 const DebugForceGraph = memo(({ graphData, cellId }: { 
   graphData: any, 
   cellId: string
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dimensions, setDimensions] = useState({ width: 800, height: 368 })
+  
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setDimensions({
+          width: rect.width || 800,
+          height: 368 // Keep fixed height
+        })
+      }
+    }
+    
+    updateDimensions()
+    window.addEventListener('resize', updateDimensions)
+    
+    return () => window.removeEventListener('resize', updateDimensions)
+  }, [])
   
   // Use the same color function as web client, but for notebook data structure
   const getNodeColor = (node: any) => {
-    const colorMap: {[key: string]: string} = {
-      'Pod': '#4285F4',         // Google Blue
-      'Service': '#34A853',     // Google Green
-      'Deployment': '#FBBC05',  // Google Yellow
-      'StatefulSet': '#EA4335', // Google Red
-      'ConfigMap': '#8E44AD',   // Purple
-      'Secret': '#F39C12',      // Orange
-      'PersistentVolumeClaim': '#1ABC9C', // Turquoise
-      'Ingress': '#E74C3C',     // Bright Red
-      'Job': '#3498DB',         // Light Blue
-      'CronJob': '#2ECC71',     // Emerald
-      'Namespace': '#9B59B6',   // Amethyst
-      'ReplicaSet': '#E67E22',  // Carrot
-      'DaemonSet': '#16A085',   // Green Sea
-      'Endpoint': '#2980B9',    // Belize Hole
-      'Node': '#F1C40F',        // Sunflower
-    }
     // Notebook uses 'type' field, web client uses 'kind' field
-    return colorMap[node.type] || '#aaaaaa'
+    return K8S_RESOURCE_COLORS[node.type] || '#aaaaaa'
   }
   
   return (
-    <ForceGraph2D
-      key={`force-${cellId}`}
-      graphData={graphData}
-      nodeLabel="name"
-      nodeColor={getNodeColor}
-      linkColor={() => '#999'}
-      linkWidth={2}
-      nodeRelSize={8}
-      enableZoomInteraction={true}
-      enableNodeDrag={true}
-      width={800}
-      height={400}
-    />
+    <div ref={containerRef} style={{ width: '100%', height: '368px' }}>
+      <ForceGraph2D
+        key={`force-${cellId}`}
+        graphData={graphData}
+        nodeLabel="name"
+        nodeColor={getNodeColor}
+        linkColor={() => '#999'}
+        linkWidth={2}
+        nodeRelSize={8}
+        enableZoomInteraction={true}
+        enableNodeDrag={true}
+        width={dimensions.width}
+        height={dimensions.height}
+      />
+    </div>
   )
 })
 
 // Dynamic node color mapping (same as web client)
 const getNodeColor = (nodeType: string): string => {
-  const colorMap: {[key: string]: string} = {
-    'Pod': '#4285F4',         // Google Blue
-    'Service': '#34A853',     // Google Green
-    'Deployment': '#FBBC05',  // Google Yellow
-    'StatefulSet': '#EA4335', // Google Red
-    'ConfigMap': '#8E44AD',   // Purple
-    'Secret': '#F39C12',      // Orange
-    'PersistentVolumeClaim': '#1ABC9C', // Turquoise
-    'Ingress': '#E74C3C',     // Bright Red
-    'Job': '#3498DB',         // Light Blue
-    'CronJob': '#2ECC71',     // Emerald
-    'Namespace': '#9B59B6',   // Amethyst
-    'ReplicaSet': '#E67E22',  // Carrot
-    'DaemonSet': '#16A085',   // Green Sea
-    'Endpoint': '#2980B9',    // Belize Hole
-    'Node': '#F1C40F',        // Sunflower
+  return K8S_RESOURCE_COLORS[nodeType] || '#aaaaaa'
+}
+
+// Force graph legend component
+const ForceGraphLegend: React.FC<{ visibleTypes: Set<string> }> = ({ visibleTypes }) => {
+  // Only show legend items for resource types that are actually present in the graph
+  const relevantTypes = Array.from(visibleTypes).filter(type => K8S_RESOURCE_COLORS[type])
+  
+  if (relevantTypes.length === 0) {
+    return null
   }
-  return colorMap[nodeType] || '#aaaaaa'
+
+  return (
+    <div className="force-graph-legend">
+      <div className="legend-items">
+        {relevantTypes.sort().map(type => (
+          <div key={type} className="legend-item">
+            <div 
+              className="legend-color-box"
+              style={{ backgroundColor: K8S_RESOURCE_COLORS[type] }}
+            />
+            <span className="legend-label">{type}</span>
+          </div>
+        ))}
+        {visibleTypes.has('unknown') && (
+          <div key="unknown" className="legend-item">
+            <div 
+              className="legend-color-box"
+              style={{ backgroundColor: '#aaaaaa' }}
+            />
+            <span className="legend-label">Unknown</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 
@@ -487,10 +528,21 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
 
   // Check if data already has graph structure
   if (data.graph && data.graph.nodes && data.graph.links) {
-    return <DebugForceGraph 
-      graphData={data.graph} 
-      cellId={cellId || 'unknown'} 
-    />
+    const visibleTypes = new Set<string>()
+    data.graph.nodes.forEach((node: any) => {
+      const nodeType = node.type || node.kind || 'unknown'
+      visibleTypes.add(nodeType)
+    })
+    
+    return (
+      <div className="force-graph-container">
+        <DebugForceGraph 
+          graphData={data.graph} 
+          cellId={cellId || 'unknown'} 
+        />
+        <ForceGraphLegend visibleTypes={visibleTypes} />
+      </div>
+    )
   }
 
   // Use the graph data if available
@@ -524,10 +576,21 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
       type: edge.Type || edge.type || 'relationship'
     }))
     
-    return <DebugForceGraph 
-      graphData={{ nodes, links }} 
-      cellId={cellId || 'unknown'} 
-    />
+    const visibleTypes = new Set<string>()
+    nodes.forEach((node: any) => {
+      const nodeType = node.type || 'unknown'
+      visibleTypes.add(nodeType)
+    })
+    
+    return (
+      <div className="force-graph-container">
+        <DebugForceGraph 
+          graphData={{ nodes, links }} 
+          cellId={cellId || 'unknown'} 
+        />
+        <ForceGraphLegend visibleTypes={visibleTypes} />
+      </div>
+    )
   }
   
   // Fallback: Try to extract nodes and relationships from Cyphernetes result data
@@ -577,10 +640,21 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
     })
 
     if (nodes.length > 0) {
-      return <DebugForceGraph 
-        graphData={{ nodes, links }} 
-        cellId={cellId || 'unknown'} 
-      />
+      const visibleTypes = new Set<string>()
+      nodes.forEach((node: any) => {
+        const nodeType = node.type || 'unknown'
+        visibleTypes.add(nodeType)
+      })
+      
+      return (
+        <div className="force-graph-container">
+          <DebugForceGraph 
+            graphData={{ nodes, links }} 
+            cellId={cellId || 'unknown'} 
+          />
+          <ForceGraphLegend visibleTypes={visibleTypes} />
+        </div>
+      )
     }
   }
 
