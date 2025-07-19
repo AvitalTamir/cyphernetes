@@ -38,6 +38,22 @@
   box-shadow: 0 0 0 1px rgba(220, 53, 69, 0.1);
 }
 
+.cell.polling {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(0, 123, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+  }
+}
+
 .cell-header {
   display: flex;
   justify-content: space-between;
@@ -72,6 +88,18 @@
 .cell-executed {
   font-size: 12px;
   color: #28a745;
+}
+
+.cell-polling-indicator {
+  font-size: 12px;
+  color: #007bff;
+  font-weight: 500;
+  animation: fade 2s infinite;
+}
+
+@keyframes fade {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .cell-actions {
@@ -239,6 +267,104 @@
 .cell-action.delete:hover {
   background: #f8d7da;
   color: #721c24;
+}
+
+.cell-action-select {
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.cell-action-select:hover {
+  background: #f8f9fa;
+  border-color: #adb5bd;
+}
+
+.cell-action-select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.run-button-group {
+  display: flex;
+  position: relative;
+}
+
+.run-button-main {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-left: none !important;
+}
+
+.run-button-dropdown {
+  position: relative;
+}
+
+.run-button-trigger {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  min-width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 4px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.interval-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.interval-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 60px;
+  margin-top: 2px;
+}
+
+.interval-option {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: white;
+  text-align: center;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.interval-option:hover {
+  background: #f8f9fa;
+}
+
+.interval-option.active {
+  background: #007bff;
+  color: white;
+}
+
+.interval-option:first-child {
+  border-radius: 4px 4px 0 0;
+}
+
+.interval-option:last-child {
+  border-radius: 0 0 4px 4px;
 }
 
 .cell-content {

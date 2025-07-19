@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
-import { FileText, Table, Network, Edit3, Play, Save, X, Trash2, Search } from 'lucide-react'
+import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown } from 'lucide-react'
 import { MarkdownCell } from './MarkdownCell'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
@@ -467,6 +467,42 @@ export const CellComponent: React.FC<CellComponentProps> = ({
   // Otherwise, render the query cell
   const [isEditing, setIsEditing] = useState(false)
   const [query, setQuery] = useState(cell.query)
+  const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null)
+  const [selectedInterval, setSelectedInterval] = useState(cell.refresh_interval || 5000)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalId) {
+        clearInterval(pollingIntervalId)
+        clearTimeout(pollingIntervalId as any)
+      }
+    }
+  }, [pollingIntervalId])
+
+  // Start polling if cell has refresh_interval set and no error
+  useEffect(() => {
+    if (cell.refresh_interval && cell.refresh_interval > 0 && !pollingIntervalId && !cell.error) {
+      setPollingIntervalId(1 as any) // Set dummy ID to indicate polling is active
+      executePoll()
+    }
+  }, []) // Only run on mount
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownOpen) {
+        const target = event.target as Element
+        if (!target.closest('.run-button-dropdown')) {
+          setDropdownOpen(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [dropdownOpen])
 
   const handleSave = async () => {
     try {
@@ -492,34 +528,136 @@ export const CellComponent: React.FC<CellComponentProps> = ({
     setIsEditing(false)
   }
 
-  const handleExecute = async () => {
+  const executeQuery = async (): Promise<boolean> => {
     try {
-      onUpdate(cell.id, { is_running: true })
+      // For polling, don't show running state to reduce flicker
+      if (!pollingIntervalId) {
+        onUpdate(cell.id, { is_running: true })
+      }
       
       const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}/execute`, {
         method: 'POST',
       })
       
       if (response.ok) {
-        const result = await response.json()
+        const responseData = await response.json()
+        // Extract the actual result data if it's wrapped
+        const result = responseData.result || responseData
         onUpdate(cell.id, { 
           results: result, 
           is_running: false,
           last_executed: new Date().toISOString(),
           error: undefined
         })
+        return true // Success
       } else {
         onUpdate(cell.id, { 
           is_running: false,
           error: 'Failed to execute query'
         })
+        return false // Error
       }
     } catch (error) {
       onUpdate(cell.id, { 
         is_running: false,
         error: 'Network error'
       })
+      return false // Error
     }
+  }
+
+  const executePoll = async () => {
+    const success = await executeQuery()
+    
+    if (!success) {
+      // Stop polling on error
+      if (pollingIntervalId) {
+        clearInterval(pollingIntervalId)
+        clearTimeout(pollingIntervalId as any)
+        setPollingIntervalId(null)
+      }
+      return
+    }
+    
+    // Schedule next execution after successful completion
+    // Use callback to ensure we check the latest state
+    setPollingIntervalId(prevId => {
+      if (prevId) {
+        // Still polling, schedule next execution
+        return setTimeout(executePoll, selectedInterval) as any
+      }
+      return null // Polling was stopped
+    })
+  }
+
+  const handleRunPause = async () => {
+    if (pollingIntervalId) {
+      // Stop polling
+      clearInterval(pollingIntervalId)
+      clearTimeout(pollingIntervalId as any)
+      setPollingIntervalId(null)
+      
+      // Update refresh_interval to 0 to indicate no polling
+      await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_interval: 0 }),
+      })
+      onUpdate(cell.id, { refresh_interval: 0 })
+    } else {
+      // Start polling with timeout-based approach
+      // Set a dummy ID to indicate polling is active
+      setPollingIntervalId(1 as any)
+      executePoll()
+      
+      // Update refresh_interval in backend
+      await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_interval: selectedInterval }),
+      })
+      onUpdate(cell.id, { refresh_interval: selectedInterval })
+    }
+  }
+
+  const handleIntervalChange = async (newInterval: number) => {
+    setSelectedInterval(newInterval)
+    
+    // If currently polling, restart with new interval
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId)
+      clearTimeout(pollingIntervalId as any)
+      setPollingIntervalId(null)
+      
+      // Restart polling with new interval
+      setPollingIntervalId(1 as any) // Set dummy ID to indicate polling is active
+      executePoll()
+      
+      // Update in backend
+      await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_interval: newInterval }),
+      })
+      onUpdate(cell.id, { refresh_interval: newInterval })
+    }
+  }
+
+  const intervalOptions = [
+    { value: 1000, label: '1s' },
+    { value: 5000, label: '5s' },
+    { value: 15000, label: '15s' },
+    { value: 30000, label: '30s' },
+    { value: 60000, label: '1m' }
+  ]
+
+  const getIntervalLabel = (value: number) => {
+    return intervalOptions.find(opt => opt.value === value)?.label || '5s'
+  }
+
+  const handleIntervalSelect = (newInterval: number) => {
+    setDropdownOpen(false)
+    handleIntervalChange(newInterval)
   }
 
   // Convert legacy visualization_type to new mode system
@@ -686,9 +824,10 @@ export const CellComponent: React.FC<CellComponentProps> = ({
     return 'executed-success'
   }
 
+
   return (
     <div 
-      className={`cell ${isEditing ? 'editing' : getExecutionStatus()} ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
+      className={`cell ${isEditing ? 'editing' : getExecutionStatus()} ${pollingIntervalId ? 'polling' : ''} ${isDragging ? 'dragging' : ''} ${isDragOver ? 'drag-over' : ''}`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -708,6 +847,11 @@ export const CellComponent: React.FC<CellComponentProps> = ({
           {cell.last_executed && (
             <span className="cell-executed">
               Last executed: {new Date(cell.last_executed).toLocaleTimeString()}
+            </span>
+          )}
+          {pollingIntervalId && (
+            <span className="cell-polling-indicator">
+              Live
             </span>
           )}
         </div>
@@ -749,17 +893,50 @@ export const CellComponent: React.FC<CellComponentProps> = ({
             </>
           ) : (
             <>
+              <div className="run-button-group">
+                <div className="run-button-dropdown">
+                  <button 
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="cell-action execute run-button-trigger"
+                  >
+                    <span className="interval-label">{getIntervalLabel(selectedInterval)}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {dropdownOpen && (
+                    <div className="interval-dropdown">
+                      {intervalOptions.map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => handleIntervalSelect(option.value)}
+                          className={`interval-option ${selectedInterval === option.value ? 'active' : ''}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={handleRunPause} 
+                  disabled={cell.is_running && !pollingIntervalId}
+                  className="cell-action execute run-button-main"
+                >
+                  {pollingIntervalId ? (
+                    <>
+                      <Pause size={14} />
+                      Pause
+                    </>
+                  ) : (
+                    <>
+                      <Play size={14} />
+                      {cell.is_running ? 'Running...' : 'Run'}
+                    </>
+                  )}
+                </button>
+              </div>
               <button onClick={() => setIsEditing(true)} className="cell-action edit">
                 <Edit3 size={14} />
                 Edit
-              </button>
-              <button 
-                onClick={handleExecute} 
-                disabled={cell.is_running}
-                className="cell-action execute"
-              >
-                <Play size={14} />
-                {cell.is_running ? 'Running...' : 'Run'}
               </button>
               <button onClick={() => onDelete(cell.id)} className="cell-action delete">
                 <Trash2 size={14} />
