@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Cell } from '../types/notebook'
-import { Edit3, Eye, Save, X, Trash2, GripVertical, FileText } from 'lucide-react'
+import { Edit3, Eye, Save, X, Trash2, FileText } from 'lucide-react'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import './MarkdownCell.css'
 
@@ -98,17 +98,15 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className="markdown-cell-header">
+      <div 
+        className="markdown-cell-header"
+        draggable={!isEditing}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        title="Drag to reorder"
+        style={{ cursor: !isEditing ? 'grab' : 'default' }}
+      >
         <div className="cell-info">
-          <div 
-            className="drag-handle" 
-            title="Drag to reorder"
-            draggable={!isEditing}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <GripVertical size={14} />
-          </div>
           <span className="cell-type">
             <FileText size={12} />
             Markdown

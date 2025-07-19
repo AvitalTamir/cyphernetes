@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
-import { FileText, Table, Network, Edit3, Play, Save, X, Trash2, Search, GripVertical } from 'lucide-react'
+import { FileText, Table, Network, Edit3, Play, Save, X, Trash2, Search } from 'lucide-react'
 import { MarkdownCell } from './MarkdownCell'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
@@ -685,17 +685,15 @@ export const CellComponent: React.FC<CellComponentProps> = ({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className="cell-header">
+      <div 
+        className="cell-header"
+        draggable={!isEditing}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        title="Drag to reorder"
+        style={{ cursor: !isEditing ? 'grab' : 'default' }}
+      >
         <div className="cell-info">
-          <div 
-            className="drag-handle" 
-            title="Drag to reorder"
-            draggable={!isEditing}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <GripVertical size={14} />
-          </div>
           <span className="cell-type">
             <Search size={12} />
             Query
