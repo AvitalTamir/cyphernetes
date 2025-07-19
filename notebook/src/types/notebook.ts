@@ -14,6 +14,7 @@ export interface Cell {
   id: string
   notebook_id: string
   type: CellType
+  name?: string
   query: string
   visualization_type: VisualizationType
   refresh_interval: number

@@ -765,6 +765,8 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
   const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null)
   const [selectedInterval, setSelectedInterval] = useState(cell.refresh_interval || 5000)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [cellName, setCellName] = useState(cell.name || '')
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -841,6 +843,30 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
   const handleCancel = () => {
     setQuery(cell.query)
     setIsEditing(false)
+  }
+
+  const handleSaveName = async () => {
+    try {
+      const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: cellName }),
+      })
+      
+      if (response.ok) {
+        onUpdate(cell.id, { name: cellName })
+        setIsEditingName(false)
+      }
+    } catch (error) {
+      console.error('Failed to save cell name:', error)
+    }
+  }
+
+  const handleCancelName = () => {
+    setCellName(cell.name || '')
+    setIsEditingName(false)
   }
 
   const executeQuery = async (): Promise<boolean> => {
@@ -1019,6 +1045,11 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
     setSelectedInterval(cell.refresh_interval || 5000)
   }, [cell.refresh_interval])
 
+  // Sync cell name state with cell data
+  useEffect(() => {
+    setCellName(cell.name || '')
+  }, [cell.name])
+
   const handleModeChange = async (mode: VisualizationMode) => {
     setCurrentMode(mode)
     
@@ -1180,7 +1211,32 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
         <div className="cell-info">
           <span className="cell-type">
             <Search size={12} />
-            Query
+            {isEditingName ? (
+              <input
+                type="text"
+                value={cellName}
+                onChange={(e) => setCellName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveName()
+                  } else if (e.key === 'Escape') {
+                    handleCancelName()
+                  }
+                }}
+                onBlur={handleSaveName}
+                autoFocus
+                className="cell-name-editor"
+                placeholder="Cell name"
+              />
+            ) : (
+              <span 
+                className="cell-name-display"
+                onClick={() => setIsEditingName(true)}
+                title="Click to edit cell name"
+              >
+                {cellName || 'Query'}
+              </span>
+            )}
           </span>
           <ContextSelector
             context={cell.config?.context}

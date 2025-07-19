@@ -203,6 +203,7 @@ func (s *Server) updateCell(c *gin.Context) {
 		VisualizationType *VisualizationType `json:"visualization_type"`
 		RefreshInterval   *int               `json:"refresh_interval"`
 		Config            *CellConfig        `json:"config"`
+		Name              *string            `json:"name"`
 	}
 
 	if err := c.ShouldBindJSON(&updates); err != nil {
@@ -211,7 +212,7 @@ func (s *Server) updateCell(c *gin.Context) {
 	}
 
 	// Update the cell in the database
-	err := s.store.UpdateCell(cellID, updates.Query, updates.VisualizationType, updates.RefreshInterval, updates.Config)
+	err := s.store.UpdateCell(cellID, updates.Query, updates.VisualizationType, updates.RefreshInterval, updates.Config, updates.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update cell"})
 		return

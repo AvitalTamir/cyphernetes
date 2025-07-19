@@ -49,6 +49,7 @@ type Cell struct {
 	ID                string            `json:"id" db:"id"`
 	NotebookID        string            `json:"notebook_id" db:"notebook_id"`
 	Type              CellType          `json:"type" db:"type"`
+	Name              string            `json:"name,omitempty" db:"name"`
 	Query             string            `json:"query" db:"query"`
 	VisualizationType VisualizationType `json:"visualization_type" db:"visualization_type"`
 	RefreshInterval   int               `json:"refresh_interval" db:"refresh_interval"` // seconds

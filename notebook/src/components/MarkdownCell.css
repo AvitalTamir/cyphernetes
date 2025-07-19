@@ -47,6 +47,34 @@
   background: #e9ecef;
 }
 
+.cell-name-editor {
+  background: white;
+  border: 1px solid #007bff;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #495057;
+  outline: none;
+  min-width: 60px;
+  text-transform: none;
+}
+
+.cell-name-editor:focus {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.cell-name-display {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+
+.cell-name-display:hover {
+  background-color: rgba(108, 117, 125, 0.1);
+}
+
 .cell-mode {
   font-size: 11px;
   color: #6c757d;

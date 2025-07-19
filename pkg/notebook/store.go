@@ -52,6 +52,7 @@ func (s *Store) migrate() error {
 		id TEXT PRIMARY KEY,
 		notebook_id TEXT NOT NULL,
 		type TEXT NOT NULL,
+		name TEXT DEFAULT '',
 		query TEXT,
 		visualization_type TEXT DEFAULT 'json',
 		refresh_interval INTEGER DEFAULT 0,
@@ -140,6 +141,21 @@ func (s *Store) runMigrations() error {
 		_, err = s.db.Exec("ALTER TABLE cells ADD COLUMN results TEXT")
 		if err != nil {
 			return fmt.Errorf("failed to add results column: %w", err)
+		}
+	}
+
+	// Check if name column exists in cells table
+	var nameColumnExists bool
+	err = s.db.QueryRow("SELECT count(*) FROM pragma_table_info('cells') WHERE name='name'").Scan(&nameColumnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check name column: %w", err)
+	}
+
+	// Add name column if it doesn't exist
+	if !nameColumnExists {
+		_, err = s.db.Exec("ALTER TABLE cells ADD COLUMN name TEXT DEFAULT ''")
+		if err != nil {
+			return fmt.Errorf("failed to add name column: %w", err)
 		}
 	}
 
@@ -338,11 +354,11 @@ func (s *Store) CreateCell(notebookID string, cell *Cell) (*Cell, error) {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	query := `INSERT INTO cells (id, notebook_id, type, query, visualization_type, 
+	query := `INSERT INTO cells (id, notebook_id, type, name, query, visualization_type, 
 	          refresh_interval, position, row_index, col_index, layout_mode, config)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	
-	_, err = s.db.Exec(query, cell.ID, cell.NotebookID, cell.Type, cell.Query, 
+	_, err = s.db.Exec(query, cell.ID, cell.NotebookID, cell.Type, cell.Name, cell.Query, 
 		cell.VisualizationType, cell.RefreshInterval, cell.Position,
 		cell.RowIndex, cell.ColIndex, cell.LayoutMode, string(configJSON))
 	
@@ -358,7 +374,7 @@ func (s *Store) CreateCell(notebookID string, cell *Cell) (*Cell, error) {
 
 // GetCells retrieves all cells for a notebook
 func (s *Store) GetCells(notebookID string) ([]*Cell, error) {
-	query := `SELECT id, notebook_id, type, query, visualization_type, refresh_interval,
+	query := `SELECT id, notebook_id, type, name, query, visualization_type, refresh_interval,
 	          position, row_index, col_index, layout_mode, last_executed, error, results, config
 	          FROM cells WHERE notebook_id = ? ORDER BY position`
 
@@ -376,7 +392,7 @@ func (s *Store) GetCells(notebookID string) ([]*Cell, error) {
 		var lastExec sql.NullTime
 		var errStr sql.NullString
 
-		err := rows.Scan(&cell.ID, &cell.NotebookID, &cell.Type, &cell.Query,
+		err := rows.Scan(&cell.ID, &cell.NotebookID, &cell.Type, &cell.Name, &cell.Query,
 			&cell.VisualizationType, &cell.RefreshInterval, &cell.Position,
 			&cell.RowIndex, &cell.ColIndex, &cell.LayoutMode, 
 			&lastExec, &errStr, &resultsJSON, &configJSON)
@@ -469,7 +485,7 @@ func (s *Store) UpdateCellResults(cellID string, results interface{}, errorMsg s
 }
 
 // UpdateCell updates specific fields of a cell
-func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationType, refreshInterval *int, config *CellConfig) error {
+func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationType, refreshInterval *int, config *CellConfig, name *string) error {
 	// Build dynamic update query
 	setParts := []string{}
 	args := []interface{}{}
@@ -496,6 +512,11 @@ func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationT
 		}
 		setParts = append(setParts, "config = ?")
 		args = append(args, string(configJSON))
+	}
+	
+	if name != nil {
+		setParts = append(setParts, "name = ?")
+		args = append(args, *name)
 	}
 	
 	if len(setParts) == 0 {

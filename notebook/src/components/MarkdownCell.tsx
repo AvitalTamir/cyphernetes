@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Cell } from '../types/notebook'
@@ -31,6 +31,8 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
 }) => {
   const [isEditing, setIsEditing] = useState(!cell.query) // Start editing if empty
   const [content, setContent] = useState(cell.query || '')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [cellName, setCellName] = useState(cell.name || '')
 
   const handleSave = async () => {
     try {
@@ -55,6 +57,35 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
     setContent(cell.query || '')
     setIsEditing(false)
   }
+
+  const handleSaveName = async () => {
+    try {
+      const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: cellName }),
+      })
+      
+      if (response.ok) {
+        onUpdate(cell.id, { name: cellName })
+        setIsEditingName(false)
+      }
+    } catch (error) {
+      console.error('Failed to save cell name:', error)
+    }
+  }
+
+  const handleCancelName = () => {
+    setCellName(cell.name || '')
+    setIsEditingName(false)
+  }
+
+  // Sync cell name state with cell data
+  useEffect(() => {
+    setCellName(cell.name || '')
+  }, [cell.name])
 
   const toggleMode = () => {
     if (isEditing) {
@@ -109,7 +140,32 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
         <div className="cell-info">
           <span className="cell-type">
             <FileText size={12} />
-            Markdown
+            {isEditingName ? (
+              <input
+                type="text"
+                value={cellName}
+                onChange={(e) => setCellName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveName()
+                  } else if (e.key === 'Escape') {
+                    handleCancelName()
+                  }
+                }}
+                onBlur={handleSaveName}
+                autoFocus
+                className="cell-name-editor"
+                placeholder="Cell name"
+              />
+            ) : (
+              <span 
+                className="cell-name-display"
+                onClick={() => setIsEditingName(true)}
+                title="Click to edit cell name"
+              >
+                {cellName || 'Markdown'}
+              </span>
+            )}
           </span>
           <span className="cell-mode">{isEditing ? 'Editing' : 'Preview'}</span>
         </div>
