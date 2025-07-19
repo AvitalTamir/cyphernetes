@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, memo } from 'react'
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
-import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown } from 'lucide-react'
+import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { MarkdownCell } from './MarkdownCell'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
@@ -377,8 +377,50 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
   )
 }
 
-// Helper function to render table view using graph data for grouping
-const renderTableView = (data: any, graph?: any, query?: string): React.ReactNode => {
+// Sortable Table Component with persistence
+const SortableTable = memo(({ data, graph, query, cellId }: {
+  data: any,
+  graph?: any,
+  query?: string,
+  cellId: string
+}) => {
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+
+  // Load saved sort state on mount
+  useEffect(() => {
+    const savedSort = localStorage.getItem(`table-sort-${cellId}`)
+    if (savedSort) {
+      try {
+        const { column, direction } = JSON.parse(savedSort)
+        setSortColumn(column)
+        setSortDirection(direction)
+      } catch (e) {
+        // Ignore invalid saved state
+      }
+    }
+  }, [cellId])
+
+  // Save sort state when it changes
+  useEffect(() => {
+    if (sortColumn) {
+      localStorage.setItem(`table-sort-${cellId}`, JSON.stringify({
+        column: sortColumn,
+        direction: sortDirection
+      }))
+    }
+  }, [sortColumn, sortDirection, cellId])
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Same column: toggle direction
+      setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc')
+    } else {
+      // New column: start with desc
+      setSortColumn(column)
+      setSortDirection('desc')
+    }
+  }
   if (!data || typeof data !== 'object') {
     return <pre>{JSON.stringify(data, null, 2)}</pre>
   }
@@ -591,17 +633,70 @@ const renderTableView = (data: any, graph?: any, query?: string): React.ReactNod
     }
   }
   
+  // Sort rows based on current sort settings
+  const sortedRows = React.useMemo(() => {
+    if (!sortColumn) return rows
+
+    return [...rows].sort((a, b) => {
+      const aVal = a[sortColumn]
+      const bVal = b[sortColumn]
+      
+      // Handle null/undefined values
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return sortDirection === 'asc' ? -1 : 1
+      if (bVal == null) return sortDirection === 'asc' ? 1 : -1
+      
+      // Convert to strings for comparison
+      const aStr = String(aVal).toLowerCase()
+      const bStr = String(bVal).toLowerCase()
+      
+      // Try numeric comparison first
+      const aNum = parseFloat(aStr)
+      const bNum = parseFloat(bStr)
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
+      }
+      
+      // String comparison
+      if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1
+      if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [rows, sortColumn, sortDirection])
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) return null
+    return sortDirection === 'desc' ? <ChevronDown size={14} /> : <ChevronUp size={14} />
+  }
+
   return (
     <table className="results-table">
       <thead>
         <tr>
           {columns.map(col => (
-            <th key={col}>{col}</th>
+            <th 
+              key={col} 
+              onClick={() => handleSort(col)}
+              style={{ 
+                cursor: 'pointer', 
+                userSelect: 'none'
+              }}
+              title={`Sort by ${col}`}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {getSortIcon(col) && (
+                  <span>
+                    {getSortIcon(col)}
+                  </span>
+                )}
+                <span>{col}</span>
+              </div>
+            </th>
           ))}
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, index) => (
+        {sortedRows.map((row, index) => (
           <tr key={index}>
             {columns.map(col => (
               <td key={col}>
@@ -618,6 +713,11 @@ const renderTableView = (data: any, graph?: any, query?: string): React.ReactNod
       </tbody>
     </table>
   )
+})
+
+// Simple wrapper function that creates the sortable table
+const renderTableView = (data: any, graph?: any, query?: string, cellId?: string): React.ReactNode => {
+  return <SortableTable data={data} graph={graph} query={query} cellId={cellId || 'unknown'} />
 }
 
 interface CellComponentProps {
@@ -1273,7 +1373,6 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
               )}
               {currentMode === 'table' && (
                 <div className="table-options">
-                  <span className="option-label">Default view</span>
                 </div>
               )}
               {currentMode === 'graph' && (
@@ -1319,7 +1418,7 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
             )}
             {currentMode === 'table' && (
               <div className="table-output">
-                {renderTableView(cell.results?.data || cell.results, cell.results?.graph, cell.query)}
+                {renderTableView(cell.results?.data || cell.results, cell.results?.graph, cell.query, cell.id)}
               </div>
             )}
             {currentMode === 'graph' && (
