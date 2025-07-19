@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
-import { ArrowLeft, Plus, Search, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Search, FileText, ChevronDown } from 'lucide-react'
 import './NotebookEditor.css'
 
 interface NotebookEditorProps {
@@ -18,10 +18,26 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [draggedCellId, setDraggedCellId] = useState<string | null>(null)
   const [dragOverCellId, setDragOverCellId] = useState<string | null>(null)
+  const [addCellDropdownOpen, setAddCellDropdownOpen] = useState(false)
 
   useEffect(() => {
     loadNotebook()
   }, [notebook.id])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (addCellDropdownOpen) {
+        const target = event.target as Element
+        if (!target.closest('.add-cell-dropdown')) {
+          setAddCellDropdownOpen(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [addCellDropdownOpen])
 
   const loadNotebook = async () => {
     try {
@@ -186,25 +202,43 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     <div className="notebook-editor">
       <div className="notebook-header">
         <button className="back-button" onClick={onBack}>
-          <ArrowLeft size={16} />
-          Back to Notebooks
+          <ArrowLeft size={20} />
         </button>
         <h1 className="notebook-title">{notebook.name}</h1>
         <div className="notebook-actions">
-          <button 
-            className="btn btn-outline"
-            onClick={() => handleAddCell('query')}
-          >
-            <Search size={16} />
-            Query Cell
-          </button>
-          <button 
-            className="btn btn-outline"
-            onClick={() => handleAddCell('markdown')}
-          >
-            <FileText size={16} />
-            Markdown Cell
-          </button>
+          <div className="add-cell-dropdown">
+            <button 
+              className="btn btn-primary"
+              onClick={() => setAddCellDropdownOpen(!addCellDropdownOpen)}
+            >
+              <Plus size={16} />
+              Add Cell
+            </button>
+            {addCellDropdownOpen && (
+              <div className="add-cell-options">
+                <button 
+                  onClick={() => {
+                    handleAddCell('query')
+                    setAddCellDropdownOpen(false)
+                  }}
+                  className="add-cell-option"
+                >
+                  <Search size={16} />
+                  Query
+                </button>
+                <button 
+                  onClick={() => {
+                    handleAddCell('markdown')
+                    setAddCellDropdownOpen(false)
+                  }}
+                  className="add-cell-option"
+                >
+                  <FileText size={16} />
+                  Markdown
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -32,14 +32,7 @@ body {
   padding: 20px;
 }
 
-.notebook-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding: 20px 0;
-  border-bottom: 1px solid #e9ecef;
-}
+/* Notebook header styles moved to NotebookEditor.css to avoid conflicts */
 
 .notebook-title {
   font-size: 24px;
@@ -47,24 +40,7 @@ body {
   color: #343a40;
 }
 
-.back-button {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #495057;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.back-button:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
-}
+/* Back button styles moved to NotebookEditor.css to avoid conflicts */
 
 /* Cell styles */
 .cell {

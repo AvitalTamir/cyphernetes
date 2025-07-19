@@ -11,8 +11,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   height: 64px;
 }
 
@@ -26,6 +25,14 @@
   font-weight: 600;
   color: #343a40;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-logo {
+  height: 32px;
+  width: auto;
 }
 
 .header-right {
@@ -37,11 +44,14 @@
   background: transparent;
   border: 1px solid #dee2e6;
   border-radius: 6px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   cursor: pointer;
   font-size: 14px;
   color: #495057;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .header-button:hover {
