@@ -5,6 +5,7 @@ import * as jsYaml from 'js-yaml'
 import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { MarkdownCell } from './MarkdownCell'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
+import { ContextSelector } from './ContextSelector'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import './CellComponent.css'
@@ -851,6 +852,13 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
       
       const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}/execute`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          context: cell.config?.context,
+          namespace: cell.config?.namespace,
+        }),
       })
       
       if (response.ok) {
@@ -1174,6 +1182,20 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
             <Search size={12} />
             Query
           </span>
+          <ContextSelector
+            context={cell.config?.context}
+            namespace={cell.config?.namespace}
+            onContextChange={(context, namespace) => {
+              onUpdate(cell.id, {
+                config: {
+                  ...cell.config,
+                  context,
+                  namespace
+                }
+              })
+            }}
+            className="compact"
+          />
           {cell.last_executed && (
             <span className="cell-executed">
               Last executed: {new Date(cell.last_executed).toLocaleTimeString()}

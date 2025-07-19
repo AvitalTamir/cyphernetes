@@ -59,6 +59,10 @@ export interface CellConfig {
   
   // Common settings
   height?: number
+  
+  // Context settings
+  context?: string
+  namespace?: string
 }
 
 export interface User {

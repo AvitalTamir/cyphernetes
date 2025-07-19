@@ -1,0 +1,131 @@
+.context-selector {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #6c757d;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 4px 8px;
+  gap: 8px;
+}
+
+.context-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.context-label,
+.namespace-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.context-value {
+  color: #007bff;
+  font-weight: 500;
+}
+
+.namespace-value {
+  color: #28a745;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.namespace-value:hover {
+  background-color: #e9ecef;
+}
+
+.namespace-chevron {
+  opacity: 0.6;
+  transition: transform 0.2s ease;
+}
+
+.namespace-value:hover .namespace-chevron {
+  opacity: 1;
+}
+
+.namespace-selector {
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.namespace-search {
+  padding: 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.namespace-search input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.namespace-search input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.namespace-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.namespace-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #495057;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.namespace-item:last-child {
+  border-bottom: none;
+}
+
+.namespace-item:hover {
+  background-color: #f8f9fa;
+}
+
+.namespace-item.active {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.namespace-item.disabled {
+  cursor: default;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.namespace-item.disabled:hover {
+  background-color: transparent;
+}
+
+/* Small variant for cell headers */
+.context-selector.compact {
+  font-size: 11px;
+  padding: 2px 6px;
+  gap: 6px;
+}
+
+.context-selector.compact .context-info {
+  gap: 4px;
+}

@@ -1,14 +1,19 @@
 package notebook
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Notebook management handlers
@@ -252,6 +257,15 @@ func (s *Server) executeCell(c *gin.Context) {
 	notebookID := c.Param("id")
 	cellID := c.Param("cellId")
 
+	// Parse request body for context and namespace
+	var req struct {
+		Context   string `json:"context"`
+		Namespace string `json:"namespace"`
+	}
+	
+	// Bind JSON, but don't fail if empty (use defaults)
+	c.ShouldBindJSON(&req)
+
 	// Get the cell from storage
 	cells, err := s.store.GetCells(notebookID)
 	if err != nil {
@@ -279,8 +293,17 @@ func (s *Server) executeCell(c *gin.Context) {
 		return
 	}
 
-	// Execute the query
-	result, err := s.executor.ExecuteQuery(targetCell.Query, "default")
+	// Use provided namespace or fall back to stored config or default
+	namespace := req.Namespace
+	if namespace == "" && targetCell.Config.Namespace != "" {
+		namespace = targetCell.Config.Namespace
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	// Execute the query with the specified namespace
+	result, err := s.executor.ExecuteQuery(targetCell.Query, namespace)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Query execution failed: %v", err)})
 		return
@@ -491,4 +514,107 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 			"username": username,
 		},
 	}, userID)
+}
+
+// Context and namespace handlers
+
+type ContextInfo struct {
+	Context   string `json:"context"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
+func (s *Server) getContext(c *gin.Context) {
+	// Get the kubeconfig loader
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		rules,
+		&clientcmd.ConfigOverrides{},
+	).RawConfig()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not load kubeconfig"})
+		return
+	}
+
+	// Get current context
+	currentContext := config.CurrentContext
+	if currentContext == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No current context set"})
+		return
+	}
+
+	// Get the current namespace from the executor (this should be per-cell in the future)
+	namespace := "default"
+	if s.executor != nil {
+		// For now, we'll return "default" but this could be enhanced to track per-cell namespaces
+		namespace = "default"
+	}
+
+	c.JSON(http.StatusOK, ContextInfo{
+		Context:   currentContext,
+		Namespace: namespace,
+	})
+}
+
+func (s *Server) getNamespaces(c *gin.Context) {
+	// Create a new API server provider to get the clientset
+	provider, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create provider: %v", err)})
+		return
+	}
+
+	// Cast to APIServerProvider to access GetClientset
+	apiProvider, ok := provider.(*apiserver.APIServerProvider)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider is not an APIServerProvider"})
+		return
+	}
+
+	// Get the clientset directly from the provider
+	clientset, err := apiProvider.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get clientset: %v", err)})
+		return
+	}
+
+	// Get the list of namespaces
+	namespaces, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to list namespaces: %v", err)})
+		return
+	}
+
+	// Extract namespace names
+	namespaceList := make([]string, 0, len(namespaces.Items))
+	for _, ns := range namespaces.Items {
+		namespaceList = append(namespaceList, ns.Name)
+	}
+
+	// Sort the namespaces alphabetically
+	sort.Strings(namespaceList)
+
+	// Return the list of namespaces
+	c.JSON(http.StatusOK, gin.H{
+		"namespaces": namespaceList,
+		"current":    "default", // For notebook, this would be per-cell
+	})
+}
+
+func (s *Server) setNamespace(c *gin.Context) {
+	var req struct {
+		Namespace string `json:"namespace"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
+		return
+	}
+
+	// For notebooks, we don't set a global namespace since each cell can have its own
+	// Instead, we just acknowledge the request and let the frontend handle per-cell namespaces
+	c.JSON(http.StatusOK, gin.H{
+		"namespace": req.Namespace,
+		"message":   "Namespace selection acknowledged (handled per-cell in notebooks)",
+	})
 }

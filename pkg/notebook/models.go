@@ -81,6 +81,10 @@ type CellConfig struct {
 	
 	// Common settings
 	Height int `json:"height,omitempty"` // px
+	
+	// Context settings
+	Context   string `json:"context,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // User represents a notebook user

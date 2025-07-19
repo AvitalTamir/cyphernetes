@@ -127,6 +127,11 @@ func (s *Server) setupRoutes() {
 		api.POST("/notebooks/:id/cells/:cellId/execute", s.executeCell)
 		api.POST("/notebooks/:id/execute-all", s.executeAllCells)
 
+		// Context and namespace operations
+		api.GET("/context", s.getContext)
+		api.GET("/namespaces", s.getNamespaces)
+		api.POST("/namespace", s.setNamespace)
+
 		// Collaboration
 		api.POST("/share/generate-pin", s.generatePin)
 		api.POST("/share/connect", s.connectWithPin)
