@@ -69,8 +69,15 @@ type CellConfig struct {
 	PageSize int `json:"page_size,omitempty"`
 	
 	// For graph visualization
+	GraphMode   string `json:"graph_mode,omitempty"`   // "force", "pie", "tree"
 	GraphLayout string `json:"graph_layout,omitempty"` // "force", "circular", "tree"
 	NodeSize    int    `json:"node_size,omitempty"`
+	
+	// For document visualization
+	DocumentMode string `json:"document_mode,omitempty"` // "json", "yaml"
+	
+	// For visualization mode
+	VisualizationMode string `json:"visualization_mode,omitempty"` // "document", "table", "graph"
 	
 	// Common settings
 	Height int `json:"height,omitempty"` // px

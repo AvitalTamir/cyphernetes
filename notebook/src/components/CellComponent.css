@@ -595,6 +595,57 @@
   overflow-x: auto;
 }
 
+/* Pie chart styles */
+.pie-chart-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.pie-chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.pie-chart-error {
+  text-align: center;
+  color: #dc3545;
+  padding: 40px;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  margin: 16px;
+}
+
+.pie-chart-error p {
+  margin: 8px 0;
+}
+
+.empty-pie {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 40px;
+}
+
 @media (max-width: 768px) {
   .cell-header {
     flex-direction: column;
@@ -613,5 +664,10 @@
   
   .cell-editor {
     font-size: 16px; /* Prevent zoom on iOS */
+  }
+
+  .pie-chart-container {
+    flex-direction: column;
+    gap: 15px;
   }
 }

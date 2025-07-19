@@ -32,8 +32,189 @@ const getNodeColor = (nodeType: string): string => {
 }
 
 
+// Helper function to render pie chart view
+const renderPieChartView = (data: any, query?: string): React.ReactNode => {
+  if (!data || typeof data !== 'object') {
+    return <div className="empty-pie">No data available for pie chart</div>
+  }
+
+  // Parse the query to detect single vs multiple return elements
+  let requestedFields: string[] = []
+  if (query) {
+    const returnMatch = query.match(/return\s+(.+?)(?:\s+order\s+by|\s+limit|\s+skip|$)/is)
+    if (returnMatch) {
+      requestedFields = returnMatch[1]
+        .split(',')
+        .map(field => field.trim())
+        .filter(field => field.length > 0)
+    }
+  }
+
+  // Check if more than one element is returned
+  if (requestedFields.length > 1) {
+    return (
+      <div className="pie-chart-error">
+        <p>Pie charts are only supported for queries with a single return element.</p>
+        <p>Your query returns {requestedFields.length} elements: {requestedFields.join(', ')}</p>
+      </div>
+    )
+  }
+
+  // Extract data for pie chart
+  const dataToProcess = data.data || data
+  if (!dataToProcess || typeof dataToProcess !== 'object') {
+    return <div className="empty-pie">No data structure suitable for pie chart</div>
+  }
+
+  // Get the single variable data
+  const entries = Object.entries(dataToProcess)
+  if (entries.length === 0) {
+    return <div className="empty-pie">No data to display in pie chart</div>
+  }
+
+  // Use the first (and ideally only) variable's data
+  const [variableName, resources] = entries[0]
+  if (!Array.isArray(resources)) {
+    return <div className="empty-pie">Data is not in array format suitable for pie chart</div>
+  }
+
+  // Extract the field path from the return clause to use for grouping
+  let groupingField: string | null = null
+  if (requestedFields.length === 1) {
+    const field = requestedFields[0]
+    // Extract the property path after the variable (e.g., "p.status.phase" -> "status.phase")
+    const dotIndex = field.indexOf('.')
+    if (dotIndex !== -1) {
+      groupingField = field.substring(dotIndex + 1)
+    }
+  }
+
+  console.log('Grouping field from query:', groupingField)
+
+  // Helper function to extract nested field value
+  const extractNestedValue = (obj: any, path: string): string => {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (const part of parts) {
+      if (!current || typeof current !== 'object') return 'Unknown'
+      current = current[part]
+    }
+    
+    // Convert result to string
+    if (typeof current === 'string') return current
+    if (typeof current === 'number') return current.toString()
+    if (typeof current === 'boolean') return current.toString()
+    if (current === null || current === undefined) return 'null'
+    return 'Unknown'
+  }
+
+  // Count occurrences by the requested field or fallback logic
+  const counts: Record<string, number> = {}
+  resources.forEach((resource: any) => {
+    if (typeof resource === 'object' && resource !== null) {
+      let groupBy = 'Unknown'
+      
+      if (groupingField) {
+        // Use the specific field requested in the return clause
+        groupBy = extractNestedValue(resource, groupingField)
+      } else {
+        // Fallback to default grouping logic
+        if (typeof resource.kind === 'string') {
+          groupBy = resource.kind
+        } else if (typeof resource.type === 'string') {
+          groupBy = resource.type
+        } else if (typeof resource.name === 'string') {
+          groupBy = resource.name
+        }
+      }
+      
+      counts[groupBy] = (counts[groupBy] || 0) + 1
+    }
+  })
+
+  const chartData = Object.entries(counts).map(([name, value]) => ({ name, value }))
+  
+  if (chartData.length === 0) {
+    return <div className="empty-pie">No categorical data found for pie chart</div>
+  }
+
+  // Simple pie chart implementation using SVG
+  const total = chartData.reduce((sum, item) => sum + item.value, 0)
+  let currentAngle = 0
+  const radius = 120
+  const centerX = 160
+  const centerY = 160
+
+  const colors = ['#4285F4', '#34A853', '#FBBC05', '#EA4335', '#8E44AD', '#F39C12', '#1ABC9C', '#E74C3C']
+
+  return (
+    <div className="pie-chart-container">
+      <svg width="400" height="320" viewBox="0 0 320 320">
+        {chartData.map((item, index) => {
+          const percentage = item.value / total
+          const angle = percentage * 2 * Math.PI
+          
+          // Start angle for this slice
+          const startAngle = currentAngle
+          const endAngle = currentAngle + angle
+          
+          const x1 = centerX + radius * Math.cos(startAngle)
+          const y1 = centerY + radius * Math.sin(startAngle)
+          const x2 = centerX + radius * Math.cos(endAngle)
+          const y2 = centerY + radius * Math.sin(endAngle)
+          
+          const largeArcFlag = angle > Math.PI ? 1 : 0
+          
+          // For single slice covering the whole pie, draw a circle
+          let pathData
+          if (chartData.length === 1) {
+            pathData = [
+              `M ${centerX} ${centerY}`,
+              `m -${radius}, 0`,
+              `a ${radius},${radius} 0 1,1 ${radius * 2},0`,
+              `a ${radius},${radius} 0 1,1 -${radius * 2},0`
+            ].join(' ')
+          } else {
+            pathData = [
+              `M ${centerX} ${centerY}`,
+              `L ${x1} ${y1}`,
+              `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+              'Z'
+            ].join(' ')
+          }
+          
+          const result = (
+            <path
+              key={`${item.name}-${index}`}
+              d={pathData}
+              fill={colors[index % colors.length]}
+              stroke="white"
+              strokeWidth="2"
+            />
+          )
+          
+          currentAngle += angle
+          return result
+        })}
+      </svg>
+      <div className="pie-chart-legend">
+        {chartData.map((item, index) => (
+          <div key={`legend-${item.name}-${index}`} className="legend-item">
+            <div 
+              className="legend-color" 
+              style={{ backgroundColor: colors[index % colors.length] }}
+            ></div>
+            <span>{item.name}: {item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Helper function to render graph view
-const renderGraphView = (data: any): React.ReactNode => {
+const renderGraphView = (data: any, cellId?: string): React.ReactNode => {
   if (!data || typeof data !== 'object') {
     return <div className="empty-graph">No graph data available</div>
   }
@@ -42,6 +223,7 @@ const renderGraphView = (data: any): React.ReactNode => {
   if (data.graph && data.graph.nodes && data.graph.links) {
     return (
       <ForceGraph2D
+        key={`force-graph-${cellId}-${Date.now()}`}
         graphData={data.graph}
         nodeLabel="name"
         nodeColor={(node: any) => node.type === 'pod' ? '#ff6b6b' : 
@@ -91,6 +273,7 @@ const renderGraphView = (data: any): React.ReactNode => {
     
     return (
       <ForceGraph2D
+        key={`force-graph-main-${cellId}-${Date.now()}`}
         graphData={{ nodes, links }}
         nodeLabel="name"
         nodeColor={(node: any) => getNodeColor(node.type)}
@@ -154,6 +337,7 @@ const renderGraphView = (data: any): React.ReactNode => {
     if (nodes.length > 0) {
       return (
         <ForceGraph2D
+          key={`force-graph-fallback-${cellId}-${Date.now()}`}
           graphData={{ nodes, links }}
           nodeLabel="name"
           nodeColor={(node: any) => getNodeColor(node.type)}
@@ -490,13 +674,15 @@ export const CellComponent: React.FC<CellComponentProps> = ({
 
   const isPollingDisabled = isMutationQuery()
 
-  // Start polling if cell has refresh_interval set and no error
+  // Start polling if cell has refresh_interval set and no error  
   useEffect(() => {
+    // Only start polling on initial mount if conditions are met
     if (cell.refresh_interval && cell.refresh_interval > 0 && !pollingIntervalId && !cell.error && !isPollingDisabled) {
       setPollingIntervalId(1 as any) // Set dummy ID to indicate polling is active
       executePoll()
     }
-  }, []) // Only run on mount
+    // Note: This intentionally has limited dependencies to avoid restart loops
+  }, []) // Only run on mount, other effects handle state changes
 
   // Stop polling if query becomes a mutation query
   useEffect(() => {
@@ -698,6 +884,22 @@ export const CellComponent: React.FC<CellComponentProps> = ({
   const [currentMode, setCurrentMode] = useState<VisualizationMode>(getVisualizationMode())
   const [documentMode, setDocumentMode] = useState<DocumentMode>(getDocumentMode())
   const [graphMode, setGraphMode] = useState<GraphMode>(getGraphMode())
+
+  // Sync state with cell data when cell changes (fixes persistence on reload)
+  useEffect(() => {
+    const newMode = getVisualizationMode()
+    const newDocMode = getDocumentMode()
+    const newGraphMode = getGraphMode()
+    
+    setCurrentMode(newMode)
+    setDocumentMode(newDocMode) 
+    setGraphMode(newGraphMode)
+  }, [cell.visualization_type, cell.config])
+
+  // Sync polling interval state with cell data
+  useEffect(() => {
+    setSelectedInterval(cell.refresh_interval || 5000)
+  }, [cell.refresh_interval])
 
   const handleModeChange = async (mode: VisualizationMode) => {
     setCurrentMode(mode)
@@ -1103,20 +1305,13 @@ export const CellComponent: React.FC<CellComponentProps> = ({
             )}
             {currentMode === 'graph' && (
               <div className="graph-output">
-                {graphMode === 'force' && renderGraphView(cell.results)}
-                {graphMode === 'pie' && (
-                  <div className="pie-chart-placeholder">
-                    <p>Pie chart visualization coming soon...</p>
-                    <div className="fallback-view">
-                      {renderGraphView(cell.results)}
-                    </div>
-                  </div>
-                )}
+                {graphMode === 'force' && renderGraphView(cell.results, cell.id)}
+                {graphMode === 'pie' && renderPieChartView(cell.results, cell.query)}
                 {graphMode === 'tree' && (
                   <div className="tree-chart-placeholder">
                     <p>Tree visualization coming soon...</p>
                     <div className="fallback-view">
-                      {renderGraphView(cell.results)}
+                      {renderGraphView(cell.results, cell.id)}
                     </div>
                   </div>
                 )}
