@@ -481,13 +481,31 @@ export const CellComponent: React.FC<CellComponentProps> = ({
     }
   }, [pollingIntervalId])
 
+  // Check if query contains mutation keywords
+  const isMutationQuery = () => {
+    if (!cell.query) return false
+    const query = cell.query.toLowerCase()
+    return query.includes('create') || query.includes('set') || query.includes('delete')
+  }
+
+  const isPollingDisabled = isMutationQuery()
+
   // Start polling if cell has refresh_interval set and no error
   useEffect(() => {
-    if (cell.refresh_interval && cell.refresh_interval > 0 && !pollingIntervalId && !cell.error) {
+    if (cell.refresh_interval && cell.refresh_interval > 0 && !pollingIntervalId && !cell.error && !isPollingDisabled) {
       setPollingIntervalId(1 as any) // Set dummy ID to indicate polling is active
       executePoll()
     }
   }, []) // Only run on mount
+
+  // Stop polling if query becomes a mutation query
+  useEffect(() => {
+    if (isPollingDisabled && pollingIntervalId) {
+      clearInterval(pollingIntervalId)
+      clearTimeout(pollingIntervalId as any)
+      setPollingIntervalId(null)
+    }
+  }, [isPollingDisabled, pollingIntervalId])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -896,8 +914,10 @@ export const CellComponent: React.FC<CellComponentProps> = ({
               <div className="run-button-group">
                 <div className="run-button-dropdown">
                   <button 
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    className="cell-action execute run-button-trigger"
+                    onClick={() => !isPollingDisabled && setDropdownOpen(!dropdownOpen)}
+                    className={`cell-action execute run-button-trigger ${isPollingDisabled ? 'disabled' : ''}`}
+                    disabled={isPollingDisabled}
+                    title={isPollingDisabled ? 'Polling disabled for mutation queries (CREATE, SET, DELETE)' : 'Select polling interval'}
                   >
                     <span className="interval-label">{getIntervalLabel(selectedInterval)}</span>
                     <ChevronDown size={12} />
@@ -917,11 +937,11 @@ export const CellComponent: React.FC<CellComponentProps> = ({
                   )}
                 </div>
                 <button 
-                  onClick={handleRunPause} 
+                  onClick={isPollingDisabled ? () => executeQuery() : handleRunPause} 
                   disabled={cell.is_running && !pollingIntervalId}
                   className="cell-action execute run-button-main"
                 >
-                  {pollingIntervalId ? (
+                  {pollingIntervalId && !isPollingDisabled ? (
                     <>
                       <Pause size={14} />
                       Pause

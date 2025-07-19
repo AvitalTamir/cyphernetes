@@ -70,7 +70,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   }
 
   const handleCellUpdate = (cellId: string, updates: Partial<Cell>) => {
-    setCells(cells.map(cell => 
+    setCells(prevCells => prevCells.map(cell => 
       cell.id === cellId ? { ...cell, ...updates } : cell
     ))
   }

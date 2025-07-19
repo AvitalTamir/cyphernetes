@@ -319,6 +319,16 @@
   box-sizing: border-box;
 }
 
+.run-button-trigger.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #6c757d !important;
+}
+
+.run-button-trigger.disabled:hover {
+  background: #6c757d !important;
+}
+
 .interval-label {
   font-size: 12px;
   font-weight: 500;
