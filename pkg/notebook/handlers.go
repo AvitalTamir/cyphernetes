@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -618,4 +619,26 @@ func (s *Server) setNamespace(c *gin.Context) {
 		"namespace": req.Namespace,
 		"message":   "Namespace selection acknowledged (handled per-cell in notebooks)",
 	})
+}
+
+func (s *Server) handleAutocomplete(c *gin.Context) {
+	query := c.Query("query")
+	pos := c.Query("position")
+
+	position, err := strconv.Atoi(pos)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid position"})
+		return
+	}
+
+	completer := &CyphernetesCompleter{executor: s.executor}
+	suggestions, _ := completer.Do([]rune(query), position)
+
+	// Convert [][]rune to []string
+	stringSuggestions := make([]string, len(suggestions))
+	for i, suggestion := range suggestions {
+		stringSuggestions[i] = string(suggestion)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
 }

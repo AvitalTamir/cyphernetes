@@ -1,4 +1,15 @@
 import React, { useState, useCallback, useEffect, memo, useRef } from 'react'
+
+// Debounce function
+function debounce<F extends (...args: any[]) => any>(func: F, wait: number): (...args: Parameters<F>) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  return (...args: Parameters<F>) => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+    }
+    timeoutId = setTimeout(() => func(...args), wait)
+  }
+}
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
@@ -1061,6 +1072,14 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [cellName, setCellName] = useState(cell.name || '')
+  
+  // Autocompletion state
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [cursorPosition, setCursorPosition] = useState(0)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+  const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0 })
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -1343,6 +1362,137 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
   useEffect(() => {
     setCellName(cell.name || '')
   }, [cell.name])
+
+  // Autocompletion functions
+  const updateSuggestionsPosition = useCallback(() => {
+    if (textareaRef.current) {
+      const textBeforeCursor = textareaRef.current.value.substring(0, cursorPosition)
+      const lines = textBeforeCursor.split('\n')
+      const currentLineNumber = lines.length
+      const currentLineText = lines[lines.length - 1]
+
+      const lineHeight = 21 // Adjust this value based on your font size and line height
+      const charWidth = 8.4 // Adjust this value based on your font size
+
+      // Position one line above the current cursor position to look like it completes the current word
+      const top = ((currentLineNumber - 1) * lineHeight) + 15 // Position above current line
+      const left = (currentLineText.length * charWidth) + 14
+
+      setSuggestionsPosition({ top, left })
+    }
+  }, [cursorPosition])
+
+  useEffect(() => {
+    updateSuggestionsPosition()
+  }, [cursorPosition, updateSuggestionsPosition])
+
+  // Debounced autocomplete function
+  const debouncedFetchSuggestions = useCallback(
+    debounce(async (query: string, position: number) => {
+      try {
+        const response = await fetch(`/api/autocomplete?query=${encodeURIComponent(query)}&position=${position}`)
+        if (response.ok) {
+          const data = await response.json()
+          const uniqueSuggestions = Array.from(new Set(data.suggestions || [])) as string[]
+          setSuggestions(uniqueSuggestions)
+          setSelectedSuggestionIndex(-1)
+        }
+      } catch (error) {
+        console.error('Failed to fetch suggestions:', error)
+      }
+    }, 300),
+    []
+  )
+
+  useEffect(() => {
+    if (isEditing && query.length > 0) {
+      debouncedFetchSuggestions(query, cursorPosition)
+    } else {
+      setSuggestions([])
+    }
+  }, [query, cursorPosition, debouncedFetchSuggestions, isEditing])
+
+  const insertSuggestion = useCallback((suggestion: string) => {
+    const newQuery = query.slice(0, cursorPosition) + suggestion + query.slice(cursorPosition)
+    const newCursorPosition = cursorPosition + suggestion.length
+
+    setQuery(newQuery)
+    setCursorPosition(newCursorPosition)
+    setSuggestions([])
+    setSelectedSuggestionIndex(-1)
+
+    // Update the cursor position in the textarea
+    if (textareaRef.current) {
+      textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
+    }
+  }, [query, cursorPosition])
+
+  const scrollSuggestionIntoView = useCallback((index: number) => {
+    if (suggestionsRef.current) {
+      const suggestionItems = suggestionsRef.current.getElementsByClassName('suggestion-item')
+      if (suggestionItems[index]) {
+        suggestionItems[index].scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        })
+      }
+    }
+  }, [])
+
+  const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newQuery = e.target.value
+    const newPosition = e.target.selectionStart
+    setQuery(newQuery)
+    setCursorPosition(newPosition)
+  }, [])
+
+  const handleCursorChange = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const newPosition = e.currentTarget.selectionStart
+    setCursorPosition(newPosition)
+  }, [])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (suggestions.length > 0) {
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        insertSuggestion(suggestions[selectedSuggestionIndex !== -1 ? selectedSuggestionIndex : 0])
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedSuggestionIndex((prevIndex) =>
+          prevIndex < suggestions.length - 1 ? prevIndex + 1 : prevIndex
+        )
+        scrollSuggestionIntoView(selectedSuggestionIndex + 1)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedSuggestionIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : 0))
+        scrollSuggestionIntoView(selectedSuggestionIndex - 1)
+      } else if (e.key === 'Enter' && selectedSuggestionIndex !== -1) {
+        e.preventDefault()
+        insertSuggestion(suggestions[selectedSuggestionIndex])
+      }
+    }
+  }, [suggestions, selectedSuggestionIndex, insertSuggestion, scrollSuggestionIntoView])
+
+  const handleSuggestionClick = useCallback((e: React.MouseEvent, suggestion: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    insertSuggestion(suggestion)
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [insertSuggestion])
+
+  const isEndOfLine = useCallback(() => {
+    if (textareaRef.current) {
+      const lines = query.split('\n')
+      const currentLineIndex = query.substr(0, cursorPosition).split('\n').length - 1
+      const currentLine = lines[currentLineIndex]
+      return cursorPosition === query.length || 
+             (currentLineIndex < lines.length - 1 && 
+              cursorPosition === query.indexOf('\n', query.indexOf(currentLine)) - 1)
+    }
+    return false
+  }, [query, cursorPosition])
 
   const handleModeChange = async (mode: VisualizationMode) => {
     setCurrentMode(mode)
@@ -1656,8 +1806,11 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
           <div className="cell-editor-container">
             <div className="cell-editor-wrapper">
               <textarea
+                ref={textareaRef}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={handleQueryChange}
+                onKeyDown={handleKeyDown}
+                onSelect={handleCursorChange}
                 placeholder="Enter your Cyphernetes query here..."
                 className="cell-editor cell-editor-overlay"
                 rows={6}
@@ -1680,6 +1833,29 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
                 </PrismSyntaxHighlighter>
               </div>
             </div>
+            {isEndOfLine() && suggestions.length > 0 && suggestions[0] !== "" && (
+              <div 
+                ref={suggestionsRef}
+                className="suggestions" 
+                style={{ 
+                  position: 'absolute',
+                  top: `${suggestionsPosition.top}px`, 
+                  left: `${suggestionsPosition.left}px`,
+                  zIndex: 1000
+                }}
+              >
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    className={`suggestion-item ${index === selectedSuggestionIndex ? 'highlighted' : ''}`}
+                    onClick={(e) => handleSuggestionClick(e, suggestion)}
+                    onMouseDown={(e) => e.preventDefault()} // Prevent blur on click
+                  >
+                    {suggestion}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="cell-query-display">

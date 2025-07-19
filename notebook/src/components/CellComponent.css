@@ -410,6 +410,7 @@
 
 .cell-editor-container {
   /* Container for the editor - no special positioning */
+  position: relative;
 }
 
 .cell-editor-wrapper {
@@ -495,6 +496,42 @@
 .cell-placeholder {
   color: #6c757d;
   font-style: italic;
+}
+
+/* Autocompletion suggestions */
+.suggestions {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: 200px;
+  overflow-y: auto;
+  min-width: 150px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  scroll-behavior: smooth;
+}
+
+.suggestion-item {
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  color: #8f8f8f;
+  border: none;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.suggestion-item:hover {
+  color: #ffffff;
+  background: transparent;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 12px rgba(255, 255, 255, 0.6), 0 0 16px rgba(255, 255, 255, 0.4);
+}
+
+.suggestion-item.highlighted {
+  color: #000000;
+  background: transparent;
 }
 
 .cell-error {

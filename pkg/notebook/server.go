@@ -131,6 +131,9 @@ func (s *Server) setupRoutes() {
 		api.GET("/context", s.getContext)
 		api.GET("/namespaces", s.getNamespaces)
 		api.POST("/namespace", s.setNamespace)
+		
+		// Autocomplete
+		api.GET("/autocomplete", s.handleAutocomplete)
 
 		// Collaboration
 		api.POST("/share/generate-pin", s.generatePin)
