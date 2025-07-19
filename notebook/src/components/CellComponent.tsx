@@ -259,6 +259,226 @@ const renderPieChartView = (data: any, query?: string): React.ReactNode => {
   )
 }
 
+// Helper function to parse Kubernetes resource notation to numbers
+const parseK8sValue = (value: string): number => {
+  if (typeof value !== 'string') return parseFloat(String(value)) || 0
+  
+  const trimmed = value.trim().toLowerCase()
+  
+  // Handle CPU units (millicores)
+  if (trimmed.endsWith('m')) {
+    const num = parseFloat(trimmed.slice(0, -1))
+    return isNaN(num) ? 0 : num / 1000 // Convert millicores to cores
+  }
+  
+  // Handle memory units
+  const memoryUnits: {[key: string]: number} = {
+    'ki': 1024,
+    'mi': 1024 * 1024,
+    'gi': 1024 * 1024 * 1024,
+    'ti': 1024 * 1024 * 1024 * 1024,
+    'k': 1000,
+    'm': 1000 * 1000,
+    'g': 1000 * 1000 * 1000,
+    't': 1000 * 1000 * 1000 * 1000,
+  }
+  
+  for (const [suffix, multiplier] of Object.entries(memoryUnits)) {
+    if (trimmed.endsWith(suffix)) {
+      const num = parseFloat(trimmed.slice(0, -suffix.length))
+      return isNaN(num) ? 0 : num * multiplier
+    }
+  }
+  
+  // Handle plain numbers
+  const num = parseFloat(trimmed)
+  return isNaN(num) ? 0 : num
+}
+
+// Helper function to format display values
+const formatDisplayValue = (originalValue: string | number, parsedValue: number): string => {
+  if (typeof originalValue === 'string') {
+    const trimmed = originalValue.trim().toLowerCase()
+    if (trimmed.endsWith('m')) {
+      // For CPU, show cores with appropriate precision
+      if (parsedValue < 1) {
+        return `${originalValue} (${parsedValue.toFixed(3)} cores)`
+      } else {
+        return `${originalValue} (${parsedValue.toFixed(1)} cores)`
+      }
+    }
+    if (trimmed.match(/[kmgt]i?$/)) return `${originalValue} (${(parsedValue / (1024 * 1024)).toFixed(2)}Mi)`
+  }
+  return String(originalValue)
+}
+
+// Helper function to render bar chart view
+const renderBarChartView = (data: any, query?: string): React.ReactNode => {
+  if (!data || typeof data !== 'object') {
+    return <div className="empty-bar">No data available for bar chart</div>
+  }
+
+  // Parse the query to detect single vs multiple return elements
+  let requestedFields: string[] = []
+  if (query) {
+    const returnMatch = query.match(/return\s+(.+?)(?:\s+order\s+by|\s+limit|\s+skip|$)/is)
+    if (returnMatch) {
+      requestedFields = returnMatch[1]
+        .split(',')
+        .map(field => field.trim())
+        .filter(field => field.length > 0)
+    }
+  }
+
+  // Check if more than one element is returned
+  if (requestedFields.length > 1) {
+    return (
+      <div className="bar-chart-error">
+        <p>Bar charts are only supported for queries with a single return element.</p>
+        <p>Your query returns {requestedFields.length} elements: {requestedFields.join(', ')}</p>
+      </div>
+    )
+  }
+
+  // Extract data for bar chart
+  const dataToProcess = data.data || data
+  if (!dataToProcess || typeof dataToProcess !== 'object') {
+    return <div className="empty-bar">No data structure suitable for bar chart</div>
+  }
+
+  // Get the single variable data
+  const entries = Object.entries(dataToProcess)
+  if (entries.length === 0) {
+    return <div className="empty-bar">No data to display in bar chart</div>
+  }
+
+  // Use the first (and ideally only) variable's data
+  const [variableName, resources] = entries[0]
+  if (!Array.isArray(resources)) {
+    return <div className="empty-bar">Data is not in array format suitable for bar chart</div>
+  }
+
+  // Extract the field path from the return clause to use for values
+  let valueField: string | null = null
+  if (requestedFields.length === 1) {
+    const field = requestedFields[0]
+    // Extract the property path after the variable (e.g., "p.status.phase" -> "status.phase")
+    const dotIndex = field.indexOf('.')
+    if (dotIndex !== -1) {
+      valueField = field.substring(dotIndex + 1)
+    }
+  }
+
+  // Helper function to extract nested field value
+  const extractNestedValue = (obj: any, path: string): any => {
+    const parts = path.split('.')
+    let current = obj
+    
+    for (const part of parts) {
+      if (!current || typeof current !== 'object') return null
+      current = current[part]
+    }
+    
+    return current
+  }
+
+  // Extract values for bar chart
+  const chartData: Array<{name: string, value: number, displayValue: string, originalValue: any}> = []
+  
+  resources.forEach((resource: any, index: number) => {
+    if (typeof resource === 'object' && resource !== null) {
+      let name = 'Unknown'
+      let originalValue: any = null
+      
+      // Get the name for the bar
+      if (typeof resource.name === 'string') {
+        name = resource.name
+      } else if (typeof resource.metadata?.name === 'string') {
+        name = resource.metadata.name
+      } else {
+        name = `Item ${index + 1}`
+      }
+      
+      if (valueField) {
+        // Use the specific field requested in the return clause
+        originalValue = extractNestedValue(resource, valueField)
+      } else {
+        // Fallback: look for common numeric fields
+        const numericFields = ['value', 'count', 'size', 'capacity', 'requests', 'limits']
+        for (const field of numericFields) {
+          if (resource[field] !== undefined) {
+            originalValue = resource[field]
+            break
+          }
+        }
+      }
+      
+      if (originalValue !== null && originalValue !== undefined) {
+        const parsedValue = parseK8sValue(String(originalValue))
+        if (parsedValue > 0) { // Only include positive values
+          chartData.push({
+            name,
+            value: parsedValue,
+            displayValue: formatDisplayValue(originalValue, parsedValue),
+            originalValue
+          })
+        }
+      }
+    }
+  })
+
+  if (chartData.length === 0) {
+    return <div className="empty-bar">No numeric data found for bar chart</div>
+  }
+
+  // Sort by value descending
+  chartData.sort((a, b) => b.value - a.value)
+
+  // Calculate chart dimensions
+  const maxValue = Math.max(...chartData.map(item => item.value))
+
+  const colors = ['#4285F4', '#34A853', '#FBBC05', '#EA4335', '#8E44AD', '#F39C12', '#1ABC9C', '#E74C3C']
+
+  return (
+    <div className="bar-chart-container">
+      <div className="bar-chart-header">
+        <h4>Values Comparison</h4>
+        {valueField && <p className="field-info">Showing: {valueField}</p>}
+      </div>
+      <div className="bar-chart-content">
+        {chartData.map((item, index) => {
+          const barWidthPercent = maxValue > 0 ? (item.value / maxValue) * 100 : 0
+          
+          return (
+            <div key={`${item.name}-${index}`} className="bar-item">
+              <div className="bar-label">
+                <span title={item.name}>{item.name}</span>
+              </div>
+              <div className="bar-container">
+                <div 
+                  className="bar-fill"
+                  style={{ 
+                    width: `${barWidthPercent}%`,
+                    backgroundColor: colors[index % colors.length]
+                  }}
+                  title={`${item.name}: ${item.displayValue}`}
+                />
+              </div>
+              <div className="bar-value">
+                <span title={item.displayValue}>{item.displayValue}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="bar-chart-legend">
+        <p>Total items: {chartData.length}</p>
+        <p>Max value: {formatDisplayValue(chartData[0]?.originalValue, maxValue)}</p>
+      </div>
+    </div>
+  )
+}
+
 // Helper function to render graph view
 const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): React.ReactNode => {
   if (!data || typeof data !== 'object') {
@@ -1459,10 +1679,10 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
                     Pie
                   </button>
                   <button
-                    className={`option-btn ${graphMode === 'tree' ? 'active' : ''}`}
-                    onClick={() => handleGraphModeChange('tree')}
+                    className={`option-btn ${graphMode === 'bar' ? 'active' : ''}`}
+                    onClick={() => handleGraphModeChange('bar')}
                   >
-                    Tree
+                    Bar
                   </button>
                 </div>
               )}
@@ -1494,14 +1714,7 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
               <div className="graph-output">
                 {graphMode === 'force' && renderGraphView(cell.results, cell.id, cell.last_executed)}
                 {graphMode === 'pie' && renderPieChartView(cell.results, cell.query)}
-                {graphMode === 'tree' && (
-                  <div className="tree-chart-placeholder">
-                    <p>Tree visualization coming soon...</p>
-                    <div className="fallback-view">
-                      {renderGraphView(cell.results, cell.id, cell.last_executed)}
-                    </div>
-                  </div>
-                )}
+                {graphMode === 'bar' && renderBarChartView(cell.results, cell.query)}
               </div>
             )}
           </div>

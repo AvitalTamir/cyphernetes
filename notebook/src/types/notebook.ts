@@ -37,7 +37,7 @@ export type VisualizationMode = 'document' | 'table' | 'graph'
 // Sub-modes for each main mode
 export type DocumentMode = 'json' | 'yaml'
 export type TableMode = 'default' // Can expand later with pagination, sorting options
-export type GraphMode = 'force' | 'pie' | 'tree' // Different graph types
+export type GraphMode = 'force' | 'pie' | 'bar' // Different graph types
 
 // Legacy type for backward compatibility (will map to modes)
 export type VisualizationType = 'json' | 'yaml' | 'table' | 'graph'
