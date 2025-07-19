@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
-import { ArrowLeft, Plus, Search, FileText, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Plus, Search, FileText, ChevronDown, Edit3, Check, X } from 'lucide-react'
 import './NotebookEditor.css'
 
 interface NotebookEditorProps {
   notebook: Notebook
   onBack: () => void
+  onUpdate: (notebookId: string, name: string) => Promise<boolean>
 }
 
 export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   notebook,
   onBack,
+  onUpdate,
 }) => {
   const [cells, setCells] = useState<Cell[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -19,10 +21,17 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const [draggedCellId, setDraggedCellId] = useState<string | null>(null)
   const [dragOverCellId, setDragOverCellId] = useState<string | null>(null)
   const [addCellDropdownOpen, setAddCellDropdownOpen] = useState(false)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleValue, setTitleValue] = useState(notebook.name)
 
   useEffect(() => {
     loadNotebook()
   }, [notebook.id])
+
+  // Update title value when notebook changes
+  useEffect(() => {
+    setTitleValue(notebook.name)
+  }, [notebook.name])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -181,6 +190,38 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     setDragOverCellId(null)
   }
 
+  const handleTitleEdit = () => {
+    setIsEditingTitle(true)
+  }
+
+  const handleTitleSave = async () => {
+    if (titleValue.trim() !== notebook.name && titleValue.trim() !== '') {
+      const success = await onUpdate(notebook.id, titleValue.trim())
+      if (success) {
+        setIsEditingTitle(false)
+      } else {
+        // Revert to original name on error
+        setTitleValue(notebook.name)
+      }
+    } else {
+      setIsEditingTitle(false)
+      setTitleValue(notebook.name) // Revert if empty or unchanged
+    }
+  }
+
+  const handleTitleCancel = () => {
+    setTitleValue(notebook.name)
+    setIsEditingTitle(false)
+  }
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleTitleSave()
+    } else if (e.key === 'Escape') {
+      handleTitleCancel()
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="notebook-editor">
@@ -204,7 +245,35 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
         <button className="back-button" onClick={onBack}>
           <ArrowLeft size={20} />
         </button>
-        <h1 className="notebook-title">{notebook.name}</h1>
+        <div className="notebook-title-container">
+          {isEditingTitle ? (
+            <div className="title-edit-group">
+              <input
+                type="text"
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleTitleSave}
+                className="notebook-title-input"
+                autoFocus
+                maxLength={100}
+              />
+              <button className="title-action-btn save" onClick={handleTitleSave}>
+                <Check size={16} />
+              </button>
+              <button className="title-action-btn cancel" onClick={handleTitleCancel}>
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="title-display-group">
+              <h1 className="notebook-title">{notebook.name}</h1>
+              <button className="title-action-btn edit" onClick={handleTitleEdit}>
+                <Edit3 size={16} />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="notebook-actions">
           <div className="add-cell-dropdown">
             <button 

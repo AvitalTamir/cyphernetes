@@ -86,8 +86,36 @@ func (s *Server) getNotebook(c *gin.Context) {
 }
 
 func (s *Server) updateNotebook(c *gin.Context) {
-	// TODO: Implement notebook update
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
+	id := c.Param("id")
+	
+	var req struct {
+		Name *string `json:"name"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update the notebook
+	err := s.store.UpdateNotebook(id, req.Name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Notebook not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return the updated notebook
+	notebook, err := s.store.GetNotebook(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, notebook)
 }
 
 func (s *Server) deleteNotebook(c *gin.Context) {

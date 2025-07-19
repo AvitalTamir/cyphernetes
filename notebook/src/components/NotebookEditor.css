@@ -18,7 +18,73 @@
   font-size: 24px;
   font-weight: 600;
   color: #343a40;
+}
+
+.notebook-title-container {
   flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.title-display-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-edit-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.notebook-title-input {
+  flex: 1;
+  font-size: 24px;
+  font-weight: 600;
+  color: #343a40;
+  background: white;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  outline: none;
+  font-family: inherit;
+}
+
+.notebook-title-input:focus {
+  border-color: #0056b3;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.title-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.title-action-btn:hover {
+  opacity: 1;
+  background: #f8f9fa;
+}
+
+.title-action-btn.edit {
+  color: #6c757d;
+}
+
+.title-action-btn.save {
+  color: #28a745;
+}
+
+.title-action-btn.cancel {
+  color: #dc3545;
 }
 
 .back-button {

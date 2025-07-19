@@ -14,7 +14,6 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
   graphData: any, 
   cellId: string
 }) => {
-  console.log(`🔍 ForceGraph render for cell ${cellId}`, { graphData })
   
   // Use the same color function as web client, but for notebook data structure
   const getNodeColor = (node: any) => {
@@ -136,7 +135,6 @@ const renderPieChartView = (data: any, query?: string): React.ReactNode => {
     }
   }
 
-  console.log('Grouping field from query:', groupingField)
 
   // Helper function to extract nested field value
   const extractNestedValue = (obj: any, path: string): string => {
@@ -743,13 +741,6 @@ const CellComponentImpl: React.FC<CellComponentProps> = ({
   isDragging,
   isDragOver,
 }) => {
-  console.log(`🔄 CellComponent render for cell ${cell.id}`, {
-    lastExecuted: cell.last_executed,
-    isRunning: cell.is_running,
-    hasResults: !!cell.results,
-    currentMode: cell.config?.visualization_mode,
-    graphMode: cell.config?.graph_mode
-  })
   // If this is a markdown cell, use the specialized component
   if (cell.type === 'markdown') {
     return (

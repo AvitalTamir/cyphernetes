@@ -69,6 +69,37 @@ function App() {
     }
   }
 
+  const handleNotebookUpdate = async (notebookId: string, name: string) => {
+    try {
+      const response = await fetch(`/api/notebooks/${notebookId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      })
+      if (response.ok) {
+        const updatedNotebook = await response.json()
+        // Update the notebook in local state
+        setNotebooks(notebooks.map(nb => nb.id === notebookId ? updatedNotebook : nb))
+        // Update selected notebook if it's the one being updated
+        if (selectedNotebook?.id === notebookId) {
+          setSelectedNotebook(updatedNotebook)
+        }
+        return true
+      } else {
+        const error = await response.json()
+        console.error('Failed to update notebook:', error.error)
+        alert('Failed to update notebook: ' + error.error)
+        return false
+      }
+    } catch (error) {
+      console.error('Failed to update notebook:', error)
+      alert('Failed to update notebook')
+      return false
+    }
+  }
+
   const handleBack = () => {
     setSelectedNotebook(null)
     // Refresh the notebooks list to get updated cell counts
@@ -84,6 +115,7 @@ function App() {
             <NotebookEditor
               notebook={selectedNotebook}
               onBack={handleBack}
+              onUpdate={handleNotebookUpdate}
             />
           ) : (
             <NotebookList

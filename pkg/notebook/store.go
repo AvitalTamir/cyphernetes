@@ -208,6 +208,45 @@ func (s *Store) GetNotebook(id string) (*Notebook, error) {
 	return &nb, nil
 }
 
+// UpdateNotebook updates notebook fields
+func (s *Store) UpdateNotebook(id string, name *string) error {
+	// Build dynamic update query
+	setParts := []string{}
+	args := []interface{}{}
+	
+	if name != nil {
+		setParts = append(setParts, "name = ?")
+		args = append(args, *name)
+	}
+	
+	if len(setParts) == 0 {
+		return nil // Nothing to update
+	}
+	
+	// Always update the updated_at timestamp
+	setParts = append(setParts, "updated_at = CURRENT_TIMESTAMP")
+	
+	// Add notebook ID to args
+	args = append(args, id)
+	
+	updateQuery := fmt.Sprintf("UPDATE notebooks SET %s WHERE id = ?", strings.Join(setParts, ", "))
+	result, err := s.db.Exec(updateQuery, args...)
+	if err != nil {
+		return fmt.Errorf("failed to update notebook: %w", err)
+	}
+	
+	// Check if notebook was actually updated
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("notebook not found")
+	}
+	
+	return nil
+}
+
 // DeleteNotebook removes a notebook and all its cells
 func (s *Store) DeleteNotebook(id string) error {
 	// Start a transaction to ensure all deletions succeed or fail together
