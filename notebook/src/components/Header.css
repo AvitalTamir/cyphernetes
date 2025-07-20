@@ -34,6 +34,9 @@
 .header-logo {
   height: 32px;
   width: auto;
+  background: white;
+  border-radius: 50%;
+  padding: 4px;
 }
 
 .header-right {

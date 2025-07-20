@@ -88,7 +88,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
 
       if (response.ok) {
         const createdCell = await response.json()
-        setCells([...cells, createdCell])
+        setCells([createdCell, ...cells])
       }
     } catch (err) {
       console.error('Failed to add cell:', err)

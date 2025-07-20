@@ -70,11 +70,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <div className="theme-name">
                     {themeOption.displayName}
                   </div>
-                  {themeName === themeOption.name && (
-                    <div className="theme-active-indicator">
-                      <Monitor size={14} />
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
