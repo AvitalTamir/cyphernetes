@@ -1103,6 +1103,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   const [isPollingActive, setIsPollingActive] = useState(false)
   const isPollingActiveRef = useRef(false)
   const [selectedInterval, setSelectedInterval] = useState(cell.refresh_interval || 5000)
+  const selectedIntervalRef = useRef(cell.refresh_interval || 5000)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [cellName, setCellName] = useState(cell.name || '')
@@ -1131,6 +1132,12 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   const setPollingActiveState = (active: boolean) => {
     setIsPollingActive(active)
     isPollingActiveRef.current = active
+  }
+  
+  // Helper to update both interval state and ref
+  const setIntervalState = (interval: number) => {
+    setSelectedInterval(interval)
+    selectedIntervalRef.current = interval
   }
 
   // Set mounted flag and cleanup on unmount
@@ -1178,13 +1185,12 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     return query.includes('create') || query.includes('set') || query.includes('delete')
   }, [cell.query])
 
-  // Start polling if cell has refresh_interval set and no error  
+  // Start polling if cell has refresh_interval set  
   useEffect(() => {
     // Prevent multiple polling starts
     const shouldStartPolling = 
       cell.refresh_interval && 
       cell.refresh_interval > 0 && 
-      !localError && 
       !isPollingDisabled && 
       isMountedRef.current
     
@@ -1323,6 +1329,30 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       
       if (response.ok) {
         const responseData = await response.json()
+        
+        // Check if the response contains an error even with 200 status
+        // Error can be at top level or nested in result
+        const errorMsg = responseData.error || responseData.result?.error
+        if (errorMsg) {
+          if (isMountedRef.current) {
+            // For polling updates, use local state
+            if (isPollingActiveRef.current) {
+              setLocalError(errorMsg)
+              setLocalIsRunning(false)
+              // No parent updates during polling!
+            } else {
+              // For manual runs, update parent
+              onUpdate(cell.id, { 
+                is_running: false,
+                error: errorMsg
+              })
+              setLocalError(errorMsg)
+              setLocalIsRunning(false)
+            }
+          }
+          return false // Error
+        }
+        
         // Extract the actual result data if it's wrapped
         const result = responseData.result || responseData
         const timestamp = new Date().toISOString()
@@ -1353,7 +1383,15 @@ export const QueryCell: React.FC<QueryCellProps> = ({
         return true // Success
       } else {
         if (isMountedRef.current) {
-          const errorMsg = 'Failed to execute query'
+          // Try to parse the actual error message from the server
+          let errorMsg = 'Failed to execute query'
+          try {
+            const errorResponse = await response.json()
+            errorMsg = errorResponse.error || errorResponse.message || errorMsg
+          } catch (e) {
+            // If we can't parse the error, use the default message
+          }
+          
           // For polling updates, use local state
           if (isPollingActiveRef.current) {
             setLocalError(errorMsg)
@@ -1426,7 +1464,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
         if (isMountedRef.current && isPollingActiveRef.current) {
           executePoll()
         }
-      }, selectedInterval)
+      }, selectedIntervalRef.current)
     }
   }
 
@@ -1457,24 +1495,34 @@ export const QueryCell: React.FC<QueryCellProps> = ({
         onUpdate(cell.id, { refresh_interval: 0 })
       }
     } else {
-      // Start polling
-      setPollingActiveState(true)
-      executePoll()
+      // Test query first before starting polling
+      const success = await executeQuery()
       
-      // Update refresh_interval in backend
-      if (isMountedRef.current) {
+      if (success && isMountedRef.current) {
+        // Only start polling if query succeeded
+        setPollingActiveState(true)
+        
+        // Schedule first poll
+        pollingTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current && isPollingActiveRef.current) {
+            executePoll()
+          }
+        }, selectedIntervalRef.current)
+        
+        // Update refresh_interval in backend
         await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_interval: selectedInterval }),
+          body: JSON.stringify({ refresh_interval: selectedIntervalRef.current }),
         })
-        onUpdate(cell.id, { refresh_interval: selectedInterval })
+        onUpdate(cell.id, { refresh_interval: selectedIntervalRef.current })
       }
+      // If query failed, don't start polling - error will be displayed
     }
   }
 
   const handleIntervalChange = async (newInterval: number) => {
-    setSelectedInterval(newInterval)
+    setIntervalState(newInterval)
     
     // If currently polling, restart with new interval
     if (isPollingActiveRef.current) {
@@ -1554,9 +1602,13 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     setGraphMode(newGraphMode)
   }, [cell.visualization_type, cell.config])
 
-  // Sync polling interval state with cell data
+  // Sync polling interval state with cell data (only when actually polling)
   useEffect(() => {
-    setSelectedInterval(cell.refresh_interval || 5000)
+    // Only sync if the cell actually has a positive refresh interval
+    // Don't reset to 5000 when polling is paused (refresh_interval = 0)
+    if (cell.refresh_interval && cell.refresh_interval > 0) {
+      setIntervalState(cell.refresh_interval)
+    }
   }, [cell.refresh_interval])
 
   // Sync cell name state with cell data
@@ -1972,7 +2024,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                   )}
                 </div>
                 <button 
-                  onClick={isPollingDisabled ? () => executeQuery() : handleRunPause} 
+                  onClick={isPollingDisabled || localError ? () => executeQuery() : handleRunPause} 
                   disabled={localIsRunning && !isPollingActive}
                   className="cell-action execute run-button-main"
                 >

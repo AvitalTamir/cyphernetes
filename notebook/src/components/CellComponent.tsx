@@ -2,7 +2,7 @@ import React from 'react'
 import { Cell } from '../types/notebook'
 import { MarkdownCell } from './MarkdownCell'
 import { QueryCell } from './QueryCell'
-import { ErrorBoundary } from './ErrorBoundary'
+import { HooksErrorBoundary } from './HooksErrorBoundary'
 
 interface CellComponentProps {
   cell: Cell
@@ -18,17 +18,14 @@ interface CellComponentProps {
 
 // Pure dispatcher component with no hooks
 const CellComponentImpl: React.FC<CellComponentProps> = (props) => {
-  if (props.cell.type === 'markdown') {
-    return (
-      <ErrorBoundary>
-        <MarkdownCell {...props} />
-      </ErrorBoundary>
-    )
-  }
   return (
-    <ErrorBoundary>
-      <QueryCell {...props} />
-    </ErrorBoundary>
+    <HooksErrorBoundary>
+      {props.cell.type === 'markdown' ? (
+        <MarkdownCell {...props} />
+      ) : (
+        <QueryCell {...props} />
+      )}
+    </HooksErrorBoundary>
   )
 }
 
