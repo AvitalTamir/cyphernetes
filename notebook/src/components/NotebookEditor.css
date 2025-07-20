@@ -1,11 +1,11 @@
 .notebook-editor {
   min-height: 100vh;
-  background: #f8f9fa;
+  background: var(--color-surface);
 }
 
 .notebook-header {
-  background: white;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
   padding: 20px 20px;
   display: flex;
   justify-content: space-between;
@@ -17,7 +17,7 @@
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #343a40;
+  color: var(--color-text);
 }
 
 .notebook-title-container {
@@ -43,9 +43,9 @@
   flex: 1;
   font-size: 24px;
   font-weight: 600;
-  color: #343a40;
-  background: white;
-  border: 2px solid #007bff;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
   border-radius: 6px;
   padding: 8px 12px;
   outline: none;
@@ -53,8 +53,8 @@
 }
 
 .notebook-title-input:focus {
-  border-color: #0056b3;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
 .title-action-btn {
@@ -72,26 +72,26 @@
 
 .title-action-btn:hover {
   opacity: 1;
-  background: #f8f9fa;
+  background: var(--color-surface);
 }
 
 .title-action-btn.edit {
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .title-action-btn.save {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .title-action-btn.cancel {
-  color: #dc3545;
+  color: var(--color-error);
 }
 
 .back-button {
   background-color: transparent;
   border: none;
   cursor: pointer;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   padding: 8px 10px;
   border-radius: 6px;
   transition: all 0.2s ease;
@@ -101,8 +101,8 @@
 }
 
 .back-button:hover {
-  color: #495057;
-  background: #f8f9fa;
+  color: var(--color-text);
+  background: var(--color-surface);
 }
 
 .notebook-actions {
@@ -124,8 +124,8 @@
   position: absolute;
   top: 100%;
   right: 0;
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
@@ -140,16 +140,16 @@
   width: 100%;
   padding: 12px 16px;
   border: none;
-  background: white;
+  background: var(--color-background);
   text-align: left;
   font-size: 14px;
-  color: #495057;
+  color: var(--color-text);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .add-cell-option:hover {
-  background: #f8f9fa;
+  background: var(--color-surface);
 }
 
 .add-cell-option:first-child {
@@ -175,22 +175,22 @@
 .notebook-empty {
   text-align: center;
   padding: 60px 20px;
-  background: white;
+  background: var(--color-background);
   border-radius: 8px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--color-border);
 }
 
 .notebook-empty h3 {
   margin: 0 0 16px 0;
   font-size: 24px;
   font-weight: 500;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .notebook-empty p {
   margin: 0 0 24px 0;
   font-size: 16px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   line-height: 1.5;
 }
 

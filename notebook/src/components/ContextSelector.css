@@ -2,9 +2,9 @@
   display: flex;
   align-items: center;
   font-size: 12px;
-  color: #6c757d;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  color: var(--color-textSecondary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 4px 8px;
   gap: 8px;
@@ -20,16 +20,16 @@
 .context-label,
 .namespace-label {
   font-weight: 500;
-  color: #495057;
+  color: var(--color-text);
 }
 
 .context-value {
-  color: #007bff;
+  color: var(--color-primary);
   font-weight: 500;
 }
 
 .namespace-value {
-  color: #28a745;
+  color: var(--color-success);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -41,7 +41,7 @@
 }
 
 .namespace-value:hover {
-  background-color: #e9ecef;
+  background-color: var(--color-border);
 }
 
 .namespace-chevron {
@@ -54,8 +54,8 @@
 }
 
 .namespace-selector {
-  background: white;
-  border: 1px solid #ced4da;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -63,13 +63,13 @@
 
 .namespace-search {
   padding: 8px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .namespace-search input {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 12px;
   outline: none;
@@ -77,8 +77,8 @@
 }
 
 .namespace-search input:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
 }
 
 .namespace-list {
@@ -90,9 +90,9 @@
   padding: 8px 12px;
   cursor: pointer;
   font-size: 12px;
-  color: #495057;
+  color: var(--color-text);
   transition: background-color 0.2s ease;
-  border-bottom: 1px solid #f8f9fa;
+  border-bottom: 1px solid var(--color-surface);
 }
 
 .namespace-item:last-child {
@@ -100,18 +100,18 @@
 }
 
 .namespace-item:hover {
-  background-color: #f8f9fa;
+  background-color: var(--color-surface);
 }
 
 .namespace-item.active {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: rgba(108, 92, 231, 0.1);
+  color: var(--color-primary);
   font-weight: 500;
 }
 
 .namespace-item.disabled {
   cursor: default;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   font-style: italic;
 }
 

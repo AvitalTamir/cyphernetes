@@ -1,10 +1,11 @@
 .header {
-  background: white;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .header-content {
@@ -23,7 +24,7 @@
 .header-title {
   font-size: 18px;
   font-weight: 600;
-  color: #343a40;
+  color: var(--color-text);
   margin: 0;
   display: flex;
   align-items: center;
@@ -42,12 +43,12 @@
 
 .header-button {
   background: transparent;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 8px 12px;
   cursor: pointer;
   font-size: 14px;
-  color: #495057;
+  color: var(--color-textSecondary);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -55,8 +56,9 @@
 }
 
 .header-button:hover {
-  background: #f8f9fa;
-  border-color: #adb5bd;
+  background: var(--color-background);
+  border-color: var(--color-textSecondary);
+  color: var(--color-text);
 }
 
 @media (max-width: 768px) {

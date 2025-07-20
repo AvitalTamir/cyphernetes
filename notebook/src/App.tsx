@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NotebookProvider } from './contexts/NotebookContext'
+import { SettingsProvider } from './contexts/SettingsContext'
 import { NotebookList } from './components/NotebookList'
 import { NotebookEditor } from './components/NotebookEditor'
 import { Header } from './components/Header'
@@ -107,27 +108,29 @@ function App() {
   }
 
   return (
-    <NotebookProvider>
-      <div className="app">
-        <Header />
-        <main className="main-content">
-          {selectedNotebook ? (
-            <NotebookEditor
-              notebook={selectedNotebook}
-              onBack={handleBack}
-              onUpdate={handleNotebookUpdate}
-            />
-          ) : (
-            <NotebookList
-              notebooks={notebooks}
-              onSelect={handleNotebookSelect}
-              onCreate={handleNotebookCreate}
-              onDelete={handleNotebookDelete}
-            />
-          )}
-        </main>
-      </div>
-    </NotebookProvider>
+    <SettingsProvider>
+      <NotebookProvider>
+        <div className="app">
+          <Header />
+          <main className="main-content">
+            {selectedNotebook ? (
+              <NotebookEditor
+                notebook={selectedNotebook}
+                onBack={handleBack}
+                onUpdate={handleNotebookUpdate}
+              />
+            ) : (
+              <NotebookList
+                notebooks={notebooks}
+                onSelect={handleNotebookSelect}
+                onCreate={handleNotebookCreate}
+                onDelete={handleNotebookDelete}
+              />
+            )}
+          </main>
+        </div>
+      </NotebookProvider>
+    </SettingsProvider>
   )
 }
 

@@ -1,6 +1,6 @@
 .markdown-cell {
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.2s ease;
@@ -14,8 +14,8 @@
 }
 
 .markdown-cell.drag-over {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.3);
   transform: translateY(-2px);
 }
 
@@ -24,13 +24,13 @@
 }
 
 .markdown-cell.editing {
-  border-color: #e9ecef;
-  box-shadow: 0 0 0 3px rgba(233, 236, 239, 0.3);
+  border-color: var(--color-border);
+  box-shadow: 0 0 0 3px rgba(221, 221, 221, 0.3);
 }
 
 .markdown-cell.preview {
-  border-color: #6f42c1;
-  box-shadow: 0 0 0 1px rgba(111, 66, 193, 0.1);
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.1);
 }
 
 .markdown-cell-header {
@@ -38,30 +38,30 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   transition: all 0.2s ease;
 }
 
 .markdown-cell-header[draggable="true"]:hover {
-  background: #e9ecef;
+  background: var(--color-border);
 }
 
 .cell-name-editor {
-  background: white;
-  border: 1px solid #007bff;
+  background: var(--color-background);
+  border: 1px solid var(--color-primary);
   border-radius: 3px;
   padding: 2px 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #495057;
+  color: var(--color-text);
   outline: none;
   min-width: 60px;
   text-transform: none;
 }
 
 .cell-name-editor:focus {
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.25);
 }
 
 .cell-name-display {
@@ -72,25 +72,25 @@
 }
 
 .cell-name-display:hover {
-  background-color: rgba(108, 117, 125, 0.1);
+  background-color: rgba(99, 110, 114, 0.1);
 }
 
 .cell-mode {
   font-size: 11px;
-  color: #6c757d;
-  background: #e9ecef;
+  color: var(--color-textSecondary);
+  background: var(--color-border);
   padding: 2px 6px;
   border-radius: 10px;
   margin-left: 8px;
 }
 
 .markdown-cell.editing .cell-mode {
-  background: #28a745;
+  background: var(--color-success);
   color: white;
 }
 
 .markdown-cell.preview .cell-mode {
-  background: #6f42c1;
+  background: var(--color-secondary);
   color: white;
 }
 
@@ -107,14 +107,14 @@
   font-size: 14px;
   line-height: 1.6;
   resize: vertical;
-  background: #f8f9fa;
+  background: var(--color-surface);
   outline: none;
 }
 
 .markdown-preview {
   padding: 16px;
   line-height: 1.6;
-  background: white;
+  background: var(--color-background);
 }
 
 .markdown-preview h1,
@@ -127,18 +127,18 @@
   margin-bottom: 16px;
   font-weight: 600;
   line-height: 1.25;
-  color: #24292e;
+  color: var(--color-text);
 }
 
 .markdown-preview h1 {
   font-size: 2em;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 8px;
 }
 
 .markdown-preview h2 {
   font-size: 1.5em;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 6px;
 }
 
@@ -156,7 +156,7 @@
 
 .markdown-preview h6 {
   font-size: 0.85em;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .markdown-preview p {
@@ -176,14 +176,14 @@
 .markdown-preview blockquote {
   margin: 16px 0;
   padding: 0 1em;
-  color: #6c757d;
-  border-left: 4px solid #dee2e6;
+  color: var(--color-textSecondary);
+  border-left: 4px solid var(--color-border);
 }
 
 .markdown-preview code.inline-code {
-  background: #eff1f5;
-  color: #4c4f69;
-  border: 1px solid #dce0e8;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.875em;
@@ -203,25 +203,25 @@
 .markdown-preview .markdown-table {
   width: 100%;
   border-collapse: collapse;
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
 }
 
 .markdown-preview .markdown-table th {
-  background: #f8f9fa;
+  background: var(--color-surface);
   padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid #dee2e6;
-  border-right: 1px solid #e9ecef;
+  border-bottom: 2px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
 }
 
 .markdown-preview .markdown-table td {
   padding: 12px 16px;
-  border-bottom: 1px solid #e9ecef;
-  border-right: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
 }
 
 .markdown-preview .markdown-table tr:last-child td {
@@ -234,11 +234,11 @@
 }
 
 .markdown-preview .markdown-table tr:hover {
-  background: #f8f9fa;
+  background: var(--color-surface);
 }
 
 .markdown-preview a {
-  color: #007bff;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -248,7 +248,7 @@
 
 .markdown-preview hr {
   height: 2px;
-  background: #e9ecef;
+  background: var(--color-border);
   border: none;
   margin: 24px 0;
 }
@@ -256,7 +256,7 @@
 .empty-markdown {
   text-align: center;
   padding: 60px 20px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .empty-markdown p {

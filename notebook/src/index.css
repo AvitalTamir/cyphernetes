@@ -1,13 +1,27 @@
 /* Reset and base styles */
 :root {
-  --primary-color: #007bff;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --warning-color: #ffc107;
-  --danger-color: #dc3545;
-  --info-color: #17a2b8;
-  --light-color: #f8f9fa;
-  --dark-color: #343a40;
+  /* Default theme colors (light) - will be overridden by theme */
+  --color-background: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-primary: #6c5ce7;
+  --color-secondary: #a29bfe;
+  --color-text: #2d3436;
+  --color-textSecondary: #636e72;
+  --color-border: #ddd;
+  --color-accent: #0984e3;
+  --color-success: #00b894;
+  --color-warning: #fdcb6e;
+  --color-error: #e84393;
+  
+  /* Legacy color mappings for compatibility */
+  --primary-color: var(--color-primary);
+  --secondary-color: var(--color-secondary);
+  --success-color: var(--color-success);
+  --warning-color: var(--color-warning);
+  --danger-color: var(--color-error);
+  --info-color: var(--color-accent);
+  --light-color: var(--color-surface);
+  --dark-color: var(--color-text);
 }
 
 html {
@@ -22,7 +36,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--light-color);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 code {
@@ -35,14 +51,14 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--color-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--color-border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--color-textSecondary);
 }

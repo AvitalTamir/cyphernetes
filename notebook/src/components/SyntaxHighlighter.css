@@ -1,7 +1,7 @@
 /* Catppuccin Latte Theme for Syntax Highlighting */
 .syntax-highlighter.catppuccin-latte {
-  background: #eff1f5;
-  color: #4c4f69;
+  background: var(--color-surface);
+  color: var(--color-text);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -9,7 +9,7 @@
   border-radius: 8px;
   overflow-x: auto;
   margin: 0;
-  border: 1px solid #dce0e8;
+  border: 1px solid var(--color-border);
   box-shadow: 0 2px 8px rgba(76, 79, 105, 0.08);
 }
 
@@ -23,7 +23,7 @@
 
 /* Catppuccin Latte Color Palette */
 .catppuccin-fg {
-  color: #4c4f69; /* Text - main foreground */
+  color: var(--color-text); /* Text - main foreground */
 }
 
 .catppuccin-string {
@@ -77,28 +77,28 @@
 }
 
 .syntax-highlighter.catppuccin-latte::-webkit-scrollbar-track {
-  background: #dce0e8;
+  background: var(--color-border);
   border-radius: 4px;
 }
 
 .syntax-highlighter.catppuccin-latte::-webkit-scrollbar-thumb {
-  background: #bcc0cc;
+  background: var(--color-textSecondary);
   border-radius: 4px;
 }
 
 .syntax-highlighter.catppuccin-latte::-webkit-scrollbar-thumb:hover {
-  background: #acb0be;
+  background: var(--color-text);
 }
 
 /* Selection styling */
 .syntax-highlighter.catppuccin-latte ::selection {
-  background: #ccd0da;
-  color: #4c4f69;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .syntax-highlighter.catppuccin-latte ::-moz-selection {
-  background: #ccd0da;
-  color: #4c4f69;
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 /* Responsive adjustments */

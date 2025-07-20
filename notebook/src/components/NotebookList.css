@@ -15,12 +15,12 @@
   margin: 0;
   font-size: 28px;
   font-weight: 600;
-  color: #343a40;
+  color: var(--color-text);
 }
 
 .notebook-create-form {
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 30px;
@@ -29,7 +29,7 @@
 .notebook-create-form input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 16px;
   margin-bottom: 16px;
@@ -37,8 +37,8 @@
 
 .notebook-create-form input:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
 .notebook-create-actions {
@@ -53,8 +53,8 @@
 }
 
 .notebook-card {
-  background: white;
-  border: 1px solid #e9ecef;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 20px;
   cursor: pointer;
@@ -63,7 +63,7 @@
 
 .notebook-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #007bff;
+  border-color: var(--color-primary);
 }
 
 .notebook-card-header {
@@ -77,7 +77,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #343a40;
+  color: var(--color-text);
   flex: 1;
 }
 
@@ -89,7 +89,7 @@
 
 .notebook-card-date {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .btn-small {
@@ -104,20 +104,21 @@
 }
 
 .btn-danger {
-  background-color: #dc3545;
-  border-color: #dc3545;
+  background-color: var(--color-error);
+  border-color: var(--color-error);
   color: white;
 }
 
 .btn-danger:hover {
-  background-color: #c82333;
-  border-color: #bd2130;
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+  filter: brightness(0.9);
 }
 
 .notebook-card-info {
   display: flex;
   gap: 16px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   font-size: 14px;
 }
 
@@ -130,14 +131,14 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .notebook-empty {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .notebook-empty h3 {

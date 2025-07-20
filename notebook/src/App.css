@@ -11,7 +11,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f8f9fa;
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
 .app {
@@ -37,7 +38,7 @@ body {
 .notebook-title {
   font-size: 24px;
   font-weight: 600;
-  color: #343a40;
+  color: var(--color-text);
 }
 
 /* Back button styles moved to NotebookEditor.css to avoid conflicts */
@@ -45,9 +46,9 @@ body {
 /* Cell styles */
 .cell {
   margin-bottom: 20px;
-  background: white;
+  background: var(--color-surface);
   border-radius: 8px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--color-border);
   overflow: hidden;
   transition: box-shadow 0.2s ease;
 }
@@ -57,8 +58,8 @@ body {
 }
 
 .cell.focused {
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
 .cell-header {
@@ -66,13 +67,13 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .cell-type {
   font-size: 12px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   font-weight: 500;
   text-transform: uppercase;
 }
@@ -87,15 +88,15 @@ body {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.2s ease;
 }
 
 .cell-action:hover {
-  background: #e9ecef;
-  color: #495057;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .cell-content {
@@ -104,13 +105,13 @@ body {
 
 .cell-results {
   padding: 16px;
-  background: #fafafa;
-  border-top: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
 }
 
 /* Button styles */
 .btn {
-  background: #007bff;
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 6px;
@@ -124,25 +125,25 @@ body {
 }
 
 .btn:hover {
-  background: #0056b3;
+  background: var(--color-secondary);
 }
 
 .btn-secondary {
-  background: #6c757d;
+  background: var(--color-textSecondary);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--color-text);
 }
 
 .btn-outline {
   background: transparent;
-  border: 1px solid #007bff;
-  color: #007bff;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
 }
 
 .btn-outline:hover {
-  background: #007bff;
+  background: var(--color-primary);
   color: white;
 }
 
@@ -155,22 +156,22 @@ body {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #495057;
+  color: var(--color-text);
 }
 
 .form-input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 14px;
-  background: white;
+  background: var(--color-background);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
 /* Loading and error states */
@@ -179,15 +180,15 @@ body {
   justify-content: center;
   align-items: center;
   height: 200px;
-  color: #6c757d;
+  color: var(--color-textSecondary);
 }
 
 .error {
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
+  background: rgba(232, 67, 147, 0.1);
+  border: 1px solid var(--color-error);
   border-radius: 4px;
   padding: 12px;
-  color: #721c24;
+  color: var(--color-error);
   margin-bottom: 16px;
 }
 
