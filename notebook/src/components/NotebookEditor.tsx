@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
 import { ArrowLeft, Plus, Search, FileText, ChevronDown, Edit3, Check, X } from 'lucide-react'
@@ -27,6 +27,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   useEffect(() => {
     loadNotebook()
   }, [notebook.id])
+  
 
   // Update title value when notebook changes
   useEffect(() => {
@@ -94,11 +95,26 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     }
   }
 
-  const handleCellUpdate = (cellId: string, updates: Partial<Cell>) => {
-    setCells(prevCells => prevCells.map(cell => 
-      cell.id === cellId ? { ...cell, ...updates } : cell
-    ))
-  }
+  const handleCellUpdate = useCallback((cellId: string, updates: Partial<Cell>) => {
+    setCells(prevCells => {
+      const index = prevCells.findIndex(cell => cell.id === cellId)
+      if (index === -1) return prevCells
+      
+      // Only update if the cell actually changed
+      const oldCell = prevCells[index]
+      const newCell = { ...oldCell, ...updates }
+      
+      // Check if anything actually changed
+      if (JSON.stringify(oldCell) === JSON.stringify(newCell)) {
+        return prevCells // Return same array reference if nothing changed
+      }
+      
+      // Create new array only if something changed
+      const newCells = [...prevCells]
+      newCells[index] = newCell
+      return newCells
+    })
+  }, [])
 
   const handleCellDelete = async (cellId: string) => {
     try {
@@ -325,20 +341,22 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
           </div>
         ) : (
           <div className="notebook-cells">
-            {cells.map((cell) => (
-              <CellComponent
-                key={cell.id}
-                cell={cell}
-                onUpdate={handleCellUpdate}
-                onDelete={handleCellDelete}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                isDragging={draggedCellId === cell.id}
-                isDragOver={dragOverCellId === cell.id}
-              />
-            ))}
+            {cells.map((cell, index) => {
+              return (
+                <CellComponent
+                  key={cell.id}
+                  cell={cell}
+                  onUpdate={handleCellUpdate}
+                  onDelete={handleCellDelete}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  isDragging={draggedCellId === cell.id}
+                  isDragOver={dragOverCellId === cell.id}
+                />
+              )
+            })}
           </div>
         )}
       </div>

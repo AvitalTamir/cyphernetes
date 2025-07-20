@@ -33,6 +33,7 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
   const [content, setContent] = useState(cell.query || '')
   const [isEditingName, setIsEditingName] = useState(false)
   const [cellName, setCellName] = useState(cell.name || '')
+  
 
   const handleSave = async () => {
     try {
