@@ -97,7 +97,7 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
 
   // Custom canvas object for node with text  
   const drawNodeWithText = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const nodeRadius = Math.max(4, 8 / globalScale)
+    const nodeRadius = Math.max(6, 12 / globalScale)
     
     // Use kind from graph structure (like web client)
     const resourceType = node.kind || node.type || 'unknown'
@@ -131,7 +131,7 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
         nodeColor={(node: any) => K8S_RESOURCE_COLORS[node.kind || node.type] || '#aaaaaa'}
         linkColor={() => '#999'}
         linkWidth={2}
-        nodeRelSize={8}
+        nodeRelSize={12}
         enableZoomInteraction={true}
         enableNodeDrag={true}
         width={dimensions.width}
