@@ -39,6 +39,29 @@ const K8S_RESOURCE_COLORS: {[key: string]: string} = {
   'Node': '#F1C40F',        // Sunflower
 }
 
+// Resource type abbreviations
+const getResourceAbbreviation = (resourceType: string): string => {
+  const abbreviations: {[key: string]: string} = {
+    'Pod': 'P',
+    'Service': 'S',
+    'Deployment': 'D',
+    'StatefulSet': 'SS',
+    'ConfigMap': 'CM',
+    'Secret': 'SEC',
+    'PersistentVolumeClaim': 'PVC',
+    'Ingress': 'ING',
+    'Job': 'J',
+    'CronJob': 'CJ',
+    'Namespace': 'NS',
+    'ReplicaSet': 'RS',
+    'DaemonSet': 'DS',
+    'Endpoint': 'EP',
+    'Node': 'N',
+    'PodDisruptionBudget': 'PDB'
+  }
+  return abbreviations[resourceType] || resourceType.substring(0, 2).toUpperCase()
+}
+
 // Simple ForceGraph wrapper with dynamic sizing
 const DebugForceGraph = memo(({ graphData, cellId }: { 
   graphData: any, 
@@ -64,10 +87,39 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
     return () => window.removeEventListener('resize', updateDimensions)
   }, [])
   
-  // Use the same color function as web client, but for notebook data structure
-  const getNodeColor = (node: any) => {
-    // Notebook uses 'type' field, web client uses 'kind' field
-    return K8S_RESOURCE_COLORS[node.type] || '#aaaaaa'
+
+  // Custom node label with resource kind (like web client)
+  const getNodeLabel = (node: any) => {
+    const resourceType = node.kind || node.type || 'Unknown'
+    const name = node.name || 'unnamed'
+    return `${resourceType.toLowerCase()}/${name}`
+  }
+
+  // Custom canvas object for node with text  
+  const drawNodeWithText = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const nodeRadius = Math.max(4, 8 / globalScale)
+    
+    // Use kind from graph structure (like web client)
+    const resourceType = node.kind || node.type || 'unknown'
+    const label = getResourceAbbreviation(resourceType)
+    const fontSize = Math.max(6, 10 / globalScale)
+    
+    // Draw the circle
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI)
+    ctx.fillStyle = K8S_RESOURCE_COLORS[resourceType] || '#aaaaaa'
+    ctx.fill()
+    
+    // Draw the text
+    ctx.font = `bold ${fontSize}px Arial`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#ffffff'
+    ctx.strokeStyle = '#000000'
+    ctx.lineWidth = 0.5
+    
+    ctx.strokeText(label, node.x, node.y)
+    ctx.fillText(label, node.x, node.y)
   }
   
   return (
@@ -75,8 +127,8 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
       <ForceGraph2D
         key={`force-${cellId}`}
         graphData={graphData}
-        nodeLabel="name"
-        nodeColor={getNodeColor}
+        nodeLabel={getNodeLabel}
+        nodeColor={(node: any) => K8S_RESOURCE_COLORS[node.kind || node.type] || '#aaaaaa'}
         linkColor={() => '#999'}
         linkWidth={2}
         nodeRelSize={8}
@@ -84,15 +136,13 @@ const DebugForceGraph = memo(({ graphData, cellId }: {
         enableNodeDrag={true}
         width={dimensions.width}
         height={dimensions.height}
+        nodeCanvasObject={drawNodeWithText}
+        nodeCanvasObjectMode={() => "replace"}
       />
     </div>
   )
 })
 
-// Dynamic node color mapping (same as web client)
-const getNodeColor = (nodeType: string): string => {
-  return K8S_RESOURCE_COLORS[nodeType] || '#aaaaaa'
-}
 
 // Force graph legend component
 const ForceGraphLegend: React.FC<{ visibleTypes: Set<string> }> = ({ visibleTypes }) => {
@@ -536,43 +586,45 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
     return <div className="empty-graph">No graph data available</div>
   }
 
-  // Check if data already has graph structure
-  if (data.graph && data.graph.nodes && data.graph.links) {
+  // Use the graph data if available (EXACTLY like web client)  
+  const graphData = data.graph || data.Graph
+  
+  // Check for lowercase nodes/links first (already processed format)
+  if (graphData && graphData.nodes && graphData.links) {
     const visibleTypes = new Set<string>()
-    data.graph.nodes.forEach((node: any) => {
-      const nodeType = node.type || node.kind || 'unknown'
+    graphData.nodes.forEach((node: any) => {
+      const nodeType = node.kind || node.type || 'unknown'
       visibleTypes.add(nodeType)
     })
     
     return (
       <div className="force-graph-container">
         <DebugForceGraph 
-          graphData={data.graph} 
+          graphData={graphData} 
           cellId={cellId || 'unknown'} 
         />
         <ForceGraphLegend visibleTypes={visibleTypes} />
       </div>
     )
   }
-
-  // Use the graph data if available
-  const graphData = data.graph || data.Graph
-  if (graphData && graphData.Nodes && graphData.Edges) {
+  
+  // Check for uppercase Nodes/Edges (raw Cyphernetes format)
+  if (graphData && graphData.Nodes && 'Edges' in graphData) {
     
-    // Use the actual graph structure - construct IDs from Kind/Name to match links
+    // Process exactly like web client: use node.Kind directly from graph with deduplication
     const nodesMap = new Map()
     graphData.Nodes.forEach((node: any) => {
-      const kind = node.Kind || node.kind || node.Type || node.type || 'unknown'
-      const name = node.Name || node.name || 'unnamed'
-      const nodeId = `${kind}/${name}` // This matches the link format
+      const nodeId = `${node.Kind}/${node.Name}`
       
       // Deduplicate nodes by ID
       if (!nodesMap.has(nodeId)) {
         nodesMap.set(nodeId, {
           id: nodeId,
-          name: name,
-          type: kind,
-          namespace: node.Namespace || node.namespace || 'default',
+          dataRefId: node.Id,
+          kind: node.Kind,        // Resource type from graph structure
+          name: node.Name,
+          type: node.Kind,        // For backward compatibility
+          namespace: node.Namespace || 'default',
           ...node
         })
       }
@@ -580,7 +632,7 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
     
     const nodes = Array.from(nodesMap.values())
     
-    const links = graphData.Edges.map((edge: any) => ({
+    const links = (graphData.Edges || []).map((edge: any) => ({
       source: edge.From || edge.source,
       target: edge.To || edge.target,
       type: edge.Type || edge.type || 'relationship'
@@ -588,8 +640,7 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
     
     const visibleTypes = new Set<string>()
     nodes.forEach((node: any) => {
-      const nodeType = node.type || 'unknown'
-      visibleTypes.add(nodeType)
+      visibleTypes.add(node.kind) // Use kind from graph
     })
     
     return (
@@ -602,6 +653,7 @@ const renderGraphView = (data: any, cellId?: string, lastExecuted?: string): Rea
       </div>
     )
   }
+  
   
   // Fallback: Try to extract nodes and relationships from Cyphernetes result data
   const dataToProcess = data.data || data
