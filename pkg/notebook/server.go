@@ -125,11 +125,13 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/notebooks/:id/cells/:cellId", s.deleteCell)
 		api.PUT("/notebooks/:id/cells/reorder", s.reorderCells)
 		api.POST("/notebooks/:id/cells/:cellId/execute", s.executeCell)
+		api.GET("/notebooks/:id/cells/:cellId/logs", s.getLogs)
 		api.POST("/notebooks/:id/execute-all", s.executeAllCells)
 
 		// Context and namespace operations
 		api.GET("/context", s.getContext)
 		api.GET("/namespaces", s.getNamespaces)
+		api.GET("/pods", s.getPods)
 		api.POST("/namespace", s.setNamespace)
 		
 		// Autocomplete

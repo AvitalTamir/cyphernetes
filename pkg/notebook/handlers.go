@@ -1,10 +1,12 @@
 package notebook
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
 	"github.com/gin-gonic/gin"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -157,17 +160,26 @@ func (s *Server) addCell(c *gin.Context) {
 		return
 	}
 
-	// Get current cell count to set position
+	// Get current cells to shift their positions
 	cells, err := s.store.GetCells(notebookID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get cells: %v", err)})
 		return
 	}
 
-	// Set defaults
+	// Shift all existing cells down by incrementing their positions
+	for _, existingCell := range cells {
+		err = s.store.UpdateCellPosition(existingCell.ID, existingCell.Position + 1)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to update cell positions: %v", err)})
+			return
+		}
+	}
+
+	// Set defaults - new cell gets position 0 (top)
 	cell.NotebookID = notebookID
-	cell.Position = len(cells)
-	cell.RowIndex = len(cells) // Each cell starts in its own row
+	cell.Position = 0
+	cell.RowIndex = 0 // New cell at the top
 	cell.ColIndex = 0
 	cell.LayoutMode = LayoutSingle
 	if cell.VisualizationType == "" {
@@ -328,6 +340,138 @@ func (s *Server) executeCell(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"cellId": cellID,
 		"result": result,
+	})
+}
+
+func (s *Server) getLogs(c *gin.Context) {
+	// Parse query parameters
+	podName := c.Query("pod")
+	container := c.Query("container")
+	namespace := c.Query("namespace")
+	follow := c.Query("follow") == "true"
+	tailLinesStr := c.Query("tail_lines")
+	sinceTime := c.Query("since_time")
+
+	// Validate required parameters
+	if podName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "pod parameter is required"})
+		return
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	// Parse tail_lines parameter
+	var tailLines *int64
+	if tailLinesStr != "" {
+		if lines, err := strconv.ParseInt(tailLinesStr, 10, 64); err == nil {
+			tailLines = &lines
+		}
+	}
+
+	// Create a new API server provider to get the clientset
+	provider, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create provider: %v", err)})
+		return
+	}
+
+	// Cast to APIServerProvider to access GetClientset
+	apiProvider, ok := provider.(*apiserver.APIServerProvider)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider is not an APIServerProvider"})
+		return
+	}
+
+	// Get the clientset directly from the provider
+	clientset, err := apiProvider.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get clientset: %v", err)})
+		return
+	}
+
+	// Prepare log options
+	logOptions := &corev1.PodLogOptions{
+		Follow:     follow,
+		TailLines:  tailLines,
+		Timestamps: true,
+	}
+
+	// Set container if specified
+	if container != "" {
+		logOptions.Container = container
+	}
+
+	// Parse since_time if provided
+	if sinceTime != "" {
+		if parsedTime, err := time.Parse(time.RFC3339, sinceTime); err == nil {
+			sinceTimeMetav1 := metav1.NewTime(parsedTime)
+			logOptions.SinceTime = &sinceTimeMetav1
+		}
+	}
+
+	// Get pod logs
+	podLogsRequest := clientset.CoreV1().Pods(namespace).GetLogs(podName, logOptions)
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stream, err := podLogsRequest.Stream(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get logs: %v", err)})
+		return
+	}
+	defer stream.Close()
+
+	// If follow is true, stream logs via Server-Sent Events
+	if follow {
+		c.Header("Content-Type", "text/event-stream")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("Access-Control-Allow-Origin", "*")
+
+		// Flush headers
+		c.Writer.Flush()
+
+		// Stream logs
+		scanner := bufio.NewScanner(stream)
+		for scanner.Scan() {
+			line := scanner.Text()
+			fmt.Fprintf(c.Writer, "data: %s\n\n", line)
+			c.Writer.Flush()
+		}
+
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
+			c.Writer.Flush()
+		}
+
+		fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
+		c.Writer.Flush()
+		return
+	}
+
+	// For non-streaming requests, read all logs and return as JSON
+	logs, err := io.ReadAll(stream)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to read logs: %v", err)})
+		return
+	}
+
+	// Split logs into lines
+	logLines := strings.Split(string(logs), "\n")
+	
+	// Remove empty last line if present
+	if len(logLines) > 0 && logLines[len(logLines)-1] == "" {
+		logLines = logLines[:len(logLines)-1]
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":      logLines,
+		"pod":       podName,
+		"container": container,
+		"namespace": namespace,
 	})
 }
 
@@ -641,4 +785,54 @@ func (s *Server) handleAutocomplete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
+}
+
+func (s *Server) getPods(c *gin.Context) {
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	// Create a new API server provider to get the clientset
+	provider, err := apiserver.NewAPIServerProvider()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create provider: %v", err)})
+		return
+	}
+
+	// Cast to APIServerProvider to access GetClientset
+	apiProvider, ok := provider.(*apiserver.APIServerProvider)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider is not an APIServerProvider"})
+		return
+	}
+
+	// Get the clientset directly from the provider
+	clientset, err := apiProvider.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get clientset: %v", err)})
+		return
+	}
+
+	// Get the list of pods in the namespace
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to list pods: %v", err)})
+		return
+	}
+
+	// Extract pod names
+	podNames := make([]string, 0, len(pods.Items))
+	for _, pod := range pods.Items {
+		podNames = append(podNames, pod.Name)
+	}
+
+	// Sort the pod names alphabetically
+	sort.Strings(podNames)
+
+	// Return the list of pod names
+	c.JSON(http.StatusOK, gin.H{
+		"pods": podNames,
+		"namespace": namespace,
+	})
 }

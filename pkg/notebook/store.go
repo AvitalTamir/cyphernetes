@@ -535,6 +535,16 @@ func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationT
 	return nil
 }
 
+// UpdateCellPosition updates just the position of a cell
+func (s *Store) UpdateCellPosition(cellID string, position int) error {
+	query := `UPDATE cells SET position = ? WHERE id = ?`
+	_, err := s.db.Exec(query, position, cellID)
+	if err != nil {
+		return fmt.Errorf("failed to update cell position: %w", err)
+	}
+	return nil
+}
+
 // DeleteCell removes a cell from the database
 func (s *Store) DeleteCell(cellID string) error {
 	query := `DELETE FROM cells WHERE id = ?`
