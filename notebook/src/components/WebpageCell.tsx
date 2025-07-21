@@ -35,6 +35,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [loadSuccess, setLoadSuccess] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const objectRef = useRef<HTMLObjectElement>(null)
 
@@ -49,11 +50,14 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
     setErrorMessage('')
     setIsLoading(false)
     setLoadSuccess(false)
+    setIsChecking(false)
   }, [url, iframeKey])
 
   // Test iframe blocking using a temporary unsandboxed iframe
   useEffect(() => {
     if (!url || !isValidUrl(url) || isEditing) return
+
+    setIsChecking(true)
 
     const checkTimer = setTimeout(() => {
       console.log('🧪 Creating temporary test iframe for:', url)
@@ -101,26 +105,39 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
                 isResolved = true
                 setLoadError(true)
                 setLoadSuccess(false)
+                setIsChecking(false)
                 setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
               } else {
                 console.log('✅ Test iframe has content - site allows embedding')
+                isResolved = true
+                setLoadSuccess(true)
+                setIsChecking(false)
               }
             } else {
               console.log('🔍 Cannot access test iframe document (cross-origin) - assuming it loaded successfully')
+              isResolved = true
+              setLoadSuccess(true)
+              setIsChecking(false)
             }
           } catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e)
             console.log('🔍 Test iframe access error:', errorMessage)
             
-            // Check for sandbox violation which indicates the site is blocked
-            if (errorMessage.toLowerCase().includes('sandbox access violation')) {
+            // Check for frame blocking errors which indicate the site is blocked
+            if (errorMessage.toLowerCase().includes('sandbox access violation') ||
+                errorMessage.toLowerCase().includes('refused to display') ||
+                errorMessage.toLowerCase().includes('x-frame-options')) {
               isResolved = true
               setLoadError(true)
               setLoadSuccess(false)
+              setIsChecking(false)
               setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
-              console.log('❌ Sandbox violation detected - site is blocked')
+              console.log('❌ Frame blocking detected - site is blocked:', errorMessage)
             } else {
               console.log('✅ Regular cross-origin error means the site loaded successfully')
+              isResolved = true
+              setLoadSuccess(true)
+              setIsChecking(false)
             }
           } finally {
             // Clean up the test iframe
@@ -149,10 +166,59 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       
       document.body.appendChild(testIframe)
       
+      // Additional check specifically for Chrome X-Frame-Options blocking
+      // Chrome doesn't throw JS errors but prevents content loading
+      setTimeout(() => {
+        if (isResolved) return
+        
+        console.log('🕐 Chrome X-Frame-Options check timeout')
+        try {
+          const doc = testIframe.contentDocument || testIframe.contentWindow?.document
+          if (doc) {
+            // We can access the document, check if it's really empty
+            const html = doc.documentElement?.innerHTML || ''
+            const bodyText = doc.body?.textContent?.trim() || ''
+            const hasElements = doc.body?.children?.length || 0
+            
+            console.log('🔍 Chrome timeout check:', {
+              htmlLength: html.length,
+              bodyText: bodyText.substring(0, 100),
+              hasElements,
+              title: doc.title
+            })
+            
+            // If document is accessible but completely empty or minimal, it's likely blocked
+            if (html.length < 100 && hasElements === 0 && !bodyText) {
+              console.log('❌ Chrome: Document accessible but empty - likely X-Frame-Options blocked')
+              isResolved = true
+              setLoadError(true)
+              setLoadSuccess(false)
+              setIsChecking(false)
+              setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
+            } else {
+              console.log('✅ Chrome: Document has content - site allows embedding')
+              isResolved = true
+              setLoadSuccess(true)
+              setIsChecking(false)
+            }
+          }
+        } catch (e) {
+          // This catch block will handle any access errors
+          console.log('❌ Chrome timeout check error - likely blocked:', e)
+          isResolved = true
+          setLoadError(true)
+          setLoadSuccess(false)
+          setIsChecking(false)
+          setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
+        }
+      }, 3000) // Longer timeout to be sure content had time to load
+      
       // Cleanup timeout
       setTimeout(() => {
         if (!isResolved) {
           console.log('⏰ Test iframe timeout - assuming it works')
+          setIsChecking(false) // Stop the pulsing animation
+          setLoadSuccess(true) // Assume success after timeout
           try {
             document.body.removeChild(testIframe)
           } catch (e) {
@@ -389,15 +455,14 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
   const handleIframeError = () => {
     setLoadError(true)
     setLoadSuccess(false)
+    setIsChecking(false)
     setErrorMessage('The website could not be loaded in the iframe')
   }
 
   const handleIframeLoad = () => {
-    // Only set success if we're not already in an error state
-    if (!loadError) {
-      setLoadSuccess(true)
-      setIsLoading(false)
-    }
+    // Don't set success immediately - wait for the verification check to complete
+    // The verification process will set success or error after checking for blocking
+    setIsLoading(false)
   }
 
   const isValidUrl = (string: string) => {
@@ -416,7 +481,8 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
     isDragging ? 'dragging' : '',
     isDragOver ? 'drag-over' : '',
     loadError ? 'executed-error' : '',
-    loadSuccess && !loadError ? 'executed-success' : ''
+    loadSuccess && !loadError ? 'executed-success' : '',
+    isChecking ? 'checking' : ''
   ].filter(Boolean).join(' ')
 
   return (

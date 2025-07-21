@@ -42,8 +42,8 @@
 }
 
 .webpage-cell.executed-success {
-  border-color: var(--color-secondary);
-  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.1);
+  border-color: var(--color-success);
+  box-shadow: 0 0 0 1px rgba(0, 184, 148, 0.1);
 }
 
 .cell.executed-error {
@@ -52,6 +52,10 @@
 }
 
 .cell.polling {
+  animation: pulse 2s infinite;
+}
+
+.cell.checking {
   animation: pulse 2s infinite;
 }
 
