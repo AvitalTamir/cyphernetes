@@ -13,6 +13,14 @@
   z-index: 1000;
 }
 
+.cell-header[draggable="true"] {
+  cursor: grab;
+}
+
+.cell-header[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .cell.drag-over {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.3);
@@ -954,4 +962,229 @@
     width: 10px;
     height: 10px;
   }
+}
+
+/* Cell type indicators */
+.cell-type-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: white;
+}
+
+.cell-type-indicator.logs {
+  background: var(--color-warning, #f39c12);
+}
+
+.cell-type-indicator.webpage {
+  background: var(--color-info, #3498db);
+}
+
+/* Logs cell styles */
+.logs-content {
+  padding: 16px;
+}
+
+.logs-info {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--color-textSecondary);
+}
+
+.logs-placeholder {
+  padding: 20px;
+  text-align: center;
+  color: var(--color-textSecondary);
+  font-style: italic;
+  background: var(--color-background);
+  border-radius: 4px;
+}
+
+/* Webpage cell styles */
+.webpage-cell .cell-type {
+  color: var(--color-info, #3498db);
+}
+
+.webpage-cell .cell-url {
+  font-size: 12px;
+  color: var(--color-textSecondary);
+  margin-left: 8px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webpage-editor {
+  padding: 16px;
+}
+
+.webpage-url-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.webpage-url-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+.editor-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-textSecondary);
+  text-align: center;
+}
+
+.webpage-content {
+  height: 600px;
+  width: 100%;
+  position: relative;
+}
+
+.webpage-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0 0 8px 8px;
+  background: white;
+}
+
+.webpage-error {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-error);
+}
+
+.webpage-error p {
+  margin: 8px 0;
+}
+
+.webpage-error p:first-child {
+  font-weight: 600;
+}
+
+.cell-action.refresh {
+  color: var(--color-primary);
+}
+
+.cell-action.refresh:hover {
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.cell-action.external {
+  color: var(--color-info, #3498db);
+  text-decoration: none;
+}
+
+.cell-action.external:hover {
+  background: rgba(52, 152, 219, 0.1);
+}
+
+.cell-empty .empty-icon {
+  color: var(--color-textSecondary);
+  margin-bottom: 16px;
+}
+
+/* External link in error message */
+.external-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.external-link:hover {
+  background: rgba(108, 92, 231, 0.1);
+  text-decoration: none;
+}
+
+/* Blocked webpage styles */
+.webpage-blocked {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-text);
+  background: var(--color-background);
+  border-radius: 8px;
+  margin: 16px;
+}
+
+.blocked-icon {
+  color: var(--color-warning, #f39c12);
+  margin-bottom: 16px;
+}
+
+.webpage-blocked h3 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.blocked-url {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  color: var(--color-primary);
+  margin: 0 0 16px 0;
+  word-break: break-all;
+}
+
+.blocked-reason {
+  color: var(--color-textSecondary);
+  margin: 0 0 24px 0;
+}
+
+.blocked-hint {
+  font-weight: 500;
+  margin: 0 0 12px 0;
+}
+
+.blocked-suggestions {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 32px 0;
+  color: var(--color-textSecondary);
+  font-size: 14px;
+}
+
+.blocked-suggestions li {
+  margin: 6px 0;
+  padding-left: 20px;
+  position: relative;
+}
+
+.blocked-suggestions li:before {
+  content: "•";
+  position: absolute;
+  left: 8px;
+  color: var(--color-primary);
+}
+
+.blocked-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+}
+
+.blocked-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

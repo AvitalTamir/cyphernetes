@@ -29,7 +29,7 @@ export interface Cell {
   config: CellConfig
 }
 
-export type CellType = 'query' | 'markdown'
+export type CellType = 'query' | 'markdown' | 'logs' | 'webpage'
 
 // Main visualization modes
 export type VisualizationMode = 'document' | 'table' | 'graph'
