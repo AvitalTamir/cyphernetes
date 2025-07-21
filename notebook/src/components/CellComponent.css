@@ -41,6 +41,11 @@
   box-shadow: 0 0 0 1px rgba(0, 184, 148, 0.1);
 }
 
+.webpage-cell.executed-success {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.1);
+}
+
 .cell.executed-error {
   border-color: var(--color-error);
   box-shadow: 0 0 0 1px rgba(232, 67, 147, 0.1);
@@ -1272,7 +1277,7 @@
 
 /* Webpage cell styles */
 .webpage-cell .cell-type {
-  color: var(--color-info, #3498db);
+  color: var(--color-textSecondary);
 }
 
 .webpage-cell .cell-url {

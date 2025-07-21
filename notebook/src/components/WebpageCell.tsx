@@ -34,6 +34,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
   const [loadError, setLoadError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [loadSuccess, setLoadSuccess] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const objectRef = useRef<HTMLObjectElement>(null)
 
@@ -42,11 +43,12 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
     setCellName(cell.name || '')
   }, [cell.name])
 
-  // Reset error when URL changes
+  // Reset state when URL changes
   useEffect(() => {
     setLoadError(false)
     setErrorMessage('')
     setIsLoading(false)
+    setLoadSuccess(false)
   }, [url, iframeKey])
 
   // Test iframe blocking using a temporary unsandboxed iframe
@@ -98,6 +100,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
               if (!hasRealContent) {
                 isResolved = true
                 setLoadError(true)
+                setLoadSuccess(false)
                 setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
               } else {
                 console.log('✅ Test iframe has content - site allows embedding')
@@ -113,6 +116,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
             if (errorMessage.toLowerCase().includes('sandbox access violation')) {
               isResolved = true
               setLoadError(true)
+              setLoadSuccess(false)
               setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
               console.log('❌ Sandbox violation detected - site is blocked')
             } else {
@@ -384,7 +388,16 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
 
   const handleIframeError = () => {
     setLoadError(true)
+    setLoadSuccess(false)
     setErrorMessage('The website could not be loaded in the iframe')
+  }
+
+  const handleIframeLoad = () => {
+    // Only set success if we're not already in an error state
+    if (!loadError) {
+      setLoadSuccess(true)
+      setIsLoading(false)
+    }
   }
 
   const isValidUrl = (string: string) => {
@@ -402,7 +415,8 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
     isEditing ? 'editing' : '',
     isDragging ? 'dragging' : '',
     isDragOver ? 'drag-over' : '',
-    loadError ? 'executed-error' : ''
+    loadError ? 'executed-error' : '',
+    loadSuccess && !loadError ? 'executed-success' : ''
   ].filter(Boolean).join(' ')
 
   return (
@@ -546,6 +560,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
                       className="webpage-iframe"
                       title={cellName || 'Webpage'}
                       sandbox="allow-scripts allow-forms allow-popups allow-top-navigation"
+                      onLoad={handleIframeLoad}
                       onError={handleIframeError}
                     />
                   </div>
