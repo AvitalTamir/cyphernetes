@@ -745,8 +745,12 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
 }) => {
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [columnOrder, setColumnOrder] = useState<string[]>([])
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [draggedOverColumn, setDraggedOverColumn] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
-  // Load saved sort state on mount
+  // Load saved sort state and column order on mount
   useEffect(() => {
     const savedSort = localStorage.getItem(`table-sort-${cellId}`)
     if (savedSort) {
@@ -754,6 +758,16 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
         const { column, direction } = JSON.parse(savedSort)
         setSortColumn(column)
         setSortDirection(direction)
+      } catch (e) {
+        // Ignore invalid saved state
+      }
+    }
+    
+    const savedColumnOrder = localStorage.getItem(`table-columns-${cellId}`)
+    if (savedColumnOrder) {
+      try {
+        const order = JSON.parse(savedColumnOrder)
+        setColumnOrder(order)
       } catch (e) {
         // Ignore invalid saved state
       }
@@ -770,6 +784,13 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
     }
   }, [sortColumn, sortDirection, cellId])
 
+  // Save column order when it changes
+  useEffect(() => {
+    if (columnOrder.length > 0) {
+      localStorage.setItem(`table-columns-${cellId}`, JSON.stringify(columnOrder))
+    }
+  }, [columnOrder, cellId])
+
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       // Same column: toggle direction
@@ -780,6 +801,71 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
       setSortDirection('desc')
     }
   }
+
+  const handleMouseDown = (e: React.MouseEvent, column: string) => {
+    // Prevent drag on sort click
+    if (e.button !== 0) return // Only left mouse button
+    
+    let startX = e.clientX
+    let hasMoved = false
+    let currentDraggedColumn: string | null = null
+    let currentDraggedOverColumn: string | null = null
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const distance = Math.abs(e.clientX - startX)
+      
+      if (distance > 5 && !hasMoved) {
+        e.preventDefault() // Prevent text selection once we start dragging
+        hasMoved = true
+        currentDraggedColumn = column
+        setDraggedColumn(column)
+        setIsDragging(true)
+        document.body.style.cursor = 'grabbing'
+        document.body.style.userSelect = 'none'
+      }
+      
+      if (hasMoved) {
+        e.preventDefault() // Continue preventing text selection during drag
+        // Find which column we're hovering over
+        const element = document.elementFromPoint(e.clientX, e.clientY)
+        const th = element?.closest('th[data-column]')
+        const hoveredColumn = th?.getAttribute('data-column')
+        currentDraggedOverColumn = hoveredColumn || null
+        setDraggedOverColumn(hoveredColumn || null)
+      }
+    }
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      
+      if (hasMoved && currentDraggedColumn && currentDraggedOverColumn && currentDraggedColumn !== currentDraggedOverColumn) {
+        // Perform the column reorder
+        const currentOrder = columnOrder.length > 0 ? [...columnOrder] : [...columns]
+        const draggedIndex = currentOrder.indexOf(currentDraggedColumn)
+        const targetIndex = currentOrder.indexOf(currentDraggedOverColumn)
+        
+        // Remove dragged column and insert at target position
+        currentOrder.splice(draggedIndex, 1)
+        currentOrder.splice(targetIndex, 0, currentDraggedColumn)
+        
+        setColumnOrder(currentOrder)
+      } else if (!hasMoved) {
+        // This was a click, not a drag - handle sort
+        handleSort(column)
+      }
+      
+      setDraggedColumn(null)
+      setDraggedOverColumn(null)
+      setIsDragging(false)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
   if (!data || typeof data !== 'object') {
     return <pre>{JSON.stringify(data, null, 2)}</pre>
   }
@@ -957,36 +1043,82 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
     return sortDirection === 'desc' ? <ChevronDown size={14} /> : <ChevronUp size={14} />
   }
 
+  // Use saved column order or default order
+  const orderedColumns = columnOrder.length > 0 ? columnOrder.filter(col => columns.includes(col)) : columns
+  
+  // Initialize column order if not set
+  useEffect(() => {
+    if (columnOrder.length === 0 && columns.length > 0) {
+      setColumnOrder([...columns])
+    }
+  }, [columns, columnOrder])
+
   return (
     <table className="results-table">
       <thead>
         <tr>
-          {columns.map(col => (
-            <th 
-              key={col} 
-              onClick={() => handleSort(col)}
-              style={{ 
-                cursor: 'pointer', 
-                userSelect: 'none'
-              }}
-              title={`Sort by ${col}`}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {getSortIcon(col) && (
-                  <span>
-                    {getSortIcon(col)}
+          {orderedColumns.map(col => {
+            const isBeingDragged = draggedColumn === col
+            const isDropTarget = draggedOverColumn === col && draggedColumn !== col
+            
+            return (
+              <th 
+                key={col}
+                data-column={col}
+                onMouseDown={(e) => handleMouseDown(e, col)}
+                style={{ 
+                  cursor: isDragging ? 'grabbing' : 'grab', 
+                  userSelect: 'none',
+                  position: 'relative',
+                  backgroundColor: isBeingDragged 
+                    ? 'var(--color-secondary)' 
+                    : isDropTarget 
+                    ? 'var(--color-secondary)' 
+                    : undefined,
+                  color: (isBeingDragged || isDropTarget) ? 'var(--color-background)' : undefined,
+                  opacity: isBeingDragged ? 0.6 : 1,
+                  transform: isBeingDragged ? 'scale(0.95) rotate(2deg)' : undefined,
+                  transition: isBeingDragged ? 'none' : 'all 0.2s ease',
+                  boxShadow: isBeingDragged 
+                    ? '0 8px 25px rgba(0,0,0,0.15)' 
+                    : undefined,
+                  zIndex: isBeingDragged ? 10 : undefined
+                }}
+                title={`Click to sort, drag to reorder`}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ 
+                    fontSize: '12px', 
+                    opacity: isDragging && !isBeingDragged ? 0.3 : 0.6,
+                    transition: 'all 0.2s ease'
+                  }}>
+                    ⋮⋮
                   </span>
-                )}
-                <span>{col}</span>
-              </div>
-            </th>
-          ))}
+                  {getSortIcon(col) && (
+                    <span style={{
+                      opacity: isDragging && !isBeingDragged ? 0.3 : 1,
+                      transition: 'opacity 0.2s ease'
+                    }}>
+                      {getSortIcon(col)}
+                    </span>
+                  )}
+                  <span style={{
+                    fontWeight: isDropTarget ? '500' : undefined,
+                    opacity: isDragging && !isBeingDragged ? 0.3 : 1,
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {col}
+                  </span>
+                </div>
+              </th>
+            )
+          })}
         </tr>
       </thead>
       <tbody>
         {sortedRows.map((row, index) => (
           <tr key={index}>
-            {columns.map(col => (
+            {orderedColumns.map(col => (
               <td key={col}>
                 {row[col] !== null && row[col] !== undefined 
                   ? (typeof row[col] === 'object' 

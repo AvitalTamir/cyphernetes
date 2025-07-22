@@ -506,6 +506,18 @@
   background-color: transparent !important;
 }
 
+/* Table column drag restrictions */
+.results-table th[data-column] {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.results-table th[data-column]:active {
+  cursor: grabbing !important;
+}
+
 .cell-query-display {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
