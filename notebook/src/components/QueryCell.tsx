@@ -17,6 +17,7 @@ import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, 
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { ContextSelector } from './ContextSelector'
 import { CyphernetesEditor } from './CyphernetesEditor'
+import { buildK8sResourceMap, findGraphPatterns, buildTableRows } from '../utils/tableGrouping'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import './CellComponent.css'
@@ -879,84 +880,13 @@ const SortableTable = memo(({ data, graph, query, cellId }: {
   const nodes = graph?.nodes || graph?.Nodes
   
   if (graph && edges && Array.isArray(edges) && edges.length > 0) {
-    // Build a mapping from Kubernetes resource identifiers to our data
-    const k8sResourceMap = new Map<string, {variable: string, resource: any}>()
-    
-    // Map each resource to its Kubernetes identifier
-    resourcesByVariable.forEach((resources, variable) => {
-      resources.forEach((resource) => {
-        // Build Kubernetes-style identifier (e.g., "Deployment/billing-service")
-        const kind = resource.kind || (variable === 'd' ? 'Deployment' : variable === 's' ? 'Service' : 'Unknown')
-        const name = resource.name || resource.metadata?.name || ''
-        const k8sId = `${kind}/${name}`
-        
-        k8sResourceMap.set(k8sId, {variable, resource})
-      })
-    })
-    
-    // Group resources by their relationships
-    const patterns: Array<Map<string, any>> = []
-    const visited = new Set<string>()
-    
-    // Find connected components using edges
-    const findConnectedResources = (startId: string): Map<string, any> => {
-      const pattern = new Map<string, any>()
-      const queue = [startId]
-      
-      while (queue.length > 0) {
-        const currentId = queue.shift()!
-        if (visited.has(currentId)) continue
-        visited.add(currentId)
-        
-        const resourceInfo = k8sResourceMap.get(currentId)
-        if (resourceInfo) {
-          pattern.set(resourceInfo.variable, resourceInfo.resource)
-        }
-        
-        // Find all connected resources
-        edges.forEach((edge: any) => {
-          const from = edge.From || edge.source
-          const to = edge.To || edge.target
-          
-          if (from === currentId && !visited.has(to)) {
-            queue.push(to)
-          }
-          if (to === currentId && !visited.has(from)) {
-            queue.push(from)
-          }
-        })
-      }
-      
-      return pattern
-    }
-    
-    // Find all connected components
-    k8sResourceMap.forEach((_, k8sId) => {
-      if (!visited.has(k8sId)) {
-        const pattern = findConnectedResources(k8sId)
-        if (pattern.size > 0) {
-          patterns.push(pattern)
-        }
-      }
-    })
-    
+    // Build resource mapping and find patterns
+    const k8sResourceMap = buildK8sResourceMap(resourcesByVariable, nodes || [])
+    const patterns = findGraphPatterns(k8sResourceMap, edges)
     
     // Build rows from patterns
-    patterns.forEach((resourceMap) => {
-      const row: Record<string, any> = {}
-      
-      columns.forEach(field => {
-        const [variable, ...pathParts] = field.split('.')
-        const resource = resourceMap.get(variable)
-        
-        if (resource) {
-          const value = extractFieldValue(resource, field)
-          row[field] = value
-        }
-      })
-      
-      rows.push(row)
-    })
+    const patternRows = buildTableRows(patterns, columns, resourcesByVariable)
+    rows.push(...patternRows)
   } else {
     // Fallback: create cartesian product of all resources
     
