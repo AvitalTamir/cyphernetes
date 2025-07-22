@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
 import { ArrowLeft, Plus, Search, FileText, Globe, ChevronDown, Check, X } from 'lucide-react'
@@ -20,6 +20,9 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [draggedCellId, setDraggedCellId] = useState<string | null>(null)
   const [dragOverCellId, setDragOverCellId] = useState<string | null>(null)
+  const autoScrollInterval = useRef<NodeJS.Timeout | null>(null)
+  const isDraggingRef = useRef(false)
+  const scrolledPixels = useRef(0)
   const [addCellDropdownOpen, setAddCellDropdownOpen] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(notebook.name)
@@ -48,6 +51,16 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [addCellDropdownOpen])
+
+  // Cleanup auto-scroll interval on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollInterval.current) {
+        clearInterval(autoScrollInterval.current)
+        autoScrollInterval.current = null
+      }
+    }
+  }, [])
 
   const loadNotebook = async () => {
     try {
@@ -132,13 +145,85 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     }
   }
 
+  const startAutoScroll = (direction: 'up' | 'down') => {
+    if (autoScrollInterval.current || !isDraggingRef.current) return
+    
+    scrolledPixels.current = 0 // Reset counter
+    const baseScrollAmount = direction === 'up' ? -8 : 8
+    
+    autoScrollInterval.current = setInterval(() => {
+      if (!isDraggingRef.current) {
+        stopAutoScroll()
+        return
+      }
+      
+      // Three speed levels: 0-500px (1x), 500-1200px (2x), 1200px+ (3x)
+      const scrolledDistance = Math.abs(scrolledPixels.current)
+      let multiplier = 1
+      if (scrolledDistance > 1200) {
+        multiplier = 3
+      } else if (scrolledDistance > 500) {
+        multiplier = 2
+      }
+      const scrollAmount = baseScrollAmount * multiplier
+      
+      window.scrollBy(0, scrollAmount)
+      scrolledPixels.current += scrollAmount
+    }, 16)
+  }
+
+  const stopAutoScroll = () => {
+    if (autoScrollInterval.current) {
+      clearInterval(autoScrollInterval.current)
+      autoScrollInterval.current = null
+    }
+    scrolledPixels.current = 0 // Reset counter when stopping
+  }
+
+  const checkAutoScroll = (e: DragEvent) => {
+    if (!isDraggingRef.current) return
+    
+    const viewportHeight = window.innerHeight
+    const scrollThreshold = 80
+    
+    if (e.clientY < scrollThreshold) {
+      if (!autoScrollInterval.current) {
+        startAutoScroll('up')
+      }
+    } else if (e.clientY > viewportHeight - scrollThreshold) {
+      if (!autoScrollInterval.current) {
+        startAutoScroll('down')
+      }
+    } else {
+      stopAutoScroll()
+    }
+  }
+
   const handleDragStart = (cellId: string) => {
     setDraggedCellId(cellId)
+    isDraggingRef.current = true
+    
+    // Add global drag event listeners for auto-scroll
+    const handleGlobalDragOver = (e: DragEvent) => {
+      checkAutoScroll(e)
+    }
+    
+    const handleGlobalDragEnd = () => {
+      isDraggingRef.current = false
+      stopAutoScroll()
+      document.removeEventListener('dragover', handleGlobalDragOver)
+      document.removeEventListener('dragend', handleGlobalDragEnd)
+    }
+    
+    document.addEventListener('dragover', handleGlobalDragOver)
+    document.addEventListener('dragend', handleGlobalDragEnd)
   }
 
   const handleDragEnd = () => {
     setDraggedCellId(null)
     setDragOverCellId(null)
+    isDraggingRef.current = false
+    stopAutoScroll()
   }
 
   const handleDragOver = (cellId: string) => {
