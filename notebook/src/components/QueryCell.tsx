@@ -2372,7 +2372,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                     ) : (
                       <>
                         <Play size={14} />
-                        Run
+                        Stream
                       </>
                     )
                   ) : isPollingActive && !isPollingDisabled ? (
