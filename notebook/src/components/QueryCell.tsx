@@ -13,9 +13,10 @@ function debounce<F extends (...args: any[]) => any>(func: F, wait: number): (..
 import { Cell, VisualizationType, VisualizationMode, DocumentMode, GraphMode } from '../types/notebook'
 import ForceGraph2D from 'react-force-graph-2d'
 import * as jsYaml from 'js-yaml'
-import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { FileText, Table, Network, Edit3, Play, Pause, Save, X, Trash2, Search, ChevronDown, ChevronUp, ScrollText, Square, Filter, Clock } from 'lucide-react'
 import { SyntaxHighlighter } from './SyntaxHighlighter'
 import { ContextSelector } from './ContextSelector'
+import { CyphernetesEditor } from './CyphernetesEditor'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import './CellComponent.css'
@@ -1178,12 +1179,6 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     setLocalIsRunning(cell.is_running || false)
   }, [cell.is_running])
 
-  // Check if query contains mutation keywords - memoized to prevent render-time computation
-  const isPollingDisabled = useMemo(() => {
-    if (!cell.query) return false
-    const query = cell.query.toLowerCase()
-    return query.includes('create') || query.includes('set') || query.includes('delete')
-  }, [cell.query])
 
   // Start polling if cell has refresh_interval set  
   useEffect(() => {
@@ -1209,24 +1204,6 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     }
   }, []) // Only run on mount
 
-  // Stop polling if query becomes a mutation query
-  useEffect(() => {
-    if (isPollingDisabled && isPollingActiveRef.current) {
-      setPollingActiveState(false)
-      
-      // Clear polling timeout
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current)
-        pollingTimeoutRef.current = null
-      }
-      
-      // Cancel any in-flight requests
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-        abortControllerRef.current = null
-      }
-    }
-  }, [isPollingDisabled])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1468,7 +1445,31 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     }
   }
 
+
   const handleRunPause = async () => {
+    // In logs mode, handle streaming instead of polling
+    console.log('handleRunPause called, currentMode:', currentMode, 'logsStreaming:', logsStreaming)
+    if (currentMode === 'logs') {
+      if (logsStreaming) {
+        // Stop logs streaming
+        if (logsEventSourceRef.current) {
+          logsEventSourceRef.current.close()
+          logsEventSourceRef.current = null
+        }
+        setLogsStreaming(false)
+      } else {
+        // Start logs streaming
+        startLogsStreaming()
+      }
+      return
+    }
+
+    // If polling is disabled (mutating query), execute once instead of polling
+    if (isPollingDisabled) {
+      await executeQuery()
+      return
+    }
+
     if (isPollingActiveRef.current) {
       // Stop polling
       setPollingActiveState(false)
@@ -1572,6 +1573,12 @@ export const QueryCell: React.FC<QueryCellProps> = ({
 
   // Convert legacy visualization_type to new mode system
   const getVisualizationMode = (): VisualizationMode => {
+    // First check if we have a saved visualization_mode in config
+    if (cell.config?.visualization_mode) {
+      return cell.config.visualization_mode as VisualizationMode
+    }
+    
+    // Fallback to legacy visualization_type mapping
     const vizType = cell.visualization_type
     if (vizType === 'json' || vizType === 'yaml') return 'document'
     if (vizType === 'table') return 'table'
@@ -1590,6 +1597,133 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   const [currentMode, setCurrentMode] = useState<VisualizationMode>(getVisualizationMode())
   const [documentMode, setDocumentMode] = useState<DocumentMode>(getDocumentMode())
   const [graphMode, setGraphMode] = useState<GraphMode>(getGraphMode())
+  
+  // Context and namespace state
+  const [context, setContext] = useState<string>(cell.config?.context || '')
+  const [namespace, setNamespace] = useState<string>(cell.config?.namespace || 'default')
+  
+  // Logs state
+  const [logs, setLogs] = useState<string[]>([])
+  const [logsStreaming, setLogsStreaming] = useState(false)
+  const [logFilter, setLogFilter] = useState('')
+  const [showTimestamps, setShowTimestamps] = useState(false)
+  const [queriedPods, setQueriedPods] = useState<string[]>([])
+  const [podColors, setPodColors] = useState<Record<string, string>>({})
+  const logsEventSourceRef = useRef<EventSource | null>(null)
+  
+  // Logs streaming functions
+  const startLogsStreaming = useCallback(() => {
+    if (queriedPods.length === 0 || !namespace) {
+      return
+    }
+
+    // Stop any existing stream
+    if (logsEventSourceRef.current) {
+      logsEventSourceRef.current.close()
+    }
+
+    setLogsStreaming(true)
+    setLogs([])
+
+    const params = new URLSearchParams({
+      namespace,
+      follow: 'true',
+      tail_lines: '100',
+    })
+    
+    if (queriedPods.length === 1) {
+      params.append('pod', queriedPods[0])
+    } else {
+      params.append('pods', queriedPods.join(','))
+    }
+
+    const eventSource = new EventSource(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}/logs?${params}`)
+    logsEventSourceRef.current = eventSource
+
+    eventSource.onmessage = (event) => {
+      try {
+        // Parse the log message which should include pod info
+        const logData = JSON.parse(event.data)
+        const podName = logData.pod || 'unknown'
+        const logLine = logData.message || event.data
+        
+        // Format the log line with colored pod prefix
+        const formattedLine = queriedPods.length > 1 
+          ? `[${podName}] ${logLine}`
+          : logLine
+          
+        setLogs((prev: string[]) => [formattedLine, ...prev])
+      } catch (e) {
+        // Fallback for non-JSON messages
+        setLogs((prev: string[]) => [event.data, ...prev])
+      }
+    }
+
+    eventSource.addEventListener('error', (event: any) => {
+      if (event.data) {
+        console.error('Log stream error:', event.data)
+      }
+    })
+
+    eventSource.addEventListener('end', () => {
+      setLogsStreaming(false)
+      eventSource.close()
+    })
+
+    eventSource.onerror = (error) => {
+      console.error('EventSource error:', error)
+      setLogsStreaming(false)
+      eventSource.close()
+      logsEventSourceRef.current = null
+    }
+  }, [queriedPods, namespace, cell.notebook_id, cell.id, setLogs, setLogsStreaming])
+  
+  // Process log line to remove timestamp if needed
+  const processLogLine = useCallback((line: string) => {
+    if (!showTimestamps) {
+      // Remove ISO timestamp from the beginning of the line
+      const timestampRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s*/
+      return line.replace(timestampRegex, '')
+    }
+    return line
+  }, [showTimestamps])
+
+  // Filter logs based on search term
+  const filteredLogs = useMemo(() => {
+    return logs.filter(line => {
+      if (!logFilter) return true
+      const processedLine = processLogLine(line)
+      return processedLine.toLowerCase().includes(logFilter.toLowerCase())
+    })
+  }, [logs, logFilter, processLogLine])
+  
+  // Check if query contains mutation keywords or in logs mode - memoized to prevent render-time computation
+  const isPollingDisabled = useMemo(() => {
+    if (!cell.query) return false
+    const query = cell.query.toLowerCase()
+    const isMutatingQuery = query.includes('create') || query.includes('set') || query.includes('delete')
+    const isInLogsMode = currentMode === 'logs'
+    return isMutatingQuery || isInLogsMode
+  }, [cell.query, currentMode])
+
+  // Stop polling if query becomes a mutation query or in logs mode
+  useEffect(() => {
+    if (isPollingDisabled && isPollingActiveRef.current) {
+      setPollingActiveState(false)
+      
+      // Clear polling timeout
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current)
+        pollingTimeoutRef.current = null
+      }
+      
+      // Cancel any in-flight requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+    }
+  }, [isPollingDisabled])
 
   // Sync state with cell data when cell changes (fixes persistence on reload)
   useEffect(() => {
@@ -1615,6 +1749,46 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   useEffect(() => {
     setCellName(cell.name || '')
   }, [cell.name])
+
+  // Extract pods from results when in logs mode
+  useEffect(() => {
+    if (currentMode === 'logs' && localResults) {
+      const pods = extractPodsFromQueryResult(localResults)
+      setQueriedPods(pods)
+      
+      // Generate colors for each pod
+      const colors: Record<string, string> = {}
+      pods.forEach(pod => {
+        colors[pod] = generatePodColor(pod)
+      })
+      setPodColors(colors)
+    }
+  }, [currentMode, localResults])
+
+  // Keep context and namespace in sync with cell config
+  useEffect(() => {
+    setContext(cell.config?.context || '')
+    setNamespace(cell.config?.namespace || 'default')
+  }, [cell.config?.context, cell.config?.namespace])
+
+  // Update current mode when cell config changes
+  useEffect(() => {
+    // Inline the logic to avoid dependency issues
+    let newMode: VisualizationMode = 'document'
+    
+    if (cell.config?.visualization_mode) {
+      newMode = cell.config.visualization_mode as VisualizationMode
+    } else {
+      const vizType = cell.visualization_type
+      if (vizType === 'json' || vizType === 'yaml') newMode = 'document'
+      else if (vizType === 'table') newMode = 'table'
+      else if (vizType === 'graph') newMode = 'graph'
+      else newMode = 'document'
+    }
+    
+    console.log('Mode effect triggered - cell.config.visualization_mode:', cell.config?.visualization_mode, 'calculated newMode:', newMode, 'current currentMode:', currentMode)
+    setCurrentMode(newMode)
+  }, [cell.config?.visualization_mode, cell.visualization_type])
 
   // Autocompletion functions
   const updateSuggestionsPosition = useCallback(() => {
@@ -1748,6 +1922,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   }, [query, cursorPosition])
 
   const handleModeChange = async (mode: VisualizationMode) => {
+    console.log('handleModeChange called with mode:', mode, 'currentMode before:', currentMode)
     setCurrentMode(mode)
     
     // Map back to legacy visualization_type for backend compatibility
@@ -1756,8 +1931,13 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       vizType = documentMode
     } else if (mode === 'table') {
       vizType = 'table'
-    } else {
+    } else if (mode === 'graph') {
       vizType = 'graph'
+    } else if (mode === 'logs') {
+      // For logs mode, we'll use 'json' as a placeholder since backend expects legacy type
+      vizType = 'json'
+    } else {
+      vizType = 'json'
     }
     
     try {
@@ -1938,12 +2118,14 @@ export const QueryCell: React.FC<QueryCellProps> = ({
           <ContextSelector
             context={cell.config?.context}
             namespace={cell.config?.namespace}
-            onContextChange={(context, namespace) => {
+            onContextChange={(contextValue, namespaceValue) => {
+              setContext(contextValue)
+              setNamespace(namespaceValue)
               onUpdate(cell.id, {
                 config: {
                   ...cell.config,
-                  context,
-                  namespace
+                  context: contextValue,
+                  namespace: namespaceValue
                 }
               })
             }}
@@ -1982,6 +2164,13 @@ export const QueryCell: React.FC<QueryCellProps> = ({
               title="Graph View"
             >
               <Network size={16} />
+            </button>
+            <button
+              className={`mode-icon ${currentMode === 'logs' ? 'active' : ''}`}
+              onClick={() => handleModeChange('logs')}
+              title="Logs View"
+            >
+              <ScrollText size={16} />
             </button>
           </div>
           
@@ -2024,11 +2213,23 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                   )}
                 </div>
                 <button 
-                  onClick={isPollingDisabled || localError ? () => executeQuery() : handleRunPause} 
+                  onClick={localError ? () => executeQuery() : handleRunPause} 
                   disabled={localIsRunning && !isPollingActive}
                   className="cell-action execute run-button-main"
                 >
-                  {isPollingActive && !isPollingDisabled ? (
+                  {currentMode === 'logs' ? (
+                    logsStreaming ? (
+                      <>
+                        <Pause size={14} />
+                        Stop
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} />
+                        Stream
+                      </>
+                    )
+                  ) : isPollingActive && !isPollingDisabled ? (
                     <>
                       <Pause size={14} />
                       Pause
@@ -2145,8 +2346,39 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       {localResults && (
         <div className="cell-results">
           <div className="cell-results-header">
-            <span>Results</span>
+            <span>
+              {currentMode === 'logs' ? `${queriedPods.length} pods found` : 'Results'}
+            </span>
             <div className="mode-options">
+              {currentMode === 'logs' && (
+                <div className="logs-options" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div className="logs-filter" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Filter size={12} />
+                    <input
+                      type="text"
+                      placeholder="Filter..."
+                      value={logFilter}
+                      onChange={(e) => setLogFilter(e.target.value)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #e0e4e7',
+                        borderRadius: '4px',
+                        width: '150px'
+                      }}
+                    />
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowTimestamps(!showTimestamps)}
+                    className={`option-btn ${showTimestamps ? 'active' : ''}`}
+                    title={showTimestamps ? 'Hide timestamps' : 'Show timestamps'}
+                  >
+                    <Clock size={12} />
+                  </button>
+                </div>
+              )}
               {currentMode === 'document' && (
                 <div className="document-options">
                   <button
@@ -2220,9 +2452,142 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                 {graphMode === 'bar' && renderBarChartView(localResults, cell.query)}
               </div>
             )}
+            {currentMode === 'logs' && (
+              <div className="logs-output">
+                {filteredLogs.length > 0 ? (
+                  <div className="logs-content" style={{ 
+                    fontFamily: 'monospace', 
+                    fontSize: '12px', 
+                    lineHeight: '1.5',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    backgroundColor: '#f8f9fa',
+                    padding: '12px',
+                    borderRadius: '4px'
+                  }}>
+                    {filteredLogs.map((line, index) => {
+                      const processedLine = processLogLine(line)
+                      
+                      // Extract pod name from line if it has the [podname] prefix
+                      const podMatch = processedLine.match(/^\[([^\]]+)\]/)
+                      const podName = podMatch ? podMatch[1] : null
+                      const lineWithoutPrefix = podMatch ? processedLine.replace(/^\[[^\]]+\]\s*/, '') : processedLine
+                      
+                      return (
+                        <div key={index} className="log-line" style={{ marginBottom: '2px' }}>
+                          {podName && (
+                            <span 
+                              className="pod-prefix"
+                              style={{ 
+                                color: podColors[podName] || '#666',
+                                fontWeight: '600',
+                                marginRight: '8px'
+                              }}
+                            >
+                              [{podName}]
+                            </span>
+                          )}
+                          <span className="log-content">{podName ? lineWithoutPrefix : processedLine}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : logs.length > 0 ? (
+                  <div className="logs-placeholder" style={{ 
+                    color: '#666', 
+                    fontStyle: 'italic',
+                    padding: '24px',
+                    textAlign: 'center'
+                  }}>
+                    No logs match the current filter.
+                  </div>
+                ) : (
+                  <div className="logs-placeholder" style={{ 
+                    color: '#666', 
+                    fontStyle: 'italic',
+                    padding: '24px',
+                    textAlign: 'center'
+                  }}>
+                    {logsStreaming ? 'Waiting for logs...' : queriedPods.length === 0 ? 'No pods found in query results.' : 'Click "Stream" to start streaming logs.'}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   )
+}
+
+
+// Helper functions for logs
+const extractPodsFromQueryResult = (result: any): string[] => {
+  const pods: string[] = []
+  
+  // The result might be directly the results object, or wrapped in a results field
+  const resultsData = result?.results || result?.result || result
+  
+  if (!resultsData) {
+    return []
+  }
+  
+  // Check graph nodes
+  const graph = resultsData.graph || resultsData.Graph
+  const nodes = graph?.nodes || graph?.Nodes
+  
+  if (nodes && Array.isArray(nodes)) {
+    for (const node of nodes) {
+      // Check both kind and type fields, handle case variations
+      const nodeKind = node.kind || node.type || node.Kind || node.Type
+      const nodeName = node.name || node.Name
+      if (nodeKind === 'Pod' && nodeName) {
+        pods.push(nodeName)
+      }
+    }
+  }
+  
+  // Also check table results in case the query returns pods in table format
+  const table = resultsData.table || resultsData.Table
+  if (table?.rows && Array.isArray(table.rows)) {
+    for (const row of table.rows) {
+      // Check if any column contains a pod
+      for (const [key, value] of Object.entries(row)) {
+        if (typeof value === 'object' && value !== null) {
+          const obj = value as any
+          if (obj.kind === 'Pod' && obj.metadata?.name) {
+            pods.push(obj.metadata.name)
+          }
+        }
+      }
+    }
+  }
+  
+  // Try data field as well
+  const data = resultsData.data || resultsData.Data
+  if (data && Array.isArray(data)) {
+    for (const item of data) {
+      if (item?.kind === 'Pod' && item?.metadata?.name) {
+        pods.push(item.metadata.name)
+      }
+    }
+  }
+  
+  return [...new Set(pods)] // Remove duplicates
+}
+
+const generatePodColor = (podName: string): string => {
+  // Generate a consistent color for each pod based on its name
+  const colors = [
+    '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+    '#1abc9c', '#e67e22', '#34495e', '#16a085', '#27ae60',
+    '#2980b9', '#8e44ad', '#c0392b', '#d35400', '#7f8c8d'
+  ]
+  
+  let hash = 0
+  for (let i = 0; i < podName.length; i++) {
+    hash = ((hash << 5) - hash + podName.charCodeAt(i)) & 0xffffffff
+  }
+  
+  return colors[Math.abs(hash) % colors.length]
 }

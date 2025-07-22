@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -64,7 +65,7 @@ func (s *Server) createNotebook(c *gin.Context) {
 
 func (s *Server) getNotebook(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	notebook, err := s.store.GetNotebook(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Notebook not found"})
@@ -96,7 +97,7 @@ func (s *Server) getNotebook(c *gin.Context) {
 
 func (s *Server) updateNotebook(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var req struct {
 		Name *string `json:"name"`
 	}
@@ -129,7 +130,7 @@ func (s *Server) updateNotebook(c *gin.Context) {
 
 func (s *Server) deleteNotebook(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	// Delete the notebook from storage
 	err := s.store.DeleteNotebook(id)
 	if err != nil {
@@ -140,7 +141,7 @@ func (s *Server) deleteNotebook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete notebook"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Notebook deleted successfully"})
 }
 
@@ -153,7 +154,7 @@ func (s *Server) forkNotebook(c *gin.Context) {
 
 func (s *Server) addCell(c *gin.Context) {
 	notebookID := c.Param("id")
-	
+
 	var cell Cell
 	if err := c.ShouldBindJSON(&cell); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid JSON: %v", err)})
@@ -169,7 +170,7 @@ func (s *Server) addCell(c *gin.Context) {
 
 	// Shift all existing cells down by incrementing their positions
 	for _, existingCell := range cells {
-		err = s.store.UpdateCellPosition(existingCell.ID, existingCell.Position + 1)
+		err = s.store.UpdateCellPosition(existingCell.ID, existingCell.Position+1)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to update cell positions: %v", err)})
 			return
@@ -210,7 +211,7 @@ func (s *Server) addCell(c *gin.Context) {
 func (s *Server) updateCell(c *gin.Context) {
 	notebookID := c.Param("id")
 	cellID := c.Param("cellId")
-	
+
 	var updates struct {
 		Query             *string            `json:"query"`
 		VisualizationType *VisualizationType `json:"visualization_type"`
@@ -236,8 +237,8 @@ func (s *Server) updateCell(c *gin.Context) {
 
 	// Broadcast the cell update to all connected users
 	s.sessions.BroadcastToNotebook(notebookID, map[string]interface{}{
-		"type":   "cell-updated",
-		"cellId": cellID,
+		"type":    "cell-updated",
+		"cellId":  cellID,
 		"updates": updates,
 	}, "")
 
@@ -247,23 +248,23 @@ func (s *Server) updateCell(c *gin.Context) {
 func (s *Server) deleteCell(c *gin.Context) {
 	notebookID := c.Param("id")
 	cellID := c.Param("cellId")
-	
+
 	// Delete the cell from storage
 	err := s.store.DeleteCell(cellID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete cell"})
 		return
 	}
-	
+
 	// Touch the notebook to update its timestamp
 	s.store.touchNotebook(notebookID)
-	
+
 	// Broadcast the cell deletion to all connected users
 	s.sessions.BroadcastToNotebook(notebookID, map[string]interface{}{
 		"type":   "cell-deleted",
 		"cellId": cellID,
 	}, "")
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Cell deleted successfully"})
 }
 
@@ -276,7 +277,7 @@ func (s *Server) executeCell(c *gin.Context) {
 		Context   string `json:"context"`
 		Namespace string `json:"namespace"`
 	}
-	
+
 	// Bind JSON, but don't fail if empty (use defaults)
 	c.ShouldBindJSON(&req)
 
@@ -346,15 +347,16 @@ func (s *Server) executeCell(c *gin.Context) {
 func (s *Server) getLogs(c *gin.Context) {
 	// Parse query parameters
 	podName := c.Query("pod")
+	podsParam := c.Query("pods")
 	container := c.Query("container")
 	namespace := c.Query("namespace")
 	follow := c.Query("follow") == "true"
 	tailLinesStr := c.Query("tail_lines")
 	sinceTime := c.Query("since_time")
 
-	// Validate required parameters
-	if podName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "pod parameter is required"})
+	// Validate required parameters - either pod or pods must be provided
+	if podName == "" && podsParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "pod or pods parameter is required"})
 		return
 	}
 
@@ -411,18 +413,13 @@ func (s *Server) getLogs(c *gin.Context) {
 		}
 	}
 
-	// Get pod logs
-	podLogsRequest := clientset.CoreV1().Pods(namespace).GetLogs(podName, logOptions)
-	
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	stream, err := podLogsRequest.Stream(ctx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get logs: %v", err)})
-		return
+	// Determine which pods to stream from
+	var pods []string
+	if podsParam != "" {
+		pods = strings.Split(podsParam, ",")
+	} else {
+		pods = []string{podName}
 	}
-	defer stream.Close()
 
 	// If follow is true, stream logs via Server-Sent Events
 	if follow {
@@ -434,23 +431,28 @@ func (s *Server) getLogs(c *gin.Context) {
 		// Flush headers
 		c.Writer.Flush()
 
-		// Stream logs
-		scanner := bufio.NewScanner(stream)
-		for scanner.Scan() {
-			line := scanner.Text()
-			fmt.Fprintf(c.Writer, "data: %s\n\n", line)
-			c.Writer.Flush()
-		}
+		// Create context for all streams
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
-			c.Writer.Flush()
-		}
-
-		fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
-		c.Writer.Flush()
+		// Stream from multiple pods
+		streamMultiplePods(c, clientset, namespace, pods, container, logOptions, ctx)
 		return
 	}
+
+	// For non-streaming requests, get logs from the first pod only
+	firstPod := pods[0]
+	podLogsRequest := clientset.CoreV1().Pods(namespace).GetLogs(firstPod, logOptions)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stream, err := podLogsRequest.Stream(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get logs: %v", err)})
+		return
+	}
+	defer stream.Close()
 
 	// For non-streaming requests, read all logs and return as JSON
 	logs, err := io.ReadAll(stream)
@@ -461,7 +463,7 @@ func (s *Server) getLogs(c *gin.Context) {
 
 	// Split logs into lines
 	logLines := strings.Split(string(logs), "\n")
-	
+
 	// Remove empty last line if present
 	if len(logLines) > 0 && logLines[len(logLines)-1] == "" {
 		logLines = logLines[:len(logLines)-1]
@@ -469,39 +471,112 @@ func (s *Server) getLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"logs":      logLines,
-		"pod":       podName,
+		"pod":       firstPod,
 		"container": container,
 		"namespace": namespace,
 	})
 }
 
+func streamMultiplePods(c *gin.Context, clientset kubernetes.Interface, namespace string, pods []string, container string, logOptions *corev1.PodLogOptions, ctx context.Context) {
+	// Channel to merge all log streams
+	logChan := make(chan string, 100)
+	doneChan := make(chan bool)
+
+	// Start streaming from each pod
+	for _, pod := range pods {
+		go func(podName string) {
+			defer func() {
+				doneChan <- true
+			}()
+
+			// Get logs for this pod
+			podLogOptions := &corev1.PodLogOptions{
+				Follow:     logOptions.Follow,
+				TailLines:  logOptions.TailLines,
+				Timestamps: logOptions.Timestamps,
+			}
+			if container != "" {
+				podLogOptions.Container = container
+			}
+
+			podLogsRequest := clientset.CoreV1().Pods(namespace).GetLogs(podName, podLogOptions)
+			stream, err := podLogsRequest.Stream(ctx)
+			if err != nil {
+				// Send error for this pod
+				logChan <- fmt.Sprintf("Error streaming from pod %s: %v", podName, err)
+				return
+			}
+			defer stream.Close()
+
+			// Stream logs with pod name prefix
+			scanner := bufio.NewScanner(stream)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Create JSON message with pod info
+				message := fmt.Sprintf(`{"pod": "%s", "message": "%s"}`, podName, strings.ReplaceAll(line, "\"", "\\\""))
+				logChan <- message
+			}
+
+			if err := scanner.Err(); err != nil {
+				logChan <- fmt.Sprintf(`{"pod": "%s", "error": "%s"}`, podName, strings.ReplaceAll(err.Error(), "\"", "\\\""))
+			}
+		}(pod)
+	}
+
+	// Stream logs as they come in
+	go func() {
+		for logMessage := range logChan {
+			fmt.Fprintf(c.Writer, "data: %s\n\n", logMessage)
+			c.Writer.Flush()
+		}
+	}()
+
+	// Wait for all pods to finish or context to be cancelled
+	completedPods := 0
+	for completedPods < len(pods) {
+		select {
+		case <-doneChan:
+			completedPods++
+		case <-ctx.Done():
+			close(logChan)
+			fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
+			c.Writer.Flush()
+			return
+		}
+	}
+
+	close(logChan)
+	fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
+	c.Writer.Flush()
+}
+
 func (s *Server) reorderCells(c *gin.Context) {
 	notebookID := c.Param("id")
-	
+
 	var request struct {
 		CellOrders []struct {
 			ID       string `json:"id"`
 			Position int    `json:"position"`
 		} `json:"cell_orders"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
-	
+
 	err := s.store.ReorderCells(notebookID, request.CellOrders)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reorder cells"})
 		return
 	}
-	
+
 	// Broadcast to all WebSocket connections
 	s.sessions.BroadcastToNotebook(notebookID, map[string]interface{}{
-		"type": "cells-reordered",
+		"type":        "cells-reordered",
 		"cell_orders": request.CellOrders,
 	}, "")
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "Cells reordered successfully"})
 }
 
@@ -543,7 +618,7 @@ func (s *Server) listSessions(c *gin.Context) {
 	}
 
 	sessions := s.sessions.GetNotebookSessions(notebookID)
-	
+
 	// Convert to response format
 	var response []Session
 	for _, session := range sessions {
@@ -596,7 +671,7 @@ func (s *Server) removePeer(c *gin.Context) {
 
 func (s *Server) handleWebSocket(c *gin.Context) {
 	notebookID := c.Param("id")
-	
+
 	// TODO: Authenticate user
 	userID := "default-user"
 	username := "Default User"
@@ -638,14 +713,14 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		case "cell-update":
 			// TODO: Handle cell updates with Y.js
 			s.sessions.BroadcastToNotebook(notebookID, message, userID)
-		
+
 		case "cell-execute":
 			// TODO: Execute cell and broadcast results
-			
+
 		case "cursor-position":
 			// Broadcast cursor position to other users
 			s.sessions.BroadcastToNotebook(notebookID, message, userID)
-		
+
 		case "user-presence":
 			// Update user presence
 			s.sessions.UpdateActivity(notebookID, userID)
@@ -785,54 +860,4 @@ func (s *Server) handleAutocomplete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"suggestions": stringSuggestions})
-}
-
-func (s *Server) getPods(c *gin.Context) {
-	namespace := c.Query("namespace")
-	if namespace == "" {
-		namespace = "default"
-	}
-
-	// Create a new API server provider to get the clientset
-	provider, err := apiserver.NewAPIServerProvider()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create provider: %v", err)})
-		return
-	}
-
-	// Cast to APIServerProvider to access GetClientset
-	apiProvider, ok := provider.(*apiserver.APIServerProvider)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Provider is not an APIServerProvider"})
-		return
-	}
-
-	// Get the clientset directly from the provider
-	clientset, err := apiProvider.GetClientset()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get clientset: %v", err)})
-		return
-	}
-
-	// Get the list of pods in the namespace
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to list pods: %v", err)})
-		return
-	}
-
-	// Extract pod names
-	podNames := make([]string, 0, len(pods.Items))
-	for _, pod := range pods.Items {
-		podNames = append(podNames, pod.Name)
-	}
-
-	// Sort the pod names alphabetically
-	sort.Strings(podNames)
-
-	// Return the list of pod names
-	c.JSON(http.StatusOK, gin.H{
-		"pods": podNames,
-		"namespace": namespace,
-	})
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
-import { ArrowLeft, Plus, Search, FileText, ScrollText, Globe, ChevronDown, Edit3, Check, X } from 'lucide-react'
+import { ArrowLeft, Plus, Search, FileText, Globe, ChevronDown, Edit3, Check, X } from 'lucide-react'
 import './NotebookEditor.css'
 
 interface NotebookEditorProps {
@@ -64,7 +64,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     }
   }
 
-  const handleAddCell = async (type: 'query' | 'markdown' | 'logs' | 'webpage' = 'query') => {
+  const handleAddCell = async (type: 'query' | 'markdown' | 'webpage' = 'query') => {
     try {
       const newCell = {
         type,
@@ -320,16 +320,6 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
                 >
                   <FileText size={16} />
                   Markdown
-                </button>
-                <button 
-                  onClick={() => {
-                    handleAddCell('logs')
-                    setAddCellDropdownOpen(false)
-                  }}
-                  className="add-cell-option"
-                >
-                  <ScrollText size={16} />
-                  Logs
                 </button>
                 <button 
                   onClick={() => {

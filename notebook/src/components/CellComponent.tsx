@@ -2,7 +2,6 @@ import React from 'react'
 import { Cell } from '../types/notebook'
 import { MarkdownCell } from './MarkdownCell'
 import { QueryCell } from './QueryCell'
-import { LogsCell } from './LogsCell'
 import { WebpageCell } from './WebpageCell'
 import { HooksErrorBoundary } from './HooksErrorBoundary'
 
@@ -24,8 +23,6 @@ const CellComponentImpl: React.FC<CellComponentProps> = (props) => {
     <HooksErrorBoundary>
       {props.cell.type === 'markdown' ? (
         <MarkdownCell {...props} />
-      ) : props.cell.type === 'logs' ? (
-        <LogsCell {...props} />
       ) : props.cell.type === 'webpage' ? (
         <WebpageCell {...props} />
       ) : (

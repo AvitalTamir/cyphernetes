@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	notebookPort     int
-	notebookDataDir  string
-	enableWireGuard  bool
-	wireguardPort    int
+	notebookPort    int
+	notebookDataDir string
+	enableWireGuard bool
+	wireguardPort   int
 )
 
 var notebookCmd = &cobra.Command{
@@ -54,7 +54,7 @@ The notebook server provides:
 
 		fmt.Printf("🚀 Cyphernetes Notebook server starting on http://localhost:%d\n", notebookPort)
 		fmt.Printf("📁 Data directory: %s\n", notebookDataDir)
-		
+
 		if enableWireGuard {
 			fmt.Printf("🔐 WireGuard enabled on port %d\n", wireguardPort)
 			fmt.Println("\nTo share your notebook with others:")
@@ -97,11 +97,11 @@ var notebookConnectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pin := args[0]
-		
+
 		// TODO: Parse pin to extract connection details
 		// TODO: Set up WireGuard connection
 		// TODO: Open browser to remote notebook
-		
+
 		fmt.Printf("🔗 Connecting to notebook with pin: %s\n", pin)
 		return fmt.Errorf("connect command not yet implemented")
 	},

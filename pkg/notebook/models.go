@@ -10,6 +10,7 @@ type CellType string
 const (
 	CellTypeQuery    CellType = "query"
 	CellTypeMarkdown CellType = "markdown"
+	CellTypeWebpage  CellType = "webpage"
 )
 
 // VisualizationType represents how to display query results
@@ -26,9 +27,9 @@ const (
 type LayoutMode int
 
 const (
-	LayoutSingle LayoutMode = 1  // Full width
-	LayoutDouble LayoutMode = 2  // Two cells side by side
-	LayoutQuad   LayoutMode = 4  // Four cells in a row
+	LayoutSingle LayoutMode = 1 // Full width
+	LayoutDouble LayoutMode = 2 // Two cells side by side
+	LayoutQuad   LayoutMode = 4 // Four cells in a row
 )
 
 // Notebook represents a Cyphernetes notebook
@@ -68,24 +69,27 @@ type Cell struct {
 type CellConfig struct {
 	// For table visualization
 	PageSize int `json:"page_size,omitempty"`
-	
+
 	// For graph visualization
 	GraphMode   string `json:"graph_mode,omitempty"`   // "force", "pie", "tree"
 	GraphLayout string `json:"graph_layout,omitempty"` // "force", "circular", "tree"
 	NodeSize    int    `json:"node_size,omitempty"`
-	
+
 	// For document visualization
 	DocumentMode string `json:"document_mode,omitempty"` // "json", "yaml"
-	
+
 	// For visualization mode
 	VisualizationMode string `json:"visualization_mode,omitempty"` // "document", "table", "graph"
-	
+
 	// Common settings
 	Height int `json:"height,omitempty"` // px
-	
+
 	// Context settings
 	Context   string `json:"context,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+
+	// Logs cell specific
+	LogsMode string `json:"logsMode,omitempty"` // "pod" or "query"
 }
 
 // User represents a notebook user

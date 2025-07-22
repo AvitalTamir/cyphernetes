@@ -103,7 +103,7 @@ func (s *Server) Stop() error {
 func (s *Server) setupRoutes() {
 	// Use Gin in release mode for production
 	gin.SetMode(gin.ReleaseMode)
-	
+
 	s.router = gin.New()
 	s.router.Use(gin.Recovery())
 	s.router.Use(gin.Logger())
@@ -131,9 +131,8 @@ func (s *Server) setupRoutes() {
 		// Context and namespace operations
 		api.GET("/context", s.getContext)
 		api.GET("/namespaces", s.getNamespaces)
-		api.GET("/pods", s.getPods)
 		api.POST("/namespace", s.setNamespace)
-		
+
 		// Autocomplete
 		api.GET("/autocomplete", s.handleAutocomplete)
 
@@ -164,7 +163,7 @@ func (s *Server) setupRoutes() {
 		})
 	} else {
 		s.router.StaticFS("/static", http.FS(staticContent))
-		
+
 		// Catch-all route to serve the React app
 		s.router.NoRoute(gin.WrapH(http.FileServer(http.FS(staticContent))))
 	}

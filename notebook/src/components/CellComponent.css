@@ -1134,6 +1134,59 @@
   border-color: var(--color-primary);
 }
 
+.logs-mode-toggle {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--color-surface);
+  border-radius: 4px;
+}
+
+.logs-mode-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.logs-mode-toggle input[type="radio"] {
+  width: 16px;
+  height: 16px;
+}
+
+.query-selector-container {
+  margin-bottom: 16px;
+}
+
+.query-selector-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.logs-query-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.logs-query-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 .loading-indicator {
   color: var(--color-primary);
   font-weight: 500;
@@ -1174,6 +1227,15 @@
 
 .log-line:hover {
   background: var(--color-surface);
+}
+
+.pod-prefix {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.log-content {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
 .logs-placeholder {

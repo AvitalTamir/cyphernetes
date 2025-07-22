@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // Store handles persistence for notebooks
@@ -169,7 +169,7 @@ func (s *Store) CreateNotebook(name, ownerID string) (*Notebook, error) {
 
 	query := `INSERT INTO notebooks (id, name, owner_id, created_at, updated_at) 
 	          VALUES (?, ?, ?, ?, ?)`
-	
+
 	_, err := s.db.Exec(query, id, name, ownerID, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create notebook: %w", err)
@@ -190,10 +190,10 @@ func (s *Store) CreateNotebook(name, ownerID string) (*Notebook, error) {
 func (s *Store) GetNotebook(id string) (*Notebook, error) {
 	query := `SELECT id, name, owner_id, created_at, updated_at, is_public 
 	          FROM notebooks WHERE id = ?`
-	
+
 	var nb Notebook
 	err := s.db.QueryRow(query, id).Scan(
-		&nb.ID, &nb.Name, &nb.OwnerID, 
+		&nb.ID, &nb.Name, &nb.OwnerID,
 		&nb.CreatedAt, &nb.UpdatedAt, &nb.IsPublic,
 	)
 	if err == sql.ErrNoRows {
@@ -229,28 +229,28 @@ func (s *Store) UpdateNotebook(id string, name *string) error {
 	// Build dynamic update query
 	setParts := []string{}
 	args := []interface{}{}
-	
+
 	if name != nil {
 		setParts = append(setParts, "name = ?")
 		args = append(args, *name)
 	}
-	
+
 	if len(setParts) == 0 {
 		return nil // Nothing to update
 	}
-	
+
 	// Always update the updated_at timestamp
 	setParts = append(setParts, "updated_at = CURRENT_TIMESTAMP")
-	
+
 	// Add notebook ID to args
 	args = append(args, id)
-	
+
 	updateQuery := fmt.Sprintf("UPDATE notebooks SET %s WHERE id = ?", strings.Join(setParts, ", "))
 	result, err := s.db.Exec(updateQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update notebook: %w", err)
 	}
-	
+
 	// Check if notebook was actually updated
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
@@ -259,7 +259,7 @@ func (s *Store) UpdateNotebook(id string, name *string) error {
 	if rowsAffected == 0 {
 		return fmt.Errorf("notebook not found")
 	}
-	
+
 	return nil
 }
 
@@ -321,18 +321,18 @@ func (s *Store) ListNotebooks(userID string) ([]*Notebook, error) {
 	for rows.Next() {
 		var nb Notebook
 		var cellCount int
-		if err := rows.Scan(&nb.ID, &nb.Name, &nb.OwnerID, 
+		if err := rows.Scan(&nb.ID, &nb.Name, &nb.OwnerID,
 			&nb.CreatedAt, &nb.UpdatedAt, &nb.IsPublic, &cellCount); err != nil {
 			return nil, err
 		}
-		
+
 		// Ensure arrays are not nil
 		nb.SharedWith = []string{}
 		nb.Tags = []string{}
-		
+
 		// Create empty cells array with the correct length for count purposes
 		nb.Cells = make([]*Cell, cellCount)
-		
+
 		notebooks = append(notebooks, &nb)
 	}
 
@@ -343,12 +343,12 @@ func (s *Store) ListNotebooks(userID string) ([]*Notebook, error) {
 func (s *Store) CreateCell(notebookID string, cell *Cell) (*Cell, error) {
 	cell.ID = uuid.New().String()
 	cell.NotebookID = notebookID
-	
+
 	// Ensure Config is initialized
 	if cell.Config.Height == 0 {
 		cell.Config.Height = 300 // Default height
 	}
-	
+
 	configJSON, err := json.Marshal(cell.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
@@ -357,11 +357,11 @@ func (s *Store) CreateCell(notebookID string, cell *Cell) (*Cell, error) {
 	query := `INSERT INTO cells (id, notebook_id, type, name, query, visualization_type, 
 	          refresh_interval, position, row_index, col_index, layout_mode, config)
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	
-	_, err = s.db.Exec(query, cell.ID, cell.NotebookID, cell.Type, cell.Name, cell.Query, 
+
+	_, err = s.db.Exec(query, cell.ID, cell.NotebookID, cell.Type, cell.Name, cell.Query,
 		cell.VisualizationType, cell.RefreshInterval, cell.Position,
 		cell.RowIndex, cell.ColIndex, cell.LayoutMode, string(configJSON))
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cell: %w", err)
 	}
@@ -394,7 +394,7 @@ func (s *Store) GetCells(notebookID string) ([]*Cell, error) {
 
 		err := rows.Scan(&cell.ID, &cell.NotebookID, &cell.Type, &cell.Name, &cell.Query,
 			&cell.VisualizationType, &cell.RefreshInterval, &cell.Position,
-			&cell.RowIndex, &cell.ColIndex, &cell.LayoutMode, 
+			&cell.RowIndex, &cell.ColIndex, &cell.LayoutMode,
 			&lastExec, &errStr, &resultsJSON, &configJSON)
 		if err != nil {
 			return nil, err
@@ -489,22 +489,22 @@ func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationT
 	// Build dynamic update query
 	setParts := []string{}
 	args := []interface{}{}
-	
+
 	if query != nil {
 		setParts = append(setParts, "query = ?")
 		args = append(args, *query)
 	}
-	
+
 	if vizType != nil {
 		setParts = append(setParts, "visualization_type = ?")
 		args = append(args, *vizType)
 	}
-	
+
 	if refreshInterval != nil {
 		setParts = append(setParts, "refresh_interval = ?")
 		args = append(args, *refreshInterval)
 	}
-	
+
 	if config != nil {
 		configJSON, err := json.Marshal(config)
 		if err != nil {
@@ -513,25 +513,25 @@ func (s *Store) UpdateCell(cellID string, query *string, vizType *VisualizationT
 		setParts = append(setParts, "config = ?")
 		args = append(args, string(configJSON))
 	}
-	
+
 	if name != nil {
 		setParts = append(setParts, "name = ?")
 		args = append(args, *name)
 	}
-	
+
 	if len(setParts) == 0 {
 		return nil // Nothing to update
 	}
-	
+
 	// Add cell ID to args
 	args = append(args, cellID)
-	
+
 	updateQuery := fmt.Sprintf("UPDATE cells SET %s WHERE id = ?", strings.Join(setParts, ", "))
 	_, err := s.db.Exec(updateQuery, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update cell: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -552,17 +552,20 @@ func (s *Store) DeleteCell(cellID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete cell: %w", err)
 	}
-	
+
 	return nil
 }
 
-func (s *Store) ReorderCells(notebookID string, cellOrders []struct{ID string `json:"id"`; Position int `json:"position"`}) error {
+func (s *Store) ReorderCells(notebookID string, cellOrders []struct {
+	ID       string `json:"id"`
+	Position int    `json:"position"`
+}) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Update positions for all cells
 	for _, order := range cellOrders {
 		query := `UPDATE cells SET position = ?, row_index = ? WHERE id = ? AND notebook_id = ?`
@@ -571,11 +574,11 @@ func (s *Store) ReorderCells(notebookID string, cellOrders []struct{ID string `j
 			return fmt.Errorf("failed to update cell position: %w", err)
 		}
 	}
-	
+
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	
+
 	return nil
 }

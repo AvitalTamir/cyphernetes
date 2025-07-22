@@ -29,15 +29,16 @@ export interface Cell {
   config: CellConfig
 }
 
-export type CellType = 'query' | 'markdown' | 'logs' | 'webpage'
+export type CellType = 'query' | 'markdown' | 'webpage'
 
 // Main visualization modes
-export type VisualizationMode = 'document' | 'table' | 'graph'
+export type VisualizationMode = 'document' | 'table' | 'graph' | 'logs'
 
 // Sub-modes for each main mode
 export type DocumentMode = 'json' | 'yaml'
 export type TableMode = 'default' // Can expand later with pagination, sorting options
 export type GraphMode = 'force' | 'pie' | 'bar' // Different graph types
+export type LogsMode = 'stream' // Can expand later with different log views
 
 // Legacy type for backward compatibility (will map to modes)
 export type VisualizationType = 'json' | 'yaml' | 'table' | 'graph'
@@ -50,6 +51,7 @@ export interface CellConfig {
   document_mode?: DocumentMode
   table_mode?: TableMode
   graph_mode?: GraphMode
+  logs_mode?: LogsMode
   
   // For table visualization
   page_size?: number

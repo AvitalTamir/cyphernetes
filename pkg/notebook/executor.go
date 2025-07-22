@@ -26,7 +26,7 @@ func NewQueryExecutor(dryRun bool) (*QueryExecutor, error) {
 	providerConfig := &apiserver.APIServerProviderConfig{
 		DryRun: dryRun,
 	}
-	
+
 	// Create provider
 	provider, err := apiserver.NewAPIServerProviderWithOptions(providerConfig)
 	if err != nil {
@@ -89,7 +89,7 @@ func (qe *QueryExecutor) ExecuteQueryWithOptions(query string, options QueryOpti
 
 	// Execute the query
 	result, err := qe.ExecuteQuery(query, options.Namespace)
-	
+
 	// Reset global options to avoid side effects
 	if options.AllNamespaces {
 		core.AllNamespaces = false
