@@ -13,8 +13,6 @@ import (
 var (
 	notebookPort    int
 	notebookDataDir string
-	enableWireGuard bool
-	wireguardPort   int
 )
 
 var notebookCmd = &cobra.Command{
@@ -25,15 +23,12 @@ var notebookCmd = &cobra.Command{
 The notebook server provides:
 - Interactive notebook interface for running Cyphernetes queries
 - Multiple visualization formats (JSON, YAML, Table, Graph)
-- Real-time collaboration via WireGuard
 - Persistent storage of notebooks and results`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Create notebook server config
 		config := notebook.ServerConfig{
-			Port:            notebookPort,
-			DataDir:         notebookDataDir,
-			EnableWireGuard: enableWireGuard,
-			WireGuardPort:   wireguardPort,
+			Port:    notebookPort,
+			DataDir: notebookDataDir,
 		}
 
 		// Create and start the server
@@ -54,14 +49,6 @@ The notebook server provides:
 
 		fmt.Printf("🚀 Cyphernetes Notebook server starting on http://localhost:%d\n", notebookPort)
 		fmt.Printf("📁 Data directory: %s\n", notebookDataDir)
-
-		if enableWireGuard {
-			fmt.Printf("🔐 WireGuard enabled on port %d\n", wireguardPort)
-			fmt.Println("\nTo share your notebook with others:")
-			fmt.Println("1. Run: cyphernetes notebook share")
-			fmt.Println("2. Share the generated pin code")
-			fmt.Println("3. Others can connect using: cyphernetes notebook connect <pin>")
-		}
 
 		// Wait for shutdown signal or error
 		select {
@@ -99,7 +86,6 @@ var notebookConnectCmd = &cobra.Command{
 		pin := args[0]
 
 		// TODO: Parse pin to extract connection details
-		// TODO: Set up WireGuard connection
 		// TODO: Open browser to remote notebook
 
 		fmt.Printf("🔗 Connecting to notebook with pin: %s\n", pin)
@@ -111,8 +97,6 @@ func init() {
 	// Add flags for notebook command
 	notebookCmd.Flags().IntVarP(&notebookPort, "port", "p", 8080, "Port to run the notebook server on")
 	notebookCmd.Flags().StringVarP(&notebookDataDir, "data-dir", "d", "~/.cyphernetes/notebooks", "Directory to store notebook data")
-	notebookCmd.Flags().BoolVar(&enableWireGuard, "enable-wireguard", true, "Enable WireGuard for peer-to-peer collaboration")
-	notebookCmd.Flags().IntVar(&wireguardPort, "wireguard-port", 51820, "Port for WireGuard interface")
 
 	// Add subcommands
 	notebookCmd.AddCommand(notebookShareCmd)

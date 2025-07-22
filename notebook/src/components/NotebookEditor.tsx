@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
+import { useNotebook } from '../contexts/NotebookContext'
 import { ArrowLeft, Plus, Search, FileText, Globe, ChevronDown, Check, X } from 'lucide-react'
 import './NotebookEditor.css'
 
@@ -15,6 +16,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   onBack,
   onUpdate,
 }) => {
+  const { dispatch } = useNotebook()
   const [cells, setCells] = useState<Cell[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,13 +31,21 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
 
   useEffect(() => {
     loadNotebook()
-  }, [notebook.id])
+    // Set as current notebook in context
+    dispatch({ type: 'SET_CURRENT_NOTEBOOK', payload: notebook })
+  }, [notebook.id, dispatch, notebook])
   
 
   // Update title value when notebook changes
   useEffect(() => {
     setTitleValue(notebook.name)
   }, [notebook.name])
+
+  const handleBack = () => {
+    // Clear current notebook from context
+    dispatch({ type: 'SET_CURRENT_NOTEBOOK', payload: null })
+    onBack()
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -335,7 +345,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
     return (
       <div className="notebook-editor">
         <div className="error">{error}</div>
-        <button onClick={onBack}>Back to Notebooks</button>
+        <button onClick={handleBack}>Back to Notebooks</button>
       </div>
     )
   }
@@ -343,7 +353,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   return (
     <div className="notebook-editor">
       <div className="notebook-header">
-        <button className="back-button" onClick={onBack}>
+        <button className="back-button" onClick={handleBack}>
           <ArrowLeft size={20} />
         </button>
         <div className="notebook-title-container">

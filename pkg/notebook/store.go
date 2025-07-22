@@ -83,25 +83,14 @@ func (s *Store) migrate() error {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 
-	CREATE TABLE IF NOT EXISTS share_pins (
-		pin TEXT PRIMARY KEY,
+	CREATE TABLE IF NOT EXISTS share_tokens (
+		token TEXT PRIMARY KEY,
 		notebook_id TEXT NOT NULL,
+		subdomain TEXT NOT NULL,
 		created_by TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		expires_at DATETIME NOT NULL,
-		wg_endpoint TEXT,
-		wg_pubkey TEXT,
 		FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS wireguard_peers (
-		id TEXT PRIMARY KEY,
-		public_key TEXT UNIQUE NOT NULL,
-		endpoint TEXT,
-		allowed_ips TEXT,
-		user_id TEXT,
-		added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 
 	CREATE TABLE IF NOT EXISTS notebook_tags (
@@ -580,5 +569,74 @@ func (s *Store) ReorderCells(notebookID string, cellOrders []struct {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	return nil
+}
+
+// CreateShareToken creates a new share token for a notebook
+func (s *Store) CreateShareToken(token *ShareToken) error {
+	query := `INSERT INTO share_tokens (token, notebook_id, subdomain, created_by, expires_at)
+	          VALUES (?, ?, ?, ?, ?)`
+	
+	_, err := s.db.Exec(query, token.Token, token.NotebookID, token.Subdomain,
+		token.CreatedBy, token.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to create share token: %w", err)
+	}
+	
+	return nil
+}
+
+// GetShareToken retrieves a share token by token value
+func (s *Store) GetShareToken(token string) (*ShareToken, error) {
+	query := `SELECT token, notebook_id, subdomain, created_by, created_at, expires_at
+	          FROM share_tokens WHERE token = ?`
+	
+	var st ShareToken
+	err := s.db.QueryRow(query, token).Scan(
+		&st.Token, &st.NotebookID, &st.Subdomain,
+		&st.CreatedBy, &st.CreatedAt, &st.ExpiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Token not found
+		}
+		return nil, fmt.Errorf("failed to get share token: %w", err)
+	}
+	
+	return &st, nil
+}
+
+// DeleteExpiredShareTokens removes all expired share tokens
+func (s *Store) DeleteExpiredShareTokens() error {
+	query := `DELETE FROM share_tokens WHERE expires_at < ?`
+	_, err := s.db.Exec(query, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to delete expired share tokens: %w", err)
+	}
+	return nil
+}
+
+// DeleteShareToken removes a specific share token
+func (s *Store) DeleteShareToken(token string) error {
+	query := `DELETE FROM share_tokens WHERE token = ?`
+	_, err := s.db.Exec(query, token)
+	if err != nil {
+		return fmt.Errorf("failed to delete share token: %w", err)
+	}
+	return nil
+}
+
+// DeleteAllShareTokens removes all share tokens (used on startup)
+func (s *Store) DeleteAllShareTokens() error {
+	query := `DELETE FROM share_tokens`
+	result, err := s.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("failed to delete all share tokens: %w", err)
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		fmt.Printf("🧹 Cleaned up %d expired share tokens on startup\n", rowsAffected)
+	}
+	
 	return nil
 }

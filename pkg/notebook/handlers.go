@@ -2,9 +2,11 @@ package notebook
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +22,98 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// DNS service API structures
+type DNSServiceRequest struct {
+	ExpiresIn int `json:"expires_in"` // seconds
+}
+
+type DNSServiceResponse struct {
+	Subdomain string `json:"subdomain"`
+	ExpiresAt string `json:"expires_at"`
+	ExpiresIn int    `json:"expires_in"`
+}
+
+// Helper function to get subdomain from DNS service
+func (s *Server) getSubdomainFromDNS(expiresIn int) (string, error) {
+	reqBody := DNSServiceRequest{
+		ExpiresIn: expiresIn,
+	}
+	
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+	
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	
+	// Call the DNS service
+	resp, err := client.Post("https://go.cyphernet.es/api/subdomain", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to call DNS service: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("DNS service returned status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	var dnsResp DNSServiceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&dnsResp); err != nil {
+		return "", fmt.Errorf("failed to decode DNS response: %w", err)
+	}
+	
+	if dnsResp.Subdomain == "" {
+		return "", fmt.Errorf("DNS service returned empty subdomain")
+	}
+	
+	return dnsResp.Subdomain, nil
+}
+
+// Middleware for share token validation
+func (s *Server) validateShareToken() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		token := c.Query("token")
+		if token == "" {
+			// No token provided, continue normally
+			c.Next()
+			return
+		}
+
+		// Clean up expired tokens first
+		s.store.DeleteExpiredShareTokens()
+
+		// Validate the token
+		shareToken, err := s.store.GetShareToken(token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Token validation failed"})
+			c.Abort()
+			return
+		}
+
+		if shareToken == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		// Check if token is expired
+		if time.Now().After(shareToken.ExpiresAt) {
+			s.store.DeleteShareToken(token)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
+			c.Abort()
+			return
+		}
+
+		// Store share token info in context for later use
+		c.Set("share_token", shareToken)
+		c.Next()
+	})
+}
 
 // Notebook management handlers
 
@@ -587,27 +681,65 @@ func (s *Server) executeAllCells(c *gin.Context) {
 
 // Collaboration handlers
 
-func (s *Server) generatePin(c *gin.Context) {
-	// Generate a random 6-digit pin
-	bytes := make([]byte, 3)
-	rand.Read(bytes)
-	hexStr := hex.EncodeToString(bytes)
-	pin := fmt.Sprintf("%06s", hexStr[:6])
+func (s *Server) generateShareToken(c *gin.Context) {
+	type GenerateTokenRequest struct {
+		NotebookID string `json:"notebook_id"`
+	}
 
-	// TODO: Store pin in database with expiration
-	// TODO: Generate WireGuard keys if enabled
-	// TODO: Return pin with connection info
+	var req GenerateTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
+	// Generate a secure random token (32 bytes = 64 hex chars)
+	tokenBytes := make([]byte, 32)
+	rand.Read(tokenBytes)
+	token := hex.EncodeToString(tokenBytes)
+
+	// Get subdomain from DNS service (10 minutes = 600 seconds)
+	subdomain, err := s.getSubdomainFromDNS(600)
+	if err != nil {
+		// Fallback to mock subdomain if DNS service fails
+		fmt.Printf("Warning: DNS service failed, using mock subdomain: %v\n", err)
+		subdomainBytes := make([]byte, 6)
+		rand.Read(subdomainBytes)
+		subdomain = hex.EncodeToString(subdomainBytes)[:12]
+	}
+
+	// Create share token with 10 minute expiry
+	expiryTime := time.Now().Add(10 * time.Minute)
+	shareToken := &ShareToken{
+		Token:      token,
+		NotebookID: req.NotebookID,
+		Subdomain:  subdomain,
+		CreatedBy:  "user", // TODO: Get from session/auth
+		ExpiresAt:  expiryTime,
+	}
+
+	// Store in database
+	if err := s.store.CreateShareToken(shareToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create share token"})
+		return
+	}
+
+	// Start the tunnel connection
+	if err := s.startTunnel(subdomain, token, expiryTime); err != nil {
+		// If tunnel fails, still return the URL but log the error
+		fmt.Printf("Warning: Failed to start tunnel: %v\n", err)
+	}
+
+	// Return the shareable URL
+	shareURL := fmt.Sprintf("https://%s.go.cyphernet.es/?token=%s", subdomain, token)
+	
 	c.JSON(http.StatusOK, gin.H{
-		"pin":        pin,
-		"expires_at": time.Now().Add(10 * time.Minute),
+		"share_url":  shareURL,
+		"expires_at": shareToken.ExpiresAt,
+		"expires_in": int(time.Until(shareToken.ExpiresAt).Seconds()),
 	})
 }
 
-func (s *Server) connectWithPin(c *gin.Context) {
-	// TODO: Implement pin-based connection
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
-}
+// Pin-based connection is deprecated in favor of token-based sharing
 
 func (s *Server) listSessions(c *gin.Context) {
 	// TODO: Get notebook ID from request
@@ -638,32 +770,6 @@ func (s *Server) listSessions(c *gin.Context) {
 
 func (s *Server) disconnectSession(c *gin.Context) {
 	// TODO: Implement session disconnection
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
-}
-
-// WireGuard handlers
-
-func (s *Server) wireguardStatus(c *gin.Context) {
-	if !s.config.EnableWireGuard {
-		c.JSON(http.StatusOK, gin.H{"enabled": false})
-		return
-	}
-
-	// TODO: Check actual WireGuard interface status
-	c.JSON(http.StatusOK, gin.H{
-		"enabled": true,
-		"port":    s.config.WireGuardPort,
-		"peers":   0, // TODO: Get actual peer count
-	})
-}
-
-func (s *Server) addPeer(c *gin.Context) {
-	// TODO: Implement WireGuard peer addition
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
-}
-
-func (s *Server) removePeer(c *gin.Context) {
-	// TODO: Implement WireGuard peer removal
 	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
 }
 

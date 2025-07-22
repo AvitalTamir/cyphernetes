@@ -112,23 +112,12 @@ type Session struct {
 	IsOwner      bool      `json:"is_owner"`
 }
 
-// SharePin represents a temporary pin for sharing
-type SharePin struct {
-	Pin        string    `json:"pin" db:"pin"`
+// ShareToken represents a temporary token for sharing via HTTPS tunnel
+type ShareToken struct {
+	Token      string    `json:"token" db:"token"`
 	NotebookID string    `json:"notebook_id" db:"notebook_id"`
+	Subdomain  string    `json:"subdomain" db:"subdomain"`
 	CreatedBy  string    `json:"created_by" db:"created_by"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`
 	ExpiresAt  time.Time `json:"expires_at" db:"expires_at"`
-	WGEndpoint string    `json:"wg_endpoint" db:"wg_endpoint"` // WireGuard endpoint
-	WGPubKey   string    `json:"wg_pubkey" db:"wg_pubkey"`     // WireGuard public key
-}
-
-// WireGuardPeer represents a connected peer
-type WireGuardPeer struct {
-	ID         string    `json:"id" db:"id"`
-	PublicKey  string    `json:"public_key" db:"public_key"`
-	Endpoint   string    `json:"endpoint" db:"endpoint"`
-	AllowedIPs string    `json:"allowed_ips" db:"allowed_ips"`
-	UserID     string    `json:"user_id" db:"user_id"`
-	AddedAt    time.Time `json:"added_at" db:"added_at"`
 }
