@@ -1403,14 +1403,16 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     // In logs mode, handle streaming instead of polling
     if (currentMode === 'logs') {
       if (logsStreaming) {
-        // Stop logs streaming
+        // Stop logs streaming - set flag to prevent auto-restart
+        hasAutoStartedRef.current = true
         if (logsEventSourceRef.current) {
           logsEventSourceRef.current.close()
           logsEventSourceRef.current = null
         }
         updateLogsStreamingState(false)
       } else {
-        // Start logs streaming
+        // Start logs streaming - reset auto-start flag
+        hasAutoStartedRef.current = false
         startLogsStreaming()
       }
       return
@@ -1777,20 +1779,20 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     setCurrentMode(newMode)
   }, [cell.config?.visualization_mode, cell.visualization_type])
 
-  // Auto-start streaming if cell was streaming and we're in logs mode (only on initial mount/mode change)
+  // Auto-start streaming when switching to logs mode
   const hasAutoStartedRef = useRef(false)
   const isManuallyRestartingRef = useRef(false)
   useEffect(() => {
-    if (currentMode === 'logs' && cell.config?.logs_streaming && !logsStreaming && queriedPods.length > 0 && namespace && !hasAutoStartedRef.current && !isManuallyRestartingRef.current) {
+    if (currentMode === 'logs' && !logsStreaming && queriedPods.length > 0 && namespace && !hasAutoStartedRef.current && !isManuallyRestartingRef.current) {
       hasAutoStartedRef.current = true
-      // Start streaming automatically
+      // Start streaming automatically when switching to logs view
       startLogsStreaming()
     }
     // Reset the flag when leaving logs mode
     if (currentMode !== 'logs') {
       hasAutoStartedRef.current = false
     }
-  }, [currentMode, cell.config?.logs_streaming, logsStreaming, queriedPods.length, namespace, startLogsStreaming])
+  }, [currentMode, logsStreaming, queriedPods.length, namespace, startLogsStreaming])
 
   // Start streaming when logsStreaming becomes true and we have pods
   useEffect(() => {
