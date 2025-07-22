@@ -20,6 +20,8 @@ import { CyphernetesEditor } from './CyphernetesEditor'
 import { buildK8sResourceMap, findGraphPatterns, buildTableRows } from '../utils/tableGrouping'
 import { Prism as PrismSyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { useSettings } from '../contexts/SettingsContext'
 import './CellComponent.css'
 
 // Kubernetes resource type color mapping
@@ -1029,6 +1031,8 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   isDragging,
   isDragOver,
 }) => {
+  const { themeName } = useSettings()
+  const syntaxTheme = themeName === 'light' ? oneLight : oneDark
   const [isEditing, setIsEditing] = useState(false)
   const [query, setQuery] = useState(cell.query)
   const [isPollingActive, setIsPollingActive] = useState(false)
@@ -2282,7 +2286,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
               <div className="cell-editor-highlight">
                 <PrismSyntaxHighlighter
                   language="cypher"
-                  style={oneLight}
+                  style={syntaxTheme}
                   customStyle={{
                     margin: 0,
                     padding: '12px',
@@ -2326,16 +2330,16 @@ export const QueryCell: React.FC<QueryCellProps> = ({
             {cell.query ? (
               <PrismSyntaxHighlighter
                 language="cypher"
-                style={oneLight}
+                style={syntaxTheme}
                 customStyle={{
                   margin: 0,
                   padding: '12px',
                   fontSize: '14px',
                   lineHeight: '1.4',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: 'var(--color-surface)',
                   border: 'none',
                   borderRadius: '4px',
-                  color: '#4c4f69'
+                  color: 'var(--color-text)'
                 }}
               >
                 {cell.query}
@@ -2471,9 +2475,10 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                     lineHeight: '1.5',
                     maxHeight: '400px',
                     overflowY: 'auto',
-                    backgroundColor: '#f8f9fa',
+                    backgroundColor: 'var(--color-surface)',
                     padding: '12px',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
+                    color: 'var(--color-text)'
                   }}>
                     {filteredLogs.map((line, index) => {
                       const processedLine = processLogLine(line)

@@ -20,6 +20,15 @@
   color: var(--color-text);
 }
 
+.notebook-title.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.notebook-title.clickable:hover {
+  color: var(--color-primary);
+}
+
 .notebook-title-container {
   flex: 1;
   display: flex;

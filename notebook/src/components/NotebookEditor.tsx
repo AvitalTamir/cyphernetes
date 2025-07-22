@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Notebook, Cell } from '../types/notebook'
 import { CellComponent } from './CellComponent'
-import { ArrowLeft, Plus, Search, FileText, Globe, ChevronDown, Edit3, Check, X } from 'lucide-react'
+import { ArrowLeft, Plus, Search, FileText, Globe, ChevronDown, Check, X } from 'lucide-react'
 import './NotebookEditor.css'
 
 interface NotebookEditorProps {
@@ -283,10 +283,13 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
             </div>
           ) : (
             <div className="title-display-group">
-              <h1 className="notebook-title">{notebook.name}</h1>
-              <button className="title-action-btn edit" onClick={handleTitleEdit}>
-                <Edit3 size={16} />
-              </button>
+              <h1 
+                className="notebook-title clickable" 
+                onClick={handleTitleEdit}
+                title="Click to rename"
+              >
+                {notebook.name}
+              </h1>
             </div>
           )}
         </div>

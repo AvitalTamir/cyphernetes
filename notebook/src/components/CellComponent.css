@@ -42,8 +42,8 @@
 }
 
 .webpage-cell.executed-success {
-  border-color: var(--color-success);
-  box-shadow: 0 0 0 1px rgba(0, 184, 148, 0.1);
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.1);
 }
 
 .cell.executed-error {
@@ -500,6 +500,12 @@
   box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
+/* Force transparent background for code elements in editor */
+.cell-editor-highlight code,
+.cell-query-display code {
+  background-color: transparent !important;
+}
+
 .cell-query-display {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
@@ -649,6 +655,9 @@
   background: var(--color-surface);
   min-height: 400px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .empty-graph {
@@ -733,6 +742,7 @@
   padding: 20px;
   background: var(--color-background);
   border-radius: 8px;
+  width: 100%;
 }
 
 .bar-chart-header {
@@ -1205,7 +1215,7 @@
 
 .logs-output {
   max-height: 400px;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: 4px;
