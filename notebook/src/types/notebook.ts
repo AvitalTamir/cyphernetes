@@ -66,6 +66,9 @@ export interface CellConfig {
   // Context settings
   context?: string
   namespace?: string
+  
+  // Logs settings
+  logs_streaming?: boolean
 }
 
 export interface User {

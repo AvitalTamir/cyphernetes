@@ -60,8 +60,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
     setIsChecking(true)
 
     const checkTimer = setTimeout(() => {
-      console.log('🧪 Creating temporary test iframe for:', url)
-      
       // Create a temporary iframe without sandbox for testing
       const testIframe = document.createElement('iframe')
       testIframe.style.position = 'absolute'
@@ -77,8 +75,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       // Handle iframe load events
       testIframe.onload = () => {
         if (isResolved) return
-        console.log('🔄 Test iframe onload fired')
-        
         setTimeout(() => {
           if (isResolved) return
           
@@ -93,14 +89,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
                 (body.textContent && body.textContent.trim().length > 0)
               )
               
-              console.log('🔍 Test iframe content analysis:', {
-                canAccess: true,
-                bodyExists: !!body,
-                childCount: body?.children.length || 0,
-                textLength: body?.textContent?.trim().length || 0,
-                hasRealContent
-              })
-              
               if (!hasRealContent) {
                 isResolved = true
                 setLoadError(true)
@@ -108,20 +96,17 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
                 setIsChecking(false)
                 setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
               } else {
-                console.log('✅ Test iframe has content - site allows embedding')
                 isResolved = true
                 setLoadSuccess(true)
                 setIsChecking(false)
               }
             } else {
-              console.log('🔍 Cannot access test iframe document (cross-origin) - assuming it loaded successfully')
               isResolved = true
               setLoadSuccess(true)
               setIsChecking(false)
             }
           } catch (e) {
             const errorMessage = e instanceof Error ? e.message : String(e)
-            console.log('🔍 Test iframe access error:', errorMessage)
             
             // Check for frame blocking errors which indicate the site is blocked
             if (errorMessage.toLowerCase().includes('sandbox access violation') ||
@@ -132,9 +117,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
               setLoadSuccess(false)
               setIsChecking(false)
               setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
-              console.log('❌ Frame blocking detected - site is blocked:', errorMessage)
             } else {
-              console.log('✅ Regular cross-origin error means the site loaded successfully')
               isResolved = true
               setLoadSuccess(true)
               setIsChecking(false)
@@ -144,7 +127,7 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
             try {
               document.body.removeChild(testIframe)
             } catch (e) {
-              console.log('Failed to remove test iframe:', e)
+              // Ignore cleanup errors
             }
           }
         }, 1500) // Wait a bit for content to load
@@ -154,13 +137,12 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       testIframe.onerror = () => {
         if (isResolved) return
         isResolved = true
-        console.log('❌ Test iframe onerror fired - likely blocked')
         setLoadError(true)
         setErrorMessage('The website could not be loaded due to network or security restrictions')
         try {
           document.body.removeChild(testIframe)
         } catch (e) {
-          console.log('Failed to remove test iframe:', e)
+          // Ignore cleanup errors
         }
       }
       
@@ -171,7 +153,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       setTimeout(() => {
         if (isResolved) return
         
-        console.log('🕐 Chrome X-Frame-Options check timeout')
         try {
           const doc = testIframe.contentDocument || testIframe.contentWindow?.document
           if (doc) {
@@ -180,23 +161,14 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
             const bodyText = doc.body?.textContent?.trim() || ''
             const hasElements = doc.body?.children?.length || 0
             
-            console.log('🔍 Chrome timeout check:', {
-              htmlLength: html.length,
-              bodyText: bodyText.substring(0, 100),
-              hasElements,
-              title: doc.title
-            })
-            
             // If document is accessible but completely empty or minimal, it's likely blocked
             if (html.length < 100 && hasElements === 0 && !bodyText) {
-              console.log('❌ Chrome: Document accessible but empty - likely X-Frame-Options blocked')
               isResolved = true
               setLoadError(true)
               setLoadSuccess(false)
               setIsChecking(false)
               setErrorMessage('The website blocked embedding due to security restrictions (X-Frame-Options or Content Security Policy)')
             } else {
-              console.log('✅ Chrome: Document has content - site allows embedding')
               isResolved = true
               setLoadSuccess(true)
               setIsChecking(false)
@@ -204,7 +176,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
           }
         } catch (e) {
           // This catch block will handle any access errors
-          console.log('❌ Chrome timeout check error - likely blocked:', e)
           isResolved = true
           setLoadError(true)
           setLoadSuccess(false)
@@ -216,13 +187,12 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       // Cleanup timeout
       setTimeout(() => {
         if (!isResolved) {
-          console.log('⏰ Test iframe timeout - assuming it works')
           setIsChecking(false) // Stop the pulsing animation
           setLoadSuccess(true) // Assume success after timeout
           try {
             document.body.removeChild(testIframe)
           } catch (e) {
-            console.log('Failed to remove test iframe:', e)
+            // Ignore cleanup errors
           }
         }
       }, 5000)
@@ -234,8 +204,6 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
 
   // Test if URL can be loaded using object element
   const testUrlLoading = (testUrl: string): Promise<boolean> => {
-    console.log('🧪 Starting object test for:', testUrl)
-    
     return new Promise((resolve) => {
       const obj = document.createElement('object')
       obj.style.position = 'absolute'
@@ -251,51 +219,41 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
       let intervalCount = 0
 
       const isReallyLoaded = (element: HTMLObjectElement) => {
-        const loaded = element.offsetHeight !== 5 // fallback height
-        console.log(`📏 Object height: ${element.offsetHeight}px, isReallyLoaded: ${loaded}`)
-        return loaded
+        return element.offsetHeight !== 5 // fallback height
       }
 
       const hasResult = (element: HTMLObjectElement) => {
-        const hasRes = element.offsetHeight > 0
-        console.log(`📊 hasResult: ${hasRes}, offsetHeight: ${element.offsetHeight}px`)
-        return hasRes
+        return element.offsetHeight > 0
       }
 
       const resolveResult = (success: boolean, reason: string) => {
         if (isResolved) return
         isResolved = true
-        console.log(`✅ Object test resolved: ${success ? 'SUCCESS' : 'FAIL'} - ${reason}`)
         try {
           document.body.removeChild(obj)
         } catch (e) {
-          console.log('Failed to remove object element:', e)
+          // Ignore cleanup errors
         }
         resolve(success)
       }
 
       // Chrome calls always, Firefox on load
       obj.onload = () => {
-        console.log('🔄 Object onload fired - but not resolving immediately, waiting for interval checks')
         // Don't resolve immediately, let the interval checks handle it
       }
 
       // Firefox on error
       obj.onerror = (e) => {
-        console.log('❌ Object onerror fired:', e)
         resolveResult(false, 'onerror event')
       }
 
       // Safari polling
       const interval = () => {
         if (isResolved) return
-
-        console.log(`🔍 Interval check #${intervalCount + 1}`)
         
         if (hasResult(obj)) {
           if (isReallyLoaded(obj)) {
             intervalCount++
-            console.log(`⏱️ Interval count: ${intervalCount}/3`)
             // Give it 3 checks (1.5 seconds total) to be sure
             if (intervalCount >= 3) {
               resolveResult(true, `interval success after ${intervalCount} checks`)
@@ -306,14 +264,12 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
             // Don't fail immediately - the site might still be loading
             if (intervalCount < 2) {
               intervalCount++
-              console.log(`⏳ Still showing fallback, but giving more time... (${intervalCount}/2)`)
               setTimeout(interval, 500)
             } else {
               resolveResult(false, 'interval - confirmed not loaded after retries')
             }
           }
         } else {
-          console.log('⌛ No result yet, continuing...')
           setTimeout(interval, 500)
         }
       }
@@ -323,12 +279,10 @@ export const WebpageCell: React.FC<WebpageCellProps> = ({
         resolveResult(true, '4-second timeout - assuming success')
       }, 4000)
 
-      console.log('📎 Appending object to DOM and starting interval')
       document.body.appendChild(obj)
       
       // Wait longer before starting checks to give it time to load
       setTimeout(() => {
-        console.log('⏰ Starting checks after 1-second delay')
         interval()
       }, 1000)
     })

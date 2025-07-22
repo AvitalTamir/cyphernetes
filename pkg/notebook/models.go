@@ -89,7 +89,8 @@ type CellConfig struct {
 	Namespace string `json:"namespace,omitempty"`
 
 	// Logs cell specific
-	LogsMode string `json:"logsMode,omitempty"` // "pod" or "query"
+	LogsMode       string `json:"logsMode,omitempty"`       // "pod" or "query"
+	LogsStreaming  bool   `json:"logs_streaming,omitempty"` // whether logs are currently streaming
 }
 
 // User represents a notebook user

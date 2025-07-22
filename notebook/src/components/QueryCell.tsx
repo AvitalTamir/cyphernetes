@@ -1233,6 +1233,29 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       if (response.ok) {
         onUpdate(cell.id, { query })
         setIsEditing(false)
+        
+        // Execute the query to provide immediate feedback after saving
+        await executeQuery()
+        
+        // If we're in logs mode and currently streaming, restart streaming with new query
+        if (currentMode === 'logs' && logsStreaming) {
+          // Stop current stream
+          if (logsEventSourceRef.current) {
+            logsEventSourceRef.current.close()
+            logsEventSourceRef.current = null
+          }
+          // Mark that we're manually restarting to prevent auto-start interference
+          isManuallyRestartingRef.current = true
+          setLogsStreaming(false)
+          
+          // Wait for pod extraction and then restart
+          setTimeout(() => {
+            if (currentMode === 'logs') {
+              isManuallyRestartingRef.current = false
+              setLogsStreaming(true)
+            }
+          }, 500)
+        }
       }
     } catch (error) {
       console.error('Failed to save cell:', error)
@@ -1448,7 +1471,6 @@ export const QueryCell: React.FC<QueryCellProps> = ({
 
   const handleRunPause = async () => {
     // In logs mode, handle streaming instead of polling
-    console.log('handleRunPause called, currentMode:', currentMode, 'logsStreaming:', logsStreaming)
     if (currentMode === 'logs') {
       if (logsStreaming) {
         // Stop logs streaming
@@ -1456,7 +1478,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
           logsEventSourceRef.current.close()
           logsEventSourceRef.current = null
         }
-        setLogsStreaming(false)
+        updateLogsStreamingState(false)
       } else {
         // Start logs streaming
         startLogsStreaming()
@@ -1604,12 +1626,39 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   
   // Logs state
   const [logs, setLogs] = useState<string[]>([])
-  const [logsStreaming, setLogsStreaming] = useState(false)
+  const [logsStreaming, setLogsStreaming] = useState(cell.config?.logs_streaming || false)
   const [logFilter, setLogFilter] = useState('')
   const [showTimestamps, setShowTimestamps] = useState(false)
   const [queriedPods, setQueriedPods] = useState<string[]>([])
   const [podColors, setPodColors] = useState<Record<string, string>>({})
   const logsEventSourceRef = useRef<EventSource | null>(null)
+  
+  // Update streaming state in backend and local state
+  const updateLogsStreamingState = useCallback(async (streaming: boolean) => {
+    setLogsStreaming(streaming)
+    
+    const updatedConfig = {
+      ...cell.config,
+      logs_streaming: streaming
+    }
+    
+    try {
+      await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          config: updatedConfig
+        }),
+      })
+      onUpdate(cell.id, {
+        config: updatedConfig
+      })
+    } catch (error) {
+      console.error('Failed to update logs streaming state:', error)
+    }
+  }, [cell.notebook_id, cell.id, cell.config, onUpdate])
   
   // Logs streaming functions
   const startLogsStreaming = useCallback(() => {
@@ -1622,7 +1671,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       logsEventSourceRef.current.close()
     }
 
-    setLogsStreaming(true)
+    updateLogsStreamingState(true)
     setLogs([])
 
     const params = new URLSearchParams({
@@ -1647,10 +1696,8 @@ export const QueryCell: React.FC<QueryCellProps> = ({
         const podName = logData.pod || 'unknown'
         const logLine = logData.message || event.data
         
-        // Format the log line with colored pod prefix
-        const formattedLine = queriedPods.length > 1 
-          ? `[${podName}] ${logLine}`
-          : logLine
+        // Format the log line with colored pod prefix (always show pod name for consistency)
+        const formattedLine = `[${podName}] ${logLine}`
           
         setLogs((prev: string[]) => [formattedLine, ...prev])
       } catch (e) {
@@ -1666,24 +1713,35 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     })
 
     eventSource.addEventListener('end', () => {
-      setLogsStreaming(false)
+      updateLogsStreamingState(false)
       eventSource.close()
     })
 
     eventSource.onerror = (error) => {
       console.error('EventSource error:', error)
-      setLogsStreaming(false)
+      updateLogsStreamingState(false)
       eventSource.close()
       logsEventSourceRef.current = null
     }
-  }, [queriedPods, namespace, cell.notebook_id, cell.id, setLogs, setLogsStreaming])
+  }, [queriedPods, namespace, cell.notebook_id, cell.id, setLogs, updateLogsStreamingState])
   
   // Process log line to remove timestamp if needed
   const processLogLine = useCallback((line: string) => {
     if (!showTimestamps) {
-      // Remove ISO timestamp from the beginning of the line
-      const timestampRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s*/
-      return line.replace(timestampRegex, '')
+      // Check if line starts with [podname] prefix
+      const podPrefixMatch = line.match(/^(\[[^\]]+\]\s*)(.*)$/)
+      if (podPrefixMatch) {
+        // Line has [podname] prefix, remove timestamp from the rest
+        const podPrefix = podPrefixMatch[1]
+        const rest = podPrefixMatch[2]
+        const timestampRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s*/
+        const restWithoutTimestamp = rest.replace(timestampRegex, '')
+        return podPrefix + restWithoutTimestamp
+      } else {
+        // No pod prefix, remove timestamp from beginning
+        const timestampRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s*/
+        return line.replace(timestampRegex, '')
+      }
     }
     return line
   }, [showTimestamps])
@@ -1786,9 +1844,30 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       else newMode = 'document'
     }
     
-    console.log('Mode effect triggered - cell.config.visualization_mode:', cell.config?.visualization_mode, 'calculated newMode:', newMode, 'current currentMode:', currentMode)
     setCurrentMode(newMode)
   }, [cell.config?.visualization_mode, cell.visualization_type])
+
+  // Auto-start streaming if cell was streaming and we're in logs mode (only on initial mount/mode change)
+  const hasAutoStartedRef = useRef(false)
+  const isManuallyRestartingRef = useRef(false)
+  useEffect(() => {
+    if (currentMode === 'logs' && cell.config?.logs_streaming && !logsStreaming && queriedPods.length > 0 && namespace && !hasAutoStartedRef.current && !isManuallyRestartingRef.current) {
+      hasAutoStartedRef.current = true
+      // Start streaming automatically
+      startLogsStreaming()
+    }
+    // Reset the flag when leaving logs mode
+    if (currentMode !== 'logs') {
+      hasAutoStartedRef.current = false
+    }
+  }, [currentMode, cell.config?.logs_streaming, logsStreaming, queriedPods.length, namespace, startLogsStreaming])
+
+  // Start streaming when logsStreaming becomes true and we have pods
+  useEffect(() => {
+    if (currentMode === 'logs' && logsStreaming && queriedPods.length > 0 && namespace && !logsEventSourceRef.current) {
+      startLogsStreaming()
+    }
+  }, [logsStreaming, queriedPods, namespace, currentMode, startLogsStreaming])
 
   // Autocompletion functions
   const updateSuggestionsPosition = useCallback(() => {
@@ -1922,7 +2001,6 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   }, [query, cursorPosition])
 
   const handleModeChange = async (mode: VisualizationMode) => {
-    console.log('handleModeChange called with mode:', mode, 'currentMode before:', currentMode)
     setCurrentMode(mode)
     
     // Map back to legacy visualization_type for backend compatibility
@@ -2221,12 +2299,12 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                     logsStreaming ? (
                       <>
                         <Pause size={14} />
-                        Stop
+                        Pause
                       </>
                     ) : (
                       <>
                         <Play size={14} />
-                        Stream
+                        Run
                       </>
                     )
                   ) : isPollingActive && !isPollingDisabled ? (
