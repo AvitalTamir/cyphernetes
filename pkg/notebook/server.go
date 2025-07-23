@@ -1,6 +1,7 @@
 package notebook
 
 import (
+	"bufio"
 	"bytes"
 	"embed"
 	"fmt"
@@ -320,6 +321,7 @@ type TunnelMessage struct {
 // TunnelResponse represents a response to send back through the tunnel
 type TunnelResponse struct {
 	ID         string            `json:"id"`
+	Type       string            `json:"type"` // "complete" or "chunk" or "end"
 	StatusCode int               `json:"status_code"`
 	Headers    map[string]string `json:"headers"`
 	Body       string            `json:"body"`
@@ -353,35 +355,102 @@ func (s *Server) handleTunnelRequest(conn *websocket.Conn, connMutex *sync.Mutex
 	}
 	defer resp.Body.Close()
 	
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		s.sendTunnelError(conn, connMutex, msg.ID, http.StatusInternalServerError, "Failed to read response")
-		return
-	}
-	
-	// Send response back through tunnel
-	tunnelResp := TunnelResponse{
-		ID:         msg.ID,
-		StatusCode: resp.StatusCode,
-		Headers:    make(map[string]string),
-		Body:       string(respBody),
-	}
+	// Check if this is an SSE response
+	contentType := resp.Header.Get("Content-Type")
+	isSSE := contentType == "text/event-stream"
 	
 	// Copy headers
+	headers := make(map[string]string)
 	for key, values := range resp.Header {
 		if len(values) > 0 {
-			tunnelResp.Headers[key] = values[0]
+			headers[key] = values[0]
 		}
 	}
 	
-	// Protect WebSocket writes with mutex to prevent concurrent writes
-	connMutex.Lock()
-	err = conn.WriteJSON(tunnelResp)
-	connMutex.Unlock()
-	
-	if err != nil {
-		fmt.Printf("Warning: Failed to send tunnel response: %v\n", err)
+	if isSSE {
+		// Handle SSE streaming
+		// First send the initial response with headers
+		initialResp := TunnelResponse{
+			ID:         msg.ID,
+			Type:       "chunk",
+			StatusCode: resp.StatusCode,
+			Headers:    headers,
+			Body:       "",
+		}
+		
+		connMutex.Lock()
+		err = conn.WriteJSON(initialResp)
+		connMutex.Unlock()
+		
+		if err != nil {
+			fmt.Printf("Warning: Failed to send initial SSE response: %v\n", err)
+			return
+		}
+		
+		// Stream the response body in chunks
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					fmt.Printf("Warning: Error reading SSE stream: %v\n", err)
+				}
+				break
+			}
+			
+			// Send each line as a chunk
+			chunkResp := TunnelResponse{
+				ID:         msg.ID,
+				Type:       "chunk",
+				StatusCode: resp.StatusCode,
+				Headers:    nil,
+				Body:       line,
+			}
+			
+			connMutex.Lock()
+			err = conn.WriteJSON(chunkResp)
+			connMutex.Unlock()
+			
+			if err != nil {
+				fmt.Printf("Warning: Failed to send SSE chunk: %v\n", err)
+				break
+			}
+		}
+		
+		// Send end marker
+		endResp := TunnelResponse{
+			ID:   msg.ID,
+			Type: "end",
+		}
+		
+		connMutex.Lock()
+		conn.WriteJSON(endResp)
+		connMutex.Unlock()
+		
+	} else {
+		// Handle regular response
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			s.sendTunnelError(conn, connMutex, msg.ID, http.StatusInternalServerError, "Failed to read response")
+			return
+		}
+		
+		// Send complete response
+		tunnelResp := TunnelResponse{
+			ID:         msg.ID,
+			Type:       "complete",
+			StatusCode: resp.StatusCode,
+			Headers:    headers,
+			Body:       string(respBody),
+		}
+		
+		connMutex.Lock()
+		err = conn.WriteJSON(tunnelResp)
+		connMutex.Unlock()
+		
+		if err != nil {
+			fmt.Printf("Warning: Failed to send tunnel response: %v\n", err)
+		}
 	}
 }
 
@@ -389,6 +458,7 @@ func (s *Server) handleTunnelRequest(conn *websocket.Conn, connMutex *sync.Mutex
 func (s *Server) sendTunnelError(conn *websocket.Conn, connMutex *sync.Mutex, id string, statusCode int, message string) {
 	resp := TunnelResponse{
 		ID:         id,
+		Type:       "complete",
 		StatusCode: statusCode,
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		Body:       fmt.Sprintf(`{"error": "%s"}`, message),

@@ -6,6 +6,11 @@ export class TunnelDurableObject {
     reject: (error: Error) => void;
     timeout: number;
   }> = new Map();
+  private streamingResponses: Map<string, {
+    controller: ReadableStreamDefaultController<Uint8Array>;
+    headers?: Headers;
+    status?: number;
+  }> = new Map();
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -122,25 +127,90 @@ export class TunnelDurableObject {
   private handleTunnelResponse(data: string): void {
     try {
       const response = JSON.parse(data);
-      const pending = this.pendingRequests.get(response.id);
       
-      if (!pending) {
-        return;
+      // Handle different response types
+      if (response.type === 'chunk') {
+        this.handleStreamingChunk(response);
+      } else if (response.type === 'end') {
+        this.handleStreamingEnd(response);
+      } else if (response.type === 'complete') {
+        this.handleCompleteResponse(response);
       }
-      
+    } catch (error) {
+      console.error('Failed to parse tunnel response:', error);
+    }
+  }
+
+  private handleCompleteResponse(response: any): void {
+    const pending = this.pendingRequests.get(response.id);
+    if (!pending) return;
+    
+    clearTimeout(pending.timeout);
+    this.pendingRequests.delete(response.id);
+    
+    // Create response
+    const headers = new Headers(response.headers || {});
+    const responseObj = new Response(response.body || '', {
+      status: response.status_code || 200,
+      headers,
+    });
+    
+    pending.resolve(responseObj);
+  }
+
+  private handleStreamingChunk(response: any): void {
+    const pending = this.pendingRequests.get(response.id);
+    
+    if (!pending && !this.streamingResponses.has(response.id)) {
+      return;
+    }
+    
+    // If this is the first chunk, create the streaming response
+    if (pending && response.headers) {
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(response.id);
       
-      // Create response
       const headers = new Headers(response.headers || {});
-      const responseObj = new Response(response.body || '', {
-        status: response.status_code || 200,
+      const status = response.status_code || 200;
+      
+      // Create a readable stream for the response
+      const stream = new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          // Store the controller for later chunks
+          this.streamingResponses.set(response.id, {
+            controller,
+            headers,
+            status,
+          });
+        },
+        cancel: () => {
+          // Clean up when stream is cancelled
+          this.streamingResponses.delete(response.id);
+        }
+      });
+      
+      const responseObj = new Response(stream, {
+        status,
         headers,
       });
       
       pending.resolve(responseObj);
-    } catch (error) {
-      console.error('Failed to parse tunnel response:', error);
+    }
+    
+    // Send chunk data to the stream
+    const streaming = this.streamingResponses.get(response.id);
+    if (streaming && response.body) {
+      const encoder = new TextEncoder();
+      streaming.controller.enqueue(encoder.encode(response.body));
+    }
+  }
+
+  private handleStreamingEnd(response: any): void {
+    const streaming = this.streamingResponses.get(response.id);
+    if (streaming) {
+      // Close the stream
+      streaming.controller.close();
+      this.streamingResponses.delete(response.id);
     }
   }
 }

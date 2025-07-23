@@ -106,7 +106,8 @@
 }
 
 .retry-button:hover {
-  background: var(--color-primary-dark);
+  background: #5a4fcf; /* Darker shade of primary color */
+  color: white; /* Ensure text stays white */
 }
 
 .share-modal-success {
@@ -191,7 +192,8 @@
 }
 
 .copy-button:hover {
-  background: var(--color-primary-dark);
+  background: #5a4fcf; /* Darker shade of primary color */
+  color: white; /* Ensure text stays white */
 }
 
 .copy-button.copied {
