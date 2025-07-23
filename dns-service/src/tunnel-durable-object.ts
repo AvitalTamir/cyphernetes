@@ -89,6 +89,10 @@ export class TunnelDurableObject {
         headers[key] = value;
       });
       
+      // Mark this request as coming from a shared tunnel session
+      // This header cannot be spoofed by users since it's added by the Cloudflare Worker
+      headers['X-Shared-Session'] = 'true';
+      
       let body: string | undefined;
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         body = await request.text();
