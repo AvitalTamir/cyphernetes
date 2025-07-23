@@ -187,6 +187,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/share/generate-token", s.generateShareToken)
 		api.GET("/share/sessions", s.listSessions)
 		api.DELETE("/share/sessions/:id", s.disconnectSession)
+		api.GET("/notebooks/shared", s.getSharedNotebook)
 	}
 
 	// WebSocket endpoint

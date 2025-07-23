@@ -7,26 +7,34 @@ import { HooksErrorBoundary } from './HooksErrorBoundary'
 
 interface CellComponentProps {
   cell: Cell
-  onUpdate: (cellId: string, updates: Partial<Cell>) => void
-  onDelete: (cellId: string) => void
+  onUpdate?: (cellId: string, updates: Partial<Cell>) => void
+  onDelete?: (cellId: string) => void
   onDragStart?: (cellId: string) => void
   onDragEnd?: () => void
   onDragOver?: (cellId: string) => void
   onDrop?: (cellId: string) => void
   isDragging?: boolean
   isDragOver?: boolean
+  isSharedMode?: boolean
 }
 
 // Pure dispatcher component with no hooks
 const CellComponentImpl: React.FC<CellComponentProps> = (props) => {
+  // Provide no-op functions for undefined handlers (shared mode)
+  const cellProps = {
+    ...props,
+    onUpdate: props.onUpdate || (() => {}),
+    onDelete: props.onDelete || (() => {}),
+  }
+
   return (
     <HooksErrorBoundary>
       {props.cell.type === 'markdown' ? (
-        <MarkdownCell {...props} />
+        <MarkdownCell {...cellProps} />
       ) : props.cell.type === 'webpage' ? (
-        <WebpageCell {...props} />
+        <WebpageCell {...cellProps} />
       ) : (
-        <QueryCell {...props} />
+        <QueryCell {...cellProps} />
       )}
     </HooksErrorBoundary>
   )

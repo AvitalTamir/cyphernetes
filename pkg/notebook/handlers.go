@@ -34,6 +34,11 @@ type DNSServiceResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
+// Helper function to check if request is from a shared session (read-only)
+func (s *Server) isSharedSession(c *gin.Context) bool {
+	return c.GetHeader("X-Shared-Session") == "true"
+}
+
 // Helper function to get subdomain from DNS service
 func (s *Server) getSubdomainFromDNS(expiresIn int) (string, error) {
 	reqBody := DNSServiceRequest{
@@ -136,6 +141,12 @@ func (s *Server) listNotebooks(c *gin.Context) {
 }
 
 func (s *Server) createNotebook(c *gin.Context) {
+	// Prevent creation from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot create notebooks in shared mode"})
+		return
+	}
+
 	var req struct {
 		Name string `json:"name" binding:"required"`
 	}
@@ -190,6 +201,12 @@ func (s *Server) getNotebook(c *gin.Context) {
 }
 
 func (s *Server) updateNotebook(c *gin.Context) {
+	// Prevent updates from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot update notebooks in shared mode"})
+		return
+	}
+
 	id := c.Param("id")
 
 	var req struct {
@@ -223,6 +240,12 @@ func (s *Server) updateNotebook(c *gin.Context) {
 }
 
 func (s *Server) deleteNotebook(c *gin.Context) {
+	// Prevent deletion from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete notebooks in shared mode"})
+		return
+	}
+
 	id := c.Param("id")
 
 	// Delete the notebook from storage
@@ -247,6 +270,12 @@ func (s *Server) forkNotebook(c *gin.Context) {
 // Cell management handlers
 
 func (s *Server) addCell(c *gin.Context) {
+	// Prevent cell creation from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot add cells in shared mode"})
+		return
+	}
+
 	notebookID := c.Param("id")
 
 	var cell Cell
@@ -303,6 +332,12 @@ func (s *Server) addCell(c *gin.Context) {
 }
 
 func (s *Server) updateCell(c *gin.Context) {
+	// Prevent cell updates from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot update cells in shared mode"})
+		return
+	}
+
 	notebookID := c.Param("id")
 	cellID := c.Param("cellId")
 
@@ -340,6 +375,12 @@ func (s *Server) updateCell(c *gin.Context) {
 }
 
 func (s *Server) deleteCell(c *gin.Context) {
+	// Prevent cell deletion from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete cells in shared mode"})
+		return
+	}
+
 	notebookID := c.Param("id")
 	cellID := c.Param("cellId")
 
@@ -645,6 +686,12 @@ func streamMultiplePods(c *gin.Context, clientset kubernetes.Interface, namespac
 }
 
 func (s *Server) reorderCells(c *gin.Context) {
+	// Prevent cell reordering from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot reorder cells in shared mode"})
+		return
+	}
+
 	notebookID := c.Param("id")
 
 	var request struct {
@@ -682,6 +729,12 @@ func (s *Server) executeAllCells(c *gin.Context) {
 // Collaboration handlers
 
 func (s *Server) generateShareToken(c *gin.Context) {
+	// Prevent token generation from shared sessions
+	if s.isSharedSession(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot generate share tokens in shared mode"})
+		return
+	}
+
 	type GenerateTokenRequest struct {
 		NotebookID string `json:"notebook_id"`
 	}
@@ -944,6 +997,65 @@ func (s *Server) setNamespace(c *gin.Context) {
 		"namespace": req.Namespace,
 		"message":   "Namespace selection acknowledged (handled per-cell in notebooks)",
 	})
+}
+
+func (s *Server) getSharedNotebook(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Token parameter is required"})
+		return
+	}
+
+	// Clean up expired tokens first
+	s.store.DeleteExpiredShareTokens()
+
+	// Validate the token
+	shareToken, err := s.store.GetShareToken(token)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Token validation failed"})
+		return
+	}
+
+	if shareToken == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+		return
+	}
+
+	// Check if token is expired
+	if time.Now().After(shareToken.ExpiresAt) {
+		s.store.DeleteShareToken(token)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
+		return
+	}
+
+	// Get the notebook
+	notebook, err := s.store.GetNotebook(shareToken.NotebookID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Notebook not found"})
+		return
+	}
+
+	// Get cells for the notebook
+	cells, err := s.store.GetCells(shareToken.NotebookID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure cells is not nil
+	if cells == nil {
+		cells = []*Cell{}
+	}
+
+	response := struct {
+		*Notebook
+		Cells []*Cell `json:"cells"`
+	}{
+		Notebook: notebook,
+		Cells:    cells,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) handleAutocomplete(c *gin.Context) {

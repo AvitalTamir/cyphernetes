@@ -16,6 +16,7 @@ interface MarkdownCellProps {
   onDrop?: (cellId: string) => void
   isDragging?: boolean
   isDragOver?: boolean
+  isSharedMode?: boolean
 }
 
 export const MarkdownCell: React.FC<MarkdownCellProps> = ({
@@ -28,6 +29,7 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
   onDrop,
   isDragging,
   isDragOver,
+  isSharedMode = false,
 }) => {
   const [isEditing, setIsEditing] = useState(!cell.query) // Start editing if empty
   const [content, setContent] = useState(cell.query || '')
@@ -132,11 +134,11 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
     >
       <div 
         className="markdown-cell-header"
-        draggable={!isEditing}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        title="Drag to reorder"
-        style={{ cursor: !isEditing ? 'grab' : 'default' }}
+        draggable={!isEditing && !isSharedMode}
+        onDragStart={!isSharedMode ? handleDragStart : undefined}
+        onDragEnd={!isSharedMode ? handleDragEnd : undefined}
+        title={!isSharedMode ? "Drag to reorder" : undefined}
+        style={{ cursor: !isEditing && !isSharedMode ? 'grab' : 'default' }}
       >
         <div className="cell-info">
           <span className="cell-type">
@@ -160,9 +162,9 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
               />
             ) : (
               <span 
-                className="cell-name-display"
-                onClick={() => setIsEditingName(true)}
-                title="Click to edit cell name"
+                className={`cell-name-display ${isSharedMode ? 'non-editable' : ''}`}
+                onClick={!isSharedMode ? () => setIsEditingName(true) : undefined}
+                title={!isSharedMode ? "Click to edit cell name" : undefined}
               >
                 {cellName || 'Markdown'}
               </span>
@@ -184,14 +186,18 @@ export const MarkdownCell: React.FC<MarkdownCellProps> = ({
             </>
           ) : (
             <>
-              <button onClick={() => setIsEditing(true)} className="cell-action edit">
-                <Edit3 size={14} />
-                Edit
-              </button>
-              <button onClick={() => onDelete(cell.id)} className="cell-action delete">
-                <Trash2 size={14} />
-                Delete
-              </button>
+              {!isSharedMode && (
+                <>
+                  <button onClick={() => setIsEditing(true)} className="cell-action edit">
+                    <Edit3 size={14} />
+                    Edit
+                  </button>
+                  <button onClick={() => onDelete(cell.id)} className="cell-action delete">
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

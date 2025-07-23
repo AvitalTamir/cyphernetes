@@ -10,10 +10,24 @@ import './App.css'
 function App() {
   const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null)
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
+  const [sharedToken, setSharedToken] = useState<string | null>(null)
+  const [isSharedMode, setIsSharedMode] = useState(false)
+  const [sharedError, setSharedError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Load notebooks from API
-    loadNotebooks()
+    // Check for shared token in URL
+    const urlParams = new URLSearchParams(window.location.search)
+    const token = urlParams.get('token')
+    
+    if (token) {
+      // This is a shared notebook access
+      setSharedToken(token)
+      setIsSharedMode(true)
+      loadSharedNotebook(token)
+    } else {
+      // Normal mode - load notebooks from API
+      loadNotebooks()
+    }
   }, [])
 
   const loadNotebooks = async () => {
@@ -23,6 +37,24 @@ function App() {
       setNotebooks(data)
     } catch (error) {
       console.error('Failed to load notebooks:', error)
+    }
+  }
+
+  const loadSharedNotebook = async (token: string) => {
+    try {
+      // Load the shared notebook using the token
+      const response = await fetch(`/api/notebooks/shared?token=${token}`)
+      if (response.ok) {
+        const notebook = await response.json()
+        setSelectedNotebook(notebook)
+      } else {
+        console.error('Failed to load shared notebook:', response.statusText)
+        const errorData = await response.json().catch(() => ({}))
+        setSharedError(errorData.error || 'Invalid or expired share link')
+      }
+    } catch (error) {
+      console.error('Failed to load shared notebook:', error)
+      setSharedError('Failed to load shared notebook')
     }
   }
 
@@ -102,6 +134,10 @@ function App() {
   }
 
   const handleBack = () => {
+    if (isSharedMode) {
+      // In shared mode, don't allow going back to notebook list
+      return
+    }
     setSelectedNotebook(null)
     // Refresh the notebooks list to get updated cell counts
     loadNotebooks()
@@ -111,14 +147,28 @@ function App() {
     <SettingsProvider>
       <NotebookProvider>
         <div className="app">
-          <Header />
+          <Header isSharedMode={isSharedMode} />
           <main className="main-content">
             {selectedNotebook ? (
               <NotebookEditor
                 notebook={selectedNotebook}
-                onBack={handleBack}
-                onUpdate={handleNotebookUpdate}
+                onBack={isSharedMode ? undefined : handleBack}
+                onUpdate={isSharedMode ? undefined : handleNotebookUpdate}
+                isSharedMode={isSharedMode}
+                sharedToken={sharedToken}
               />
+            ) : isSharedMode ? (
+              sharedError ? (
+                <div className="shared-error">
+                  <h2>Share Link Error</h2>
+                  <p>{sharedError}</p>
+                  <p>Please contact the person who shared this link for assistance.</p>
+                </div>
+              ) : (
+                <div className="shared-loading">
+                  <p>Loading shared notebook...</p>
+                </div>
+              )
             ) : (
               <NotebookList
                 notebooks={notebooks}

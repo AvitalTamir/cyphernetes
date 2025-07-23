@@ -5,7 +5,11 @@ import { ShareModal } from './ShareModal'
 import { useNotebook } from '../contexts/NotebookContext'
 import './Header.css'
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  isSharedMode?: boolean
+}
+
+export const Header: React.FC<HeaderProps> = ({ isSharedMode = false }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const { state } = useNotebook()
@@ -21,14 +25,16 @@ export const Header: React.FC = () => {
             </h1>
           </div>
           <div className="header-right">
-            <button 
-              className="header-button" 
-              title={state.currentNotebook ? "Share Notebook" : "Select a notebook to share"}
-              disabled={!state.currentNotebook}
-              onClick={() => setIsShareOpen(true)}
-            >
-              <UserPlus size={16} />
-            </button>
+            {!isSharedMode && (
+              <button 
+                className="header-button" 
+                title={state.currentNotebook ? "Share Notebook" : "Select a notebook to share"}
+                disabled={!state.currentNotebook}
+                onClick={() => setIsShareOpen(true)}
+              >
+                <UserPlus size={16} />
+              </button>
+            )}
             <button 
               className="header-button" 
               title="Settings"
@@ -45,11 +51,13 @@ export const Header: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)} 
       />
       
-      <ShareModal
-        isOpen={isShareOpen}
-        onClose={() => setIsShareOpen(false)}
-        notebookId={state.currentNotebook?.id}
-      />
+      {!isSharedMode && (
+        <ShareModal
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          notebookId={state.currentNotebook?.id}
+        />
+      )}
     </>
   )
 }

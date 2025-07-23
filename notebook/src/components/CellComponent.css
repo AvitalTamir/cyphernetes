@@ -126,8 +126,16 @@
   transition: background-color 0.15s ease;
 }
 
-.cell-name-display:hover {
+.cell-name-display:hover:not(.non-editable) {
   background-color: rgba(99, 110, 114, 0.1);
+}
+
+.cell-name-display.non-editable {
+  cursor: default;
+}
+
+.cell-name-display.non-editable:hover {
+  background-color: transparent;
 }
 
 .cell-executed {

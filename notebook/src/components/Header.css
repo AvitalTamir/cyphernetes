@@ -39,6 +39,12 @@
   padding: 4px;
 }
 
+.shared-indicator {
+  color: var(--color-warning);
+  font-weight: 500;
+  font-size: 14px;
+}
+
 .header-right {
   display: flex;
   gap: 12px;

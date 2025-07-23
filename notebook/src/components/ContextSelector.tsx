@@ -12,13 +12,15 @@ interface ContextSelectorProps {
   namespace?: string
   onContextChange: (context: string, namespace: string) => void
   className?: string
+  disabled?: boolean
 }
 
 export const ContextSelector: React.FC<ContextSelectorProps> = ({
   context,
   namespace,
   onContextChange,
-  className = ''
+  className = '',
+  disabled = false
 }) => {
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null)
   const [namespaces, setNamespaces] = useState<string[]>([])
@@ -69,6 +71,8 @@ export const ContextSelector: React.FC<ContextSelectorProps> = ({
   }, [fetchContextInfo, fetchNamespaces])
 
   const handleNamespaceClick = (e: React.MouseEvent) => {
+    if (disabled) return
+    
     e.preventDefault()
     e.stopPropagation()
     
@@ -140,9 +144,10 @@ export const ContextSelector: React.FC<ContextSelectorProps> = ({
         <span className="namespace-label">ns:</span>
         <span 
           ref={namespaceElementRef}
-          className="namespace-value" 
+          className={`namespace-value ${disabled ? 'disabled' : ''}`}
           onClick={handleNamespaceClick}
-          title="Click to change namespace"
+          title={disabled ? "Namespace selection disabled in shared mode" : "Click to change namespace"}
+          style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
         >
           {displayNamespace}
           <ChevronDown size={12} className="namespace-chevron" />

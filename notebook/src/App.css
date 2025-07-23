@@ -26,6 +26,42 @@ body {
   padding: 0;
 }
 
+.shared-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.shared-error h2 {
+  color: var(--color-error);
+  margin-bottom: 16px;
+  font-size: 24px;
+}
+
+.shared-error p {
+  color: var(--color-textSecondary);
+  font-size: 16px;
+  margin-bottom: 12px;
+  max-width: 500px;
+}
+
+.shared-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.shared-loading p {
+  color: var(--color-textSecondary);
+  font-size: 16px;
+}
+
 /* Notebook styles */
 .notebook-container {
   max-width: 1200px;

@@ -1150,6 +1150,7 @@ interface QueryCellProps {
   onDrop?: (cellId: string) => void
   isDragging?: boolean
   isDragOver?: boolean
+  isSharedMode?: boolean
 }
 
 export const QueryCell: React.FC<QueryCellProps> = ({
@@ -1162,6 +1163,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   onDrop,
   isDragging,
   isDragOver,
+  isSharedMode = false,
 }) => {
   const { themeName } = useSettings()
   const syntaxTheme = themeName === 'light' ? oneLight : oneDark
@@ -2086,6 +2088,20 @@ export const QueryCell: React.FC<QueryCellProps> = ({
       vizType = 'json'
     }
     
+    // In shared mode, only update local state - don't persist to backend
+    if (isSharedMode) {
+      onUpdate(cell.id, {
+        visualization_type: vizType,
+        config: {
+          ...cell.config,
+          visualization_mode: mode,
+          document_mode: documentMode,
+          graph_mode: graphMode
+        }
+      })
+      return
+    }
+    
     try {
       const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
         method: 'PUT',
@@ -2122,6 +2138,18 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   const handleDocumentModeChange = async (mode: DocumentMode) => {
     setDocumentMode(mode)
     
+    // In shared mode, only update local state - don't persist to backend
+    if (isSharedMode) {
+      onUpdate(cell.id, {
+        visualization_type: mode,
+        config: {
+          ...cell.config,
+          document_mode: mode
+        }
+      })
+      return
+    }
+    
     try {
       const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
         method: 'PUT',
@@ -2153,6 +2181,17 @@ export const QueryCell: React.FC<QueryCellProps> = ({
 
   const handleGraphModeChange = async (mode: GraphMode) => {
     setGraphMode(mode)
+    
+    // In shared mode, only update local state - don't persist to backend
+    if (isSharedMode) {
+      onUpdate(cell.id, {
+        config: {
+          ...cell.config,
+          graph_mode: mode
+        }
+      })
+      return
+    }
     
     try {
       const response = await fetch(`/api/notebooks/${cell.notebook_id}/cells/${cell.id}`, {
@@ -2225,11 +2264,11 @@ export const QueryCell: React.FC<QueryCellProps> = ({
     >
       <div 
         className="cell-header"
-        draggable={!isEditing}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        title="Drag to reorder"
-        style={{ cursor: !isEditing ? 'grab' : 'default' }}
+        draggable={!isEditing && !isSharedMode}
+        onDragStart={!isSharedMode ? handleDragStart : undefined}
+        onDragEnd={!isSharedMode ? handleDragEnd : undefined}
+        title={!isSharedMode ? "Drag to reorder" : undefined}
+        style={{ cursor: !isEditing && !isSharedMode ? 'grab' : 'default' }}
       >
         <div className="cell-info">
           <span className="cell-type">
@@ -2253,9 +2292,9 @@ export const QueryCell: React.FC<QueryCellProps> = ({
               />
             ) : (
               <span 
-                className="cell-name-display"
-                onClick={() => setIsEditingName(true)}
-                title="Click to edit cell name"
+                className={`cell-name-display ${isSharedMode ? 'non-editable' : ''}`}
+                onClick={!isSharedMode ? () => setIsEditingName(true) : undefined}
+                title={!isSharedMode ? "Click to edit cell name" : undefined}
               >
                 {cellName || 'Query'}
               </span>
@@ -2276,6 +2315,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
               })
             }}
             className="compact"
+            disabled={isSharedMode}
           />
           {localLastExecuted && (
             <span className="cell-executed">
@@ -2388,14 +2428,18 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                   )}
                 </button>
               </div>
-              <button onClick={() => setIsEditing(true)} className="cell-action edit">
-                <Edit3 size={14} />
-                Edit
-              </button>
-              <button onClick={() => onDelete(cell.id)} className="cell-action delete">
-                <Trash2 size={14} />
-                Delete
-              </button>
+              {!isSharedMode && (
+                <>
+                  <button onClick={() => setIsEditing(true)} className="cell-action edit">
+                    <Edit3 size={14} />
+                    Edit
+                  </button>
+                  <button onClick={() => onDelete(cell.id)} className="cell-action delete">
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

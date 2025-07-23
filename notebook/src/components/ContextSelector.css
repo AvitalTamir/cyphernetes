@@ -40,8 +40,17 @@
   transition: background-color 0.2s ease;
 }
 
-.namespace-value:hover {
+.namespace-value:hover:not(.disabled) {
   background-color: var(--color-border);
+}
+
+.namespace-value.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.namespace-value.disabled:hover {
+  background-color: transparent;
 }
 
 .namespace-chevron {

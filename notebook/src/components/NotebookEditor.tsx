@@ -7,14 +7,18 @@ import './NotebookEditor.css'
 
 interface NotebookEditorProps {
   notebook: Notebook
-  onBack: () => void
-  onUpdate: (notebookId: string, name: string) => Promise<boolean>
+  onBack?: () => void
+  onUpdate?: (notebookId: string, name: string) => Promise<boolean>
+  isSharedMode?: boolean
+  sharedToken?: string | null
 }
 
 export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   notebook,
   onBack,
   onUpdate,
+  isSharedMode = false,
+  sharedToken = null,
 }) => {
   const { dispatch } = useNotebook()
   const [cells, setCells] = useState<Cell[]>([])
@@ -44,7 +48,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const handleBack = () => {
     // Clear current notebook from context
     dispatch({ type: 'SET_CURRENT_NOTEBOOK', payload: null })
-    onBack()
+    onBack?.()
   }
 
   // Close dropdown when clicking outside
@@ -306,7 +310,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   }
 
   const handleTitleSave = async () => {
-    if (titleValue.trim() !== notebook.name && titleValue.trim() !== '') {
+    if (titleValue.trim() !== notebook.name && titleValue.trim() !== '' && onUpdate) {
       const success = await onUpdate(notebook.id, titleValue.trim())
       if (success) {
         setIsEditingTitle(false)
@@ -353,11 +357,13 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   return (
     <div className="notebook-editor">
       <div className="notebook-header">
-        <button className="back-button" onClick={handleBack}>
-          <ArrowLeft size={20} />
-        </button>
+        {!isSharedMode && onBack && (
+          <button className="back-button" onClick={handleBack}>
+            <ArrowLeft size={20} />
+          </button>
+        )}
         <div className="notebook-title-container">
-          {isEditingTitle ? (
+          {isEditingTitle && !isSharedMode ? (
             <div className="title-edit-group">
               <input
                 type="text"
@@ -379,60 +385,62 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
           ) : (
             <div className="title-display-group">
               <h1 
-                className="notebook-title clickable" 
-                onClick={handleTitleEdit}
-                title="Click to rename"
+                className={`notebook-title ${!isSharedMode ? 'clickable' : ''}`}
+                onClick={!isSharedMode ? handleTitleEdit : undefined}
+                title={!isSharedMode ? "Click to rename" : undefined}
               >
                 {notebook.name}
               </h1>
             </div>
           )}
         </div>
-        <div className="notebook-actions">
-          <div className="add-cell-dropdown">
-            <button 
-              className="btn btn-primary"
-              onClick={() => setAddCellDropdownOpen(!addCellDropdownOpen)}
-            >
-              <Plus size={16} />
-              Add Cell
-            </button>
-            {addCellDropdownOpen && (
-              <div className="add-cell-options">
-                <button 
-                  onClick={() => {
-                    handleAddCell('query')
-                    setAddCellDropdownOpen(false)
-                  }}
-                  className="add-cell-option"
-                >
-                  <Search size={16} />
-                  Query
-                </button>
-                <button 
-                  onClick={() => {
-                    handleAddCell('markdown')
-                    setAddCellDropdownOpen(false)
-                  }}
-                  className="add-cell-option"
-                >
-                  <FileText size={16} />
-                  Markdown
-                </button>
-                <button 
-                  onClick={() => {
-                    handleAddCell('webpage')
-                    setAddCellDropdownOpen(false)
-                  }}
-                  className="add-cell-option"
-                >
-                  <Globe size={16} />
-                  Webpage
-                </button>
-              </div>
-            )}
+        {!isSharedMode && (
+          <div className="notebook-actions">
+            <div className="add-cell-dropdown">
+              <button 
+                className="btn btn-primary"
+                onClick={() => setAddCellDropdownOpen(!addCellDropdownOpen)}
+              >
+                <Plus size={16} />
+                Add Cell
+              </button>
+              {addCellDropdownOpen && (
+                <div className="add-cell-options">
+                  <button 
+                    onClick={() => {
+                      handleAddCell('query')
+                      setAddCellDropdownOpen(false)
+                    }}
+                    className="add-cell-option"
+                  >
+                    <Search size={16} />
+                    Query
+                  </button>
+                  <button 
+                    onClick={() => {
+                      handleAddCell('markdown')
+                      setAddCellDropdownOpen(false)
+                    }}
+                    className="add-cell-option"
+                  >
+                    <FileText size={16} />
+                    Markdown
+                  </button>
+                  <button 
+                    onClick={() => {
+                      handleAddCell('webpage')
+                      setAddCellDropdownOpen(false)
+                    }}
+                    className="add-cell-option"
+                  >
+                    <Globe size={16} />
+                    Webpage
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="notebook-content">
@@ -454,14 +462,15 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
                 <CellComponent
                   key={cell.id}
                   cell={cell}
-                  onUpdate={handleCellUpdate}
-                  onDelete={handleCellDelete}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  isDragging={draggedCellId === cell.id}
-                  isDragOver={dragOverCellId === cell.id}
+                  onUpdate={isSharedMode ? undefined : handleCellUpdate}
+                  onDelete={isSharedMode ? undefined : handleCellDelete}
+                  onDragStart={isSharedMode ? undefined : handleDragStart}
+                  onDragEnd={isSharedMode ? undefined : handleDragEnd}
+                  onDragOver={isSharedMode ? undefined : handleDragOver}
+                  onDrop={isSharedMode ? undefined : handleDrop}
+                  isDragging={!isSharedMode && draggedCellId === cell.id}
+                  isDragOver={!isSharedMode && dragOverCellId === cell.id}
+                  isSharedMode={isSharedMode}
                 />
               )
             })}
