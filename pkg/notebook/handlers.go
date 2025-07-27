@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider/apiserver"
@@ -658,11 +659,21 @@ func streamMultiplePods(c *gin.Context, clientset kubernetes.Interface, namespac
 		}(pod)
 	}
 
+	// Use a WaitGroup to ensure the streaming goroutine completes
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	// Stream logs as they come in
 	go func() {
+		defer wg.Done()
 		for logMessage := range logChan {
-			fmt.Fprintf(c.Writer, "data: %s\n\n", logMessage)
-			c.Writer.Flush()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				fmt.Fprintf(c.Writer, "data: %s\n\n", logMessage)
+				c.Writer.Flush()
+			}
 		}
 	}()
 
@@ -674,6 +685,7 @@ func streamMultiplePods(c *gin.Context, clientset kubernetes.Interface, namespac
 			completedPods++
 		case <-ctx.Done():
 			close(logChan)
+			wg.Wait() // Wait for streaming goroutine to finish
 			fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
 			c.Writer.Flush()
 			return
@@ -681,6 +693,7 @@ func streamMultiplePods(c *gin.Context, clientset kubernetes.Interface, namespac
 	}
 
 	close(logChan)
+	wg.Wait() // Wait for streaming goroutine to finish
 	fmt.Fprintf(c.Writer, "event: end\ndata: Log stream ended\n\n")
 	c.Writer.Flush()
 }
