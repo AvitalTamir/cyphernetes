@@ -1166,7 +1166,19 @@ export const QueryCell: React.FC<QueryCellProps> = ({
   isSharedMode = false,
 }) => {
   const { themeName } = useSettings()
-  const syntaxTheme = themeName === 'light' ? oneLight : oneDark
+  const baseTheme = themeName === 'light' ? oneLight : oneDark
+  // Create a custom theme without background
+  const syntaxTheme = {
+    ...baseTheme,
+    'pre[class*="language-"]': {
+      ...baseTheme['pre[class*="language-"]'],
+      background: 'transparent'
+    },
+    'code[class*="language-"]': {
+      ...baseTheme['code[class*="language-"]'],
+      background: 'transparent'
+    }
+  }
   const [isEditing, setIsEditing] = useState(false)
   const [query, setQuery] = useState(cell.query)
   const [isPollingActive, setIsPollingActive] = useState(false)
@@ -2512,7 +2524,7 @@ export const QueryCell: React.FC<QueryCellProps> = ({
                   padding: '12px',
                   fontSize: '14px',
                   lineHeight: '1.4',
-                  backgroundColor: 'var(--color-surface)',
+                  backgroundColor: 'transparent',
                   border: 'none',
                   borderRadius: '4px',
                   color: 'var(--color-text)'
