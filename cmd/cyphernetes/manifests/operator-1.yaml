@@ -48,6 +48,12 @@ spec:
           spec:
             description: DynamicOperatorSpec defines the desired state of DynamicOperator
             properties:
+              dryRun:
+                default: false
+                description: DryRun specifies whether to run in dry-run mode. When
+                  true, queries are parsed and validated but no actual changes are
+                  made to Kubernetes resources
+                type: boolean
               namespace:
                 description: Namespace specifies the namespace to watch. If empty,
                   it watches all namespaces

@@ -14,6 +14,10 @@ type DynamicOperatorSpec struct {
 	// Namespace specifies the namespace to watch. If empty, it watches all namespaces
 	Namespace string `json:"namespace,omitempty"`
 
+	// DryRun specifies whether to run in dry-run mode. When true, queries are parsed and validated but no actual changes are made to Kubernetes resources
+	// +kubebuilder:default:=false
+	DryRun bool `json:"dryRun,omitempty"`
+
 	// OnCreate is the Cyphernetes query to execute when a resource is created
 	OnCreate string `json:"onCreate,omitempty"`
 

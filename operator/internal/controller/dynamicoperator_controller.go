@@ -339,14 +339,16 @@ func (r *DynamicOperatorReconciler) handleCreate(ctx context.Context, dynamicOpe
 	log.Log.Info("handleCreate called", "resource", getName(obj), "namespace", namespace)
 
 	if dynamicOperator.Spec.OnCreate != "" {
-		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnCreate, obj, namespace)
+		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnCreate, obj, namespace, dynamicOperator.Spec.DryRun)
 		if err != nil {
 			log.Log.Error(err, "Failed to execute onCreate query")
 			return
 		}
 
 		// Add finalizer only if the creation was successful or the resource already existed
-		r.addFinalizer(ctx, dynamicOperator, obj)
+		if !dynamicOperator.Spec.DryRun {
+			r.addFinalizer(ctx, dynamicOperator, obj)
+		}
 	}
 }
 
@@ -379,7 +381,7 @@ func (r *DynamicOperatorReconciler) addFinalizer(ctx context.Context, dynamicOpe
 
 func (r *DynamicOperatorReconciler) handleUpdate(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, namespace string) {
 	if dynamicOperator.Spec.OnUpdate != "" {
-		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnUpdate, obj, namespace)
+		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnUpdate, obj, namespace, dynamicOperator.Spec.DryRun)
 		if err != nil {
 			log.Log.Error(err, "Failed to execute onUpdate query")
 		}
@@ -402,7 +404,7 @@ func (r *DynamicOperatorReconciler) handleDelete(ctx context.Context, dynamicOpe
 		log.Log.Info("Finalizer found, executing onDelete query", "resource", u.GetName())
 		// Execute onDelete query if specified
 		if dynamicOperator.Spec.OnDelete != "" {
-			err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnDelete, obj, namespace)
+			err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnDelete, obj, namespace, dynamicOperator.Spec.DryRun)
 			if err != nil {
 				log.Log.Error(err, "Failed to execute onDelete query")
 				// Continue with finalizer removal even if the query fails
@@ -469,7 +471,7 @@ func getName(obj interface{}) string {
 	return unstructuredObj.GetName()
 }
 
-func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj interface{}, namespace string) error {
+func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj interface{}, namespace string, dryRun bool) error {
 	// Convert the object to a map for easier JSON path access
 	objMap := make(map[string]interface{})
 	objJSON, err := json.Marshal(obj)
@@ -493,7 +495,7 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 
 	// Execute each statement
 	for _, statement := range statements {
-		err := r.executeStatement(statement, objMap, namespace)
+		err := r.executeStatement(statement, objMap, namespace, dryRun)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err)
 		}
@@ -505,7 +507,7 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 	return nil
 }
 
-func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap map[string]interface{}, namespace string) error {
+func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap map[string]interface{}, namespace string, dryRun bool) error {
 	// Regular expression to find all {{$.path.to.property}} patterns
 	re := regexp.MustCompile(`\{\{\$(.[^}]+)\}\}`)
 
@@ -540,6 +542,12 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 	}
 
 	// Execute the sanitized statement
+	if dryRun {
+		log.Log.Info("Dry-run mode enabled, toggling provider dry-run", "statement", sanitizedStatement)
+		r.QueryExecutor.Provider().ToggleDryRun()
+		defer r.QueryExecutor.Provider().ToggleDryRun() // Toggle back after execution
+	}
+	
 	result, err := r.QueryExecutor.Execute(ast, namespace)
 
 	if err != nil {
@@ -577,12 +585,16 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 		}
 
 		// Add owner references to the identified nodes
-		for _, node := range nodesToAddOwnerRef {
-			err := r.addOwnerReference(result, node, matchCreateNode, objMap, namespace)
-			if err != nil {
-				log.Log.Error(err, "Failed to add owner reference", "node", node.ResourceProperties.Name)
-				// Consider whether to return the error or continue with other nodes
+		if !dryRun {
+			for _, node := range nodesToAddOwnerRef {
+				err := r.addOwnerReference(result, node, matchCreateNode, objMap, namespace)
+				if err != nil {
+					log.Log.Error(err, "Failed to add owner reference", "node", node.ResourceProperties.Name)
+					// Consider whether to return the error or continue with other nodes
+				}
 			}
+		} else {
+			log.Log.Info("Dry-run mode: would add owner references to nodes", "nodeCount", len(nodesToAddOwnerRef))
 		}
 	}
 
