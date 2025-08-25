@@ -1,0 +1,31 @@
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: dry-run-test-operator
+  namespace: default
+spec:
+  resourceKind: deployments
+  namespace: default
+  dryRun: true
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})
+    WHERE d.spec.replicas > 0
+    CREATE (d)->(s:Service {
+      "metadata": {
+        "name": "auto-service-{{$.metadata.name}}",
+        "labels": {
+          "created-by": "cyphernetes-dry-run"
+        }
+      },
+      "spec": {
+        "selector": {
+          "app": "{{$.metadata.labels.app}}"
+        },
+        "ports": [
+          {
+            "port": 80,
+            "targetPort": 8080
+          }
+        ]
+      }
+    });

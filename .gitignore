@@ -29,3 +29,5 @@ y.output
 
 .coverage
 node_modules
+cmd/cyphernetes/cyphernetes
+operator/cmd/operator

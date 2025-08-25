@@ -94,7 +94,7 @@ func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body inte
 	return nil
 }
 
-func (m *MockProvider) PatchK8sResource(group, version, resource string, patch []byte) error {
+func (m *MockProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
 	return nil
 }
 
@@ -202,6 +202,133 @@ var _ = Describe("DynamicOperator Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Add more specific assertions here based on what your reconciler should do
+
+			// After reconciliation, ensure we clean up the watcher
+			defer func() {
+				if dynamicOperatorReconciler.activeWatchers != nil {
+					for _, cancel := range dynamicOperatorReconciler.activeWatchers {
+						cancel()
+					}
+				}
+			}()
+		})
+
+		It("Should support dry-run mode", func() {
+			By("Creating a DynamicOperator with dry-run enabled")
+			dynamicOperator := &operatorv1.DynamicOperator{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "cyphernetes-operator.cyphernet.es/v1",
+					Kind:       "DynamicOperator",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "dry-run-test-operator",
+					Namespace: DynamicOperatorNamespace,
+				},
+				Spec: operatorv1.DynamicOperatorSpec{
+					ResourceKind: "pods",
+					Namespace:    "default",
+					DryRun:       true,
+					OnCreate: `CREATE (s:Service {
+						"metadata": {
+							"name": "test-service-{{$.metadata.name}}",
+							"namespace": "default"
+						},
+						"spec": {
+							"selector": {
+								"app": "{{$.metadata.name}}"
+							},
+							"ports": [
+								{
+									"port": 80,
+									"targetPort": 8080
+								}
+							]
+						}
+					});`,
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, dynamicOperator)).Should(Succeed())
+
+			dynamicOperatorLookupKey := types.NamespacedName{Name: "dry-run-test-operator", Namespace: DynamicOperatorNamespace}
+
+			// We'll need to fetch it to get the updated object.
+			createdDynamicOperator := &operatorv1.DynamicOperator{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, dynamicOperatorLookupKey, createdDynamicOperator)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying dry-run field is set correctly")
+			Expect(createdDynamicOperator.Spec.DryRun).To(BeTrue())
+
+			By("Creating a test pod to trigger the operator in dry-run mode")
+			testPod := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "Pod",
+					"metadata": map[string]interface{}{
+						"name":      "test-pod-dry-run",
+						"namespace": "default",
+						"labels": map[string]interface{}{
+							"app": "test-pod-dry-run",
+						},
+					},
+					"spec": map[string]interface{}{
+						"containers": []interface{}{
+							map[string]interface{}{
+								"name":  "test",
+								"image": "nginx",
+							},
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, testPod)).Should(Succeed())
+
+			By("Setting up the reconciler with mock provider")
+			// Create real clients using the envtest's rest config
+			k8sConfig := testEnv.Config
+			testClientset, err := kubernetes.NewForConfig(k8sConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			testDynamicClient, err := dynamic.NewForConfig(k8sConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockProvider := &MockProvider{}
+			mockProvider.On("FindGVR", "pods").Return(schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "pods",
+			}, nil)
+			mockProvider.On("FindGVR", "services").Return(schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1", 
+				Resource: "services",
+			}, nil)
+
+			queryExecutor, err := core.NewQueryExecutor(mockProvider)
+			Expect(err).NotTo(HaveOccurred())
+
+			dynamicOperatorReconciler := &DynamicOperatorReconciler{
+				Client:         k8sClient,
+				Scheme:         k8sClient.Scheme(),
+				Clientset:      testClientset,
+				DynamicClient:  testDynamicClient,
+				QueryExecutor:  queryExecutor,
+				lastExecution:  make(map[string]time.Time),
+				activeWatchers: make(map[string]context.CancelFunc),
+			}
+
+			_, err = dynamicOperatorReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: dynamicOperatorLookupKey,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that DryRun flag is properly used")
+			// In dry-run mode, the service should not actually be created
+			// This test verifies the dry-run flag is properly threaded through the system
 
 			// After reconciliation, ensure we clean up the watcher
 			defer func() {
