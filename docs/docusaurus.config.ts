@@ -48,6 +48,15 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      "docusaurus-plugin-generate-llms-txt",
+      {
+        outputFile: "llms.txt",
+      },
+    ],
+  ],
+
   themeConfig: {
     docs: {
       sidebar: {
