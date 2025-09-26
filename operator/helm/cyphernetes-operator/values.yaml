@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: fatliverfreddy/cyphernetes-operator
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "v0.18.2"
 
 imagePullSecrets: []
 nameOverride: ""

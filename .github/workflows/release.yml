@@ -24,6 +24,13 @@ jobs:
     - name: Extract version
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    - name: Update chart versions
+      env:
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+      run: |
+        # Remove 'v' prefix from version for chart versioning
+        CHART_VERSION=${VERSION#v}
+        ./scripts/update-chart-versions.sh $CHART_VERSION
     - name: Build and push operator image
       env:
         IMG: fatliverfreddy/cyphernetes-operator:${{ steps.get_version.outputs.VERSION }}
