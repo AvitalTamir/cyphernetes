@@ -1,0 +1,47 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: cypher
+spec:
+  version: {{ .TagName }}
+  homepage: https://github.com/avitaltamir/cyphernetes
+  shortDescription: Query your clusters using the Cyphernetes query language
+  description: |
+    Cyphernetes is a query language for Kubernetes. It allows you to query your clusters using a Cypher-like syntax.
+  platforms:
+  - selector:
+      matchLabels:
+        os: darwin
+        arch: amd64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-darwin-amd64.tar.gz" .TagName }}
+    bin: kubectl-cypher
+  - selector:
+      matchLabels:
+        os: darwin
+        arch: arm64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-darwin-arm64.tar.gz" .TagName }}
+    bin: kubectl-cypher
+  - selector:
+      matchLabels:
+        os: linux
+        arch: amd64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-linux-amd64.tar.gz" .TagName }}
+    bin: kubectl-cypher
+  - selector:
+      matchLabels:
+        os: linux
+        arch: arm64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-linux-arm64.tar.gz" .TagName }}
+    bin: kubectl-cypher
+  - selector:
+      matchLabels:
+        os: windows
+        arch: amd64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-windows-amd64.tar.gz" .TagName }}
+    bin: kubectl-cypher.exe
+  - selector:
+      matchLabels:
+        os: windows
+        arch: arm64
+    {{addURIAndSha "https://github.com/AvitalTamir/cyphernetes/releases/download/{{ .TagName }}/kubectl-cypher-windows-arm64.tar.gz" .TagName }}
+    bin: kubectl-cypher.exe
