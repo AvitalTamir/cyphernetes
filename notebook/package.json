@@ -1,0 +1,51 @@
+{
+  "name": "cyphernetes-notebook",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@codemirror/basic-setup": "^0.20.0",
+    "@codemirror/lang-javascript": "^6.2.1",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.24.1",
+    "@tanstack/react-table": "^8.11.8",
+    "@testing-library/react": "^16.0.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitest/ui": "^2.1.2",
+    "js-yaml": "^4.1.0",
+    "jsdom": "^25.0.1",
+    "lucide-react": "^0.525.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-force-graph-2d": "^1.25.6",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^0.0.55",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.1",
+    "vitest": "^2.1.9",
+    "y-codemirror.next": "^0.3.5",
+    "y-websocket": "^1.5.0",
+    "yjs": "^13.6.10"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@types/testing-library__jest-dom": "^5.14.5",
+    "@vitejs/plugin-react": "^3.1.0",
+    "typescript": "^4.9.3",
+    "vite": "^4.5.14",
+    "vitest-canvas-mock": "^0.3.1"
+  },
+  "packageManager": "pnpm@9.11.0"
+}

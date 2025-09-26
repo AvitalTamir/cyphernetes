@@ -1,0 +1,33 @@
+name = "cyphernetes-dns"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+# Custom domain - use routes for pattern matching
+routes = [
+  { pattern = "go.cyphernet.es/*", zone_name = "cyphernet.es" },
+  { pattern = "*.go.cyphernet.es/*", zone_name = "cyphernet.es" }
+]
+
+# KV Namespace for storing subdomain mappings
+[[kv_namespaces]]
+binding = "SUBDOMAINS"
+id = "f182b6fea729461d9336c4d81187c93b"
+
+# KV Namespace for storing static assets (will be created if needed)
+# [[kv_namespaces]]
+# binding = "ASSETS"
+# id = "will_be_created_by_deploy_script"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "TUNNEL"
+class_name = "TunnelDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TunnelDurableObject"]
+
+# Environment variables
+[vars]
+TUNNEL_DOMAIN = "go.cyphernet.es"
+MAX_SUBDOMAIN_AGE_SECONDS = "600" # 10 minutes

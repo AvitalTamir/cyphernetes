@@ -10,6 +10,8 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/gobwas/glob v0.2.3
 	github.com/google/gnostic v0.7.0
+	github.com/gorilla/websocket v1.5.3
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/spf13/cobra v1.8.1

@@ -1,0 +1,24 @@
+{
+  "name": "cyphernetes-dns-service",
+  "version": "1.0.0",
+  "description": "Dynamic DNS service for Cyphernetes notebook sharing",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "dns",
+    "tunneling"
+  ],
+  "author": "Cyphernetes Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.25.1"
+  }
+}
