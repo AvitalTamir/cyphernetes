@@ -49,7 +49,7 @@ jobs:
     - name: Package kubectl-cypher for release
       run: |
         mkdir -p release-packages
-        
+
         # Package for each platform
         for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64; do
           mkdir -p temp-$platform
@@ -193,3 +193,8 @@ jobs:
         asset_path: ./release-packages/kubectl-cypher-windows-arm64.tar.gz
         asset_name: kubectl-cypher-windows-arm64.tar.gz
         asset_content_type: application/gzip
+
+    - name: Update new version in krew-index
+      uses: rajatjindal/krew-release-bot@v0.0.46
+      with:
+        krew_template_file: .krew/cypher.yaml
