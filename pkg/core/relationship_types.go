@@ -28,6 +28,8 @@ const (
 	MutatingWebhookTargetService   RelationshipType = "MUTATINGWEBHOOK_TARGET_SERVICE"
 	ValidatingWebhookTargetService RelationshipType = "VALIDATINGWEBHOOK_TARGET_SERVICE"
 	PDBProtectPod                  RelationshipType = "PDB_PROTECT_POD"
+	PVCToPV                        RelationshipType = "PVC_TO_PV"
+	PVCToPod                       RelationshipType = "PVC_TO_POD"
 	// ingresses to services
 	Route RelationshipType = "ROUTE"
 
@@ -341,6 +343,30 @@ var relationshipRules = []RelationshipRule{
 				FieldA:         "$.spec.selector.matchLabels",
 				FieldB:         "$.metadata.labels",
 				ComparisonType: ContainsAll,
+			},
+		},
+	},
+	{
+		KindA:        "persistentvolumeclaims",
+		KindB:        "persistentvolumes",
+		Relationship: PVCToPV,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.volumeName",
+				FieldB:         "$.metadata.name",
+				ComparisonType: ExactMatch,
+			},
+		},
+	},
+	{
+		KindA:        "pods",
+		KindB:        "persistentvolumeclaims",
+		Relationship: PVCToPod,
+		MatchCriteria: []MatchCriterion{
+			{
+				FieldA:         "$.spec.volumes[].persistentVolumeClaim.claimName",
+				FieldB:         "$.metadata.name",
+				ComparisonType: ExactMatch,
 			},
 		},
 	},

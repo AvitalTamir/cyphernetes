@@ -214,7 +214,7 @@ func TestFindPotentialKindsWithPartialKnownRelationship(t *testing.T) {
 					},
 				},
 			},
-			want: []string{"services", "networkpolicies", "poddisruptionbudgets", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs"},
+			want: []string{"services", "networkpolicies", "persistentvolumeclaims", "poddisruptionbudgets", "replicasets", "statefulsets", "daemonsets", "jobs", "cronjobs"},
 		},
 	}
 
@@ -244,7 +244,7 @@ func TestFindPotentialKinds(t *testing.T) {
 		{
 			name:       "pods to services (hardcoded)",
 			sourceKind: "pods",
-			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
+			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "persistentvolumeclaims", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
 		},
 		{
 			name:       "services to pods (reverse)",
@@ -254,7 +254,7 @@ func TestFindPotentialKinds(t *testing.T) {
 		{
 			name:       "case insensitive - PODS",
 			sourceKind: "PODS",
-			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
+			want:       []string{"cronjobs", "daemonsets", "jobs", "networkpolicies", "persistentvolumeclaims", "poddisruptionbudgets", "replicasets", "services", "statefulsets"},
 		},
 		{
 			name:       "non-existent kind",
