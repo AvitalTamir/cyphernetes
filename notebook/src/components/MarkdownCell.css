@@ -1,0 +1,295 @@
+.markdown-cell {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.markdown-cell.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+  cursor: grabbing;
+  z-index: 1000;
+}
+
+.markdown-cell.drag-over {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.3);
+  transform: translateY(-2px);
+}
+
+.markdown-cell:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-cell.editing {
+  border-color: var(--color-border);
+  box-shadow: 0 0 0 3px rgba(221, 221, 221, 0.3);
+}
+
+.markdown-cell.preview {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.1);
+}
+
+.markdown-cell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  transition: all 0.2s ease;
+}
+
+.markdown-cell-header[draggable="true"]:hover {
+  background: var(--color-border);
+}
+
+.cell-name-editor {
+  background: var(--color-background);
+  border: 1px solid var(--color-primary);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text);
+  outline: none;
+  min-width: 60px;
+  text-transform: none;
+}
+
+.cell-name-editor:focus {
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.25);
+}
+
+.cell-name-display {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+
+.cell-name-display:hover:not(.non-editable) {
+  background-color: rgba(99, 110, 114, 0.1);
+}
+
+.cell-name-display.non-editable {
+  cursor: default;
+}
+
+.cell-name-display.non-editable:hover {
+  background-color: transparent;
+}
+
+.cell-mode {
+  font-size: 11px;
+  color: var(--color-textSecondary);
+  background: var(--color-border);
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.markdown-cell.editing .cell-mode {
+  background: var(--color-success);
+  color: white;
+}
+
+.markdown-cell.preview .cell-mode {
+  background: var(--color-secondary);
+  color: white;
+}
+
+.markdown-cell-content {
+  min-height: 120px;
+}
+
+.markdown-editor {
+  width: 100%;
+  min-height: 300px;
+  padding: 16px;
+  border: none;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  background: var(--color-surface);
+  outline: none;
+}
+
+.markdown-preview {
+  padding: 16px;
+  line-height: 1.6;
+  background: var(--color-background);
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.markdown-preview h1 {
+  font-size: 2em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 6px;
+}
+
+.markdown-preview h3 {
+  font-size: 1.25em;
+}
+
+.markdown-preview h4 {
+  font-size: 1em;
+}
+
+.markdown-preview h5 {
+  font-size: 0.875em;
+}
+
+.markdown-preview h6 {
+  font-size: 0.85em;
+  color: var(--color-textSecondary);
+}
+
+.markdown-preview p {
+  margin-bottom: 16px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+
+.markdown-preview li {
+  margin-bottom: 4px;
+}
+
+.markdown-preview blockquote {
+  margin: 16px 0;
+  padding: 0 1em;
+  color: var(--color-textSecondary);
+  border-left: 4px solid var(--color-border);
+}
+
+.markdown-preview code.inline-code {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Code blocks now use SyntaxHighlighter component, but keep margin styling */
+.markdown-preview .syntax-highlighter {
+  margin: 16px 0;
+}
+
+.markdown-preview .table-wrapper {
+  overflow-x: auto;
+  margin: 16px 0;
+}
+
+.markdown-preview .markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.markdown-preview .markdown-table th {
+  background: var(--color-surface);
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.markdown-preview .markdown-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.markdown-preview .markdown-table tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-preview .markdown-table th:last-child,
+.markdown-preview .markdown-table td:last-child {
+  border-right: none;
+}
+
+.markdown-preview .markdown-table tr:hover {
+  background: var(--color-surface);
+}
+
+.markdown-preview a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.markdown-preview a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview hr {
+  height: 2px;
+  background: var(--color-border);
+  border: none;
+  margin: 24px 0;
+}
+
+.empty-markdown {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-textSecondary);
+}
+
+.empty-markdown p {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .markdown-cell-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .cell-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .markdown-editor {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  .markdown-preview {
+    padding: 12px;
+  }
+}

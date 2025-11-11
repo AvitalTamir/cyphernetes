@@ -13,7 +13,7 @@ all: operator-manifests bt
 bt: build test
 
 # Define how to build the project
-build: web-build
+build: web-build notebook-build
 	@echo "👷 Building ${BINARY_NAME}..."
 	(cd cmd/cyphernetes && go build -o ${BINARY_NAME} -ldflags "-X main.Version=${VERSION}" > /dev/null)
 	mkdir -p dist/
@@ -106,12 +106,23 @@ web-test:
 	@echo "🧪 Running web tests..."
 	cd web && pnpm install && pnpm test
 
+notebook-build:
+	@echo "📓 Building notebook interface..."
+	cd notebook && pnpm install > /dev/null && pnpm run build > /dev/null
+	@echo "📦 Copying notebook artifacts..."
+	rm -rf pkg/notebook/static
+	cp -r notebook/dist pkg/notebook/static
+
+notebook-test:
+	@echo "🧪 Running notebook tests..."
+	cd notebook && pnpm install && pnpm test
+
 web-run: build
 	./dist/cyphernetes web
 
 # Define a phony target for the clean command to ensure it always runs
 .PHONY: clean build-kubectl-plugin build-kubectl-plugin-all-platforms
-.SILENT: build build-kubectl-plugin test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
+.SILENT: build build-kubectl-plugin test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test notebook-build notebook-test
 
 # Add a help command to list available targets
 help:

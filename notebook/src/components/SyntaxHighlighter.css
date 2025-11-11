@@ -1,0 +1,124 @@
+/* Catppuccin Latte Theme for Syntax Highlighting */
+.syntax-highlighter.catppuccin-latte {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px rgba(76, 79, 105, 0.08);
+}
+
+.syntax-highlighter.catppuccin-latte code {
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Catppuccin Latte Color Palette */
+.catppuccin-fg {
+  color: var(--color-text); /* Text - main foreground */
+}
+
+.catppuccin-string {
+  color: #40a02b; /* Green - strings */
+}
+
+.catppuccin-number {
+  color: #8839ef; /* Mauve - numbers */
+}
+
+.catppuccin-boolean {
+  color: #fe640b; /* Peach - booleans */
+}
+
+.catppuccin-null {
+  color: #d20f39; /* Red - null/undefined */
+}
+
+.catppuccin-punctuation {
+  color: #7c7f93; /* Overlay2 - brackets, commas, etc. */
+}
+
+.catppuccin-colon {
+  color: #209fb5; /* Sapphire - colons in JSON/YAML */
+}
+
+.catppuccin-key {
+  color: #df8e1d; /* Yellow - object keys */
+  font-weight: 600;
+}
+
+.catppuccin-comment {
+  color: #6c6f85; /* Subtext0 - comments */
+  font-style: italic;
+}
+
+/* Additional styling for better readability */
+.syntax-highlighter.catppuccin-latte .catppuccin-string {
+  /* Slightly enhance string visibility */
+  text-shadow: 0 0 1px rgba(64, 160, 43, 0.2);
+}
+
+.syntax-highlighter.catppuccin-latte .catppuccin-key {
+  /* Make keys stand out more */
+  text-shadow: 0 0 1px rgba(223, 142, 29, 0.2);
+}
+
+/* Scrollbar styling for Catppuccin theme */
+.syntax-highlighter.catppuccin-latte::-webkit-scrollbar {
+  height: 8px;
+}
+
+.syntax-highlighter.catppuccin-latte::-webkit-scrollbar-track {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.syntax-highlighter.catppuccin-latte::-webkit-scrollbar-thumb {
+  background: var(--color-textSecondary);
+  border-radius: 4px;
+}
+
+.syntax-highlighter.catppuccin-latte::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text);
+}
+
+/* Selection styling */
+.syntax-highlighter.catppuccin-latte ::selection {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.syntax-highlighter.catppuccin-latte ::-moz-selection {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .syntax-highlighter.catppuccin-latte {
+    font-size: 12px;
+    padding: 12px;
+  }
+}
+
+/* Animation for syntax highlighting (subtle fade-in) */
+.syntax-highlighter.catppuccin-latte {
+  animation: syntaxFadeIn 0.3s ease-in-out;
+}
+
+@keyframes syntaxFadeIn {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
+}

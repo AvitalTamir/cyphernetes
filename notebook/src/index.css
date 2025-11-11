@@ -1,0 +1,64 @@
+/* Reset and base styles */
+:root {
+  /* Default theme colors (light) - will be overridden by theme */
+  --color-background: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-primary: #6c5ce7;
+  --color-secondary: #a29bfe;
+  --color-text: #2d3436;
+  --color-textSecondary: #636e72;
+  --color-border: #ddd;
+  --color-accent: #0984e3;
+  --color-success: #00b894;
+  --color-warning: #fdcb6e;
+  --color-error: #e84393;
+  
+  /* Legacy color mappings for compatibility */
+  --primary-color: var(--color-primary);
+  --secondary-color: var(--color-secondary);
+  --success-color: var(--color-success);
+  --warning-color: var(--color-warning);
+  --danger-color: var(--color-error);
+  --info-color: var(--color-accent);
+  --light-color: var(--color-surface);
+  --dark-color: var(--color-text);
+}
+
+html {
+  line-height: 1.15;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+code {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-textSecondary);
+}
