@@ -15,7 +15,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vitest/ui": "^2.1.2",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.1.1",
     "jsdom": "^25.0.1",
     "path": "^0.12.7",
     "react": "^18.2.0",
