@@ -643,17 +643,17 @@
     padding: 8rem 0;
   }
 
-  .codeComparison .row {
+  .codeComparison :global(.row) {
     flex-direction: column;
     margin: 0;
   }
 
-  .codeComparison .col {
-    margin-bottom: 2rem;
+  .codeComparison :global(.col) {
+    margin-bottom: 4rem;
     padding: 0;
   }
 
-  .codeComparison .col:last-child {
+  .codeComparison :global(.col):last-child {
     margin-bottom: 0;
   }
 
