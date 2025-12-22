@@ -29,3 +29,4 @@ y.output
 
 .coverage
 node_modules
+.claude

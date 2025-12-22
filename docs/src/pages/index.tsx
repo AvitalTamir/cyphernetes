@@ -7,7 +7,19 @@ import CodeBlock from "@theme/CodeBlock";
 
 import styles from "./index.module.css";
 
-function GraphParticles() {
+interface Orb {
+  x: number;
+  y: number;
+  baseRadius: number;
+  radius: number;
+  color: string;
+  vx: number;
+  vy: number;
+  phase: number;
+  pulseSpeed: number;
+}
+
+function FloatingOrbs() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -17,84 +29,78 @@ function GraphParticles() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Set canvas size
     const setCanvasSize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.offsetWidth * dpr;
+      canvas.height = canvas.offsetHeight * dpr;
+      ctx.scale(dpr, dpr);
     };
     setCanvasSize();
     window.addEventListener("resize", setCanvasSize);
 
-    // Particle class
-    class Particle {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      size: number;
+    // Create bolder, more dramatic orbs
+    const createOrb = (color: string, baseRadius: number): Orb => ({
+      x: Math.random() * canvas.offsetWidth,
+      y: Math.random() * canvas.offsetHeight,
+      baseRadius,
+      radius: baseRadius,
+      color,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      phase: Math.random() * Math.PI * 2,
+      pulseSpeed: 0.006 + Math.random() * 0.006,
+    });
 
-      constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.vx = (Math.random() - 0.5) * 0.3;
-        this.vy = (Math.random() - 0.5) * 0.3;
-        this.size = Math.random() * 3 + 2;
-      }
+    const orbs: Orb[] = [
+      createOrb("rgba(139, 92, 246, 0.18)", 280),  // Royal violet - larger
+      createOrb("rgba(192, 132, 252, 0.14)", 220), // Soft lavender
+      createOrb("rgba(236, 72, 153, 0.12)", 200),  // Pink
+      createOrb("rgba(212, 175, 55, 0.08)", 180),  // Champagne gold
+      createOrb("rgba(99, 102, 241, 0.12)", 240),  // Indigo
+      createOrb("rgba(244, 114, 182, 0.10)", 160), // Rose
+    ];
 
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
+    function updateOrb(orb: Orb) {
+      orb.x += orb.vx;
+      orb.y += orb.vy;
+      orb.phase += orb.pulseSpeed;
+      orb.radius = orb.baseRadius + Math.sin(orb.phase) * 30;
 
-        if (this.x < 0) this.x = canvas.width;
-        if (this.x > canvas.width) this.x = 0;
-        if (this.y < 0) this.y = canvas.height;
-        if (this.y > canvas.height) this.y = 0;
-      }
-
-      draw() {
-        if (!ctx) return;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-        ctx.fill();
-      }
+      const width = canvas.offsetWidth;
+      const height = canvas.offsetHeight;
+      if (orb.x < -orb.radius) orb.x = width + orb.radius;
+      if (orb.x > width + orb.radius) orb.x = -orb.radius;
+      if (orb.y < -orb.radius) orb.y = height + orb.radius;
+      if (orb.y > height + orb.radius) orb.y = -orb.radius;
     }
 
-    // Create particles
-    const particles: Particle[] = [];
-    for (let i = 0; i < 150; i++) {
-      particles.push(new Particle());
+    function drawOrb(orb: Orb) {
+      if (!ctx) return;
+      const gradient = ctx.createRadialGradient(
+        orb.x,
+        orb.y,
+        0,
+        orb.x,
+        orb.y,
+        orb.radius
+      );
+      gradient.addColorStop(0, orb.color);
+      gradient.addColorStop(0.5, orb.color.replace(/[\d.]+\)$/, "0.05)"));
+      gradient.addColorStop(1, "transparent");
+
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, orb.radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
     }
 
-    // Animation loop
     function animate() {
       if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
-      // Update and draw particles
-      particles.forEach((particle) => {
-        particle.update();
-        particle.draw();
-      });
-
-      // Draw connections
-      particles.forEach((p1, i) => {
-        particles.slice(i + 1).forEach((p2) => {
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < 100) {
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(255, 255, 255, ${
-              0.3 * (1 - distance / 100)
-            })`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-          }
-        });
+      orbs.forEach((orb) => {
+        updateOrb(orb);
+        drawOrb(orb);
       });
 
       requestAnimationFrame(animate);
@@ -107,17 +113,19 @@ function GraphParticles() {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className={styles.particles} />;
+  return <canvas ref={canvasRef} className={styles.floatingOrbs} />;
 }
 
 function HomepageHeader() {
   const { siteConfig } = useDocusaurusContext();
   return (
     <header className={clsx("hero", styles.heroBanner)}>
-      <GraphParticles />
+      <FloatingOrbs />
       <div className="container">
         <h1 className={styles.heroTitle}>{siteConfig.title}</h1>
-        <p className={styles.heroSubtitle}>{siteConfig.tagline}</p>
+        <p className={styles.heroSubtitle}>
+          A Kubernetes Query Language
+        </p>
         <div className={styles.buttons}>
           <Link
             className={clsx(styles.button, styles.buttonPrimary)}
@@ -154,7 +162,7 @@ $ kubectl get pods --all-namespaces \\
 const afterExample = `// Do the same thing!
 MATCH (p:Pod)
 WHERE p.status.phase != "Running"
-DELETE p;`
+DELETE p;`;
 
 function CodeComparison() {
   return (
@@ -163,8 +171,10 @@ function CodeComparison() {
         <div className="row">
           <div className="col col--6">
             <div className={styles.codeBlockTitle}>
-              <span className={styles.emoji}>😣</span>
-              <span>Before Cyphernetes</span>
+              <span className={styles.labelBadge} data-type="before">
+                Complex
+              </span>
+              <span>Traditional kubectl</span>
             </div>
             <div className={styles.codeBlock}>
               <CodeBlock language="bash" showLineNumbers>
@@ -174,7 +184,9 @@ function CodeComparison() {
           </div>
           <div className="col col--6">
             <div className={styles.codeBlockTitle}>
-              <span className={styles.emoji}>🤩</span>
+              <span className={styles.labelBadge} data-type="after">
+                Simple
+              </span>
               <span>With Cyphernetes</span>
             </div>
             <div className={styles.codeBlock}>
@@ -214,19 +226,19 @@ function HomepageFeatures() {
         <h2 className={styles.sectionTitle}>Why Cyphernetes?</h2>
         <div className={styles.grid}>
           <Feature
-            emoji="🎯"
-            title="Intuitive Graph Queries"
-            description="Use Cypher-inspired syntax to query and manipulate your Kubernetes resources naturally, just like you would with a graph database."
+            emoji="✨"
+            title="Graph-Powered Queries"
+            description="Express complex multi-resource operations with elegant Cypher syntax. Relationships between resources become first-class citizens."
           />
           <Feature
-            emoji="🚀"
-            title="Works Out of the Box"
-            description="No setup required. Cyphernetes works with your existing Kubernetes clusters and automatically supports all your CRDs."
+            emoji="⚡"
+            title="Zero Configuration"
+            description="Works instantly with any cluster. Automatically discovers all your CRDs and understands resource relationships out of the box."
           />
           <Feature
             emoji="🌐"
-            title="Multi-Cluster Support"
-            description="Query and manage resources across multiple clusters with the same simple syntax. Perfect for complex, distributed environments."
+            title="Multi-Cluster Native"
+            description="Query across your entire infrastructure with a single command. One syntax to rule all your Kubernetes environments."
           />
         </div>
       </div>
@@ -238,37 +250,31 @@ function GrowingEcosystem() {
   return (
     <section className={clsx(styles.section, styles.sectionAlt)}>
       <div className="container">
-        <h2 className={styles.sectionTitle}>A Growing Ecosystem</h2>
+        <h2 className={styles.sectionTitle}>One Language, Many Interfaces</h2>
         <div className={styles.ecosystemGrid}>
           <div className={styles.ecosystemCard}>
-            <img
-              src="/img/cli.png"
-              alt="Interactive Shell"
-              className={styles.ecosystemImage}
-            />
-            <h3>Fully-Featured Interactive Shell</h3>
+            <div className={styles.ecosystemIcon}>$_</div>
+            <h3>Interactive Shell</h3>
             <p>
-              Powerful interactive shell with auto-completion and syntax
-              highlighting.
+              Powerful REPL with intelligent auto-completion, syntax highlighting,
+              and built-in macros for common operations.
             </p>
           </div>
           <div className={styles.ecosystemCard}>
-            <img
-              src="/img/web.png"
-              alt="Web Client"
-              className={styles.ecosystemImage}
-            />
-            <h3>Beautiful Web Client</h3>
-            <p>Experience Kubernetes in a whole new way with the Web UI.</p>
+            <div className={styles.ecosystemIcon}>&lt;/&gt;</div>
+            <h3>Web Interface</h3>
+            <p>
+              Visualize your cluster as a graph. See relationships between
+              resources and execute queries with instant visual feedback.
+            </p>
           </div>
           <div className={styles.ecosystemCard}>
-            <img
-              src="/img/operators.png"
-              alt="K8s Operators"
-              className={styles.ecosystemImage}
-            />
-            <h3>Instant K8s Operators</h3>
-            <p>Plug it into CI/CD. Spin up Operators in minutes.</p>
+            <div className={styles.ecosystemIcon}>&infin;</div>
+            <h3>Dynamic Operators</h3>
+            <p>
+              Define reactive workflows with Cyphernetes queries. Build
+              production-ready operators without writing Go code.
+            </p>
           </div>
         </div>
       </div>
@@ -281,7 +287,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="A Cypher-inspired Kubernetes query language"
+      description="Query Kubernetes like a graph database. Cyphernetes brings Cypher-inspired syntax to kubectl, making complex operations simple and intuitive."
     >
       <HomepageHeader />
       <main>

@@ -9,6 +9,46 @@ const config: Config = {
   tagline: "A Kubernetes Query Language",
   favicon: "img/favicon.ico",
 
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://fonts.googleapis.com',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossorigin: 'anonymous',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
+      },
+    },
+    {
+      tagName: 'style',
+      attributes: {
+        type: 'text/css',
+      },
+      innerHTML: `
+        :root {
+          --ifm-font-family-base: 'Space Grotesk', system-ui, sans-serif !important;
+          --ifm-heading-font-family: 'Space Grotesk', system-ui, sans-serif !important;
+        }
+        html, body, #__docusaurus {
+          font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif !important;
+        }
+      `,
+    },
+  ],
+
   // Set the production url of your site here
   url: "https://docs.cyphernet.es",
   // Set the /<baseUrl>/ pathname under which your site is served
