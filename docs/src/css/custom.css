@@ -72,6 +72,7 @@ html[data-theme='dark'] {
   --docusaurus-highlighted-code-line-bg: rgba(139, 92, 246, 0.15);
   --code-block-bg: #0f0f1a;
   --code-block-color: #e2e8f0;
+  --ifm-code-background: #1e1e2e;
 
   /* Text colors */
   --ifm-font-color-base: #f8fafc;
@@ -371,10 +372,19 @@ div[class^='codeBlockContainer'] {
   overflow: hidden;
 }
 
+[data-theme='dark'] div[class^='codeBlockContainer'] {
+  background-color: #0f0f1a !important;
+}
+
 div[class^='codeBlockContent'] {
   background-color: var(--code-block-bg);
   color: var(--code-block-color);
   padding: 1rem;
+}
+
+[data-theme='dark'] div[class^='codeBlockContent'] {
+  background-color: #0f0f1a !important;
+  color: #e2e8f0 !important;
 }
 
 section[class^='codeComparison'] div[class^='codeBlockContent'] {
@@ -389,11 +399,32 @@ section[class^='codeComparison'] div[class^='codeBlockContent'] {
   padding: 1rem !important;
 }
 
+[data-theme='dark'] .prism-code {
+  background-color: #0f0f1a !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme='dark'] pre {
+  background-color: #0f0f1a !important;
+}
+
 :not(pre) > code {
   background-color: var(--ifm-code-background);
   border: 1px solid var(--luxury-glass-border);
   border-radius: 6px;
   padding: 0.125rem 0.375rem;
+}
+
+[data-theme='dark'] :not(pre) > code {
+  background-color: #1e1e2e;
+  color: #e2e8f0;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+[data-theme='light'] :not(pre) > code {
+  background-color: #f3f4f6;
+  color: #1e1b4b;
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .tabs-container .tabs-content .prism-code {
