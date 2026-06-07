@@ -2,6 +2,8 @@ package core
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/avitaltamir/cyphernetes/pkg/provider"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,30 +36,31 @@ func InitResourceSpecs(p provider.Provider) error {
 	return nil
 }
 
-func (q *QueryExecutor) resourcePropertyName(n *NodePattern) (string, error) {
-	var ns string
-
-	gvr, err := q.provider.FindGVR(n.ResourceProperties.Kind)
+func (q *QueryExecutor) resourceFetchKey(n *NodePattern, namespace, fieldSelector, labelSelector string, extraFilters []*Filter) (string, error) {
+	gvr, err := tryResolveGVR(q.provider, n.ResourceProperties.Kind)
 	if err != nil {
 		return "", err
 	}
 
-	if n.ResourceProperties.Properties == nil {
-		return fmt.Sprintf("%s_%s", Namespace, gvr.Resource), nil
-	}
-
-	for _, prop := range n.ResourceProperties.Properties.PropertyList {
-		if prop.Key == "namespace" || prop.Key == "metadata.namespace" {
-			ns = prop.Value.(string)
-			break
+	properties := []string{}
+	if n.ResourceProperties.Properties != nil {
+		for _, prop := range n.ResourceProperties.Properties.PropertyList {
+			properties = append(properties, fmt.Sprintf("%s=%#v", prop.Key, prop.Value))
 		}
 	}
+	sort.Strings(properties)
 
-	if ns == "" {
-		ns = Namespace
-	}
-
-	return fmt.Sprintf("%s_%s", ns, gvr.Resource), nil
+	return strings.Join([]string{
+		namespace,
+		gvr.Group,
+		gvr.Version,
+		gvr.Resource,
+		n.ResourceProperties.Name,
+		fieldSelector,
+		labelSelector,
+		strings.Join(properties, ","),
+		filterSignature(extraFilters),
+	}, "\x00"), nil
 }
 
 func (q *QueryExecutor) GetOpenAPIResourceSpecs() (map[string][]string, error) {

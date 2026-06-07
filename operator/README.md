@@ -1,114 +1,92 @@
-# operator
-// TODO(user): Add simple overview of use/purpose
+# Cyphernetes Operator
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+Cyphernetes is available as a Kubernetes Operator that can be used to define child operators on-the-fly.
 
-## Getting Started
+## Usage
 
-### Prerequisites
-- go version v1.22.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+The cyphernetes-operator watches for CustomResourceDefinitions (CRDs) of type `DynamicOperator` and sets up watches on the specified Kubernetes resources.
+When a change is detected, the operator executes the Cypher queries and updates the resources accordingly.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+Here is a simple example of a DynamicOperator that sets the ingress class name to "inactive" when the deployment has 0 replicas and to "active" when the deployment has more than 0 replicas:
 
-```sh
-make docker-build docker-push IMG=<some-registry>/operator:tag
+```yaml
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: ingress-activator-operator
+spec:
+  resourceKind: deployments
+  namespace: default
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+In addition to the `onUpdate` field, the operator also supports the `onCreate` and `onDelete` fields.
 
-**Install the CRDs into the cluster:**
+## Installation
 
-```sh
-make install
+The operator can be installed either using Helm, or using the Cyphernetes CLI.
+
+### Helm
+
+To install the operator using Helm, run the following command:
+
+```bash
+helm pull oci://ghcr.io/avitaltamir/cyphernetes/cyphernetes-operator
+tar -xvf cyphernetes-operator-*.tgz
+cd cyphernetes-operator
+helm upgrade --install cyphernetes-operator . --namespace cyphernetes-operator --create-namespace
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+Make sure to edit the values.yaml file and configure the operator's RBAC rules.
+By default, the operator will have no permissions and will not be able to watch any resources.
 
-```sh
-make deploy IMG=<some-registry>/operator:tag
+### Cyphernetes CLI
+
+Alternatively, you can install the operator using the Cyphernetes CLI - this is meant for development and testing purposes:
+
+```bash
+cyphernetes operator deploy
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+To remove the operator:
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
+```bash
+cyphernetes operator remove
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+## Using the operator
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+To start watching resources, you need to provision your first `DynamicOperator` resource.
 
-```sh
-kubectl delete -k config/samples/
+```yaml
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: ingress-activator-operator
+  namespace: default
+spec:
+  resourceKind: deployments
+  namespace: default
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas > 0
+    SET i.spec.ingressClassName = "active";
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+The operator will now watch the `deployments` resource in the `default` namespace and update the ingress class name accordingly.
+In addition to the `onUpdate` field, the operator also supports the `onCreate` and `onDelete` fields.
 
-```sh
-make uninstall
+You can easily template `DynamicOperator` resources using the Cyphernetes CLI:
+
+```bash
+cyphernetes operator create my-operator --on-create "MATCH (n) RETURN n" | kubectl apply -f -
 ```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following are the steps to build the installer and distribute this project to users.
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/operator:tag
-```
-
-NOTE: The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without
-its dependencies.
-
-2. Using the installer
-
-Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/operator/<tag or branch>/dist/install.yaml
-```
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2024.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-

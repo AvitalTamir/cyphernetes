@@ -4,6 +4,7 @@ KUBECTL_PLUGIN_NAME=kubectl-cypher
 TARGET_KERNELS=darwin linux windows
 TARGET_ARCHS=amd64 arm64
 VERSION ?= dev
+CORE_COVERAGE_MIN ?= 80.0
 
 # Define the default make target
 all: operator-manifests bt
@@ -55,6 +56,21 @@ build-kubectl-plugin-all-platforms:
 test:
 	@echo "🧪 Running tests..."
 	go test ./...
+
+core-coverage:
+	@echo "🧪 Checking pkg/core coverage..."
+	@set -e; \
+	tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	go test ./pkg/core -covermode=atomic -coverprofile=$$tmp; \
+	total=$$(go tool cover -func=$$tmp | awk '/^total:/ {gsub("%", "", $$3); print $$3}'); \
+	awk -v total="$$total" -v min="$(CORE_COVERAGE_MIN)" 'BEGIN { \
+		if (total + 0 < min + 0) { \
+			printf("pkg/core coverage %.1f%% is below %.1f%%\n", total, min); \
+			exit 1; \
+		} \
+		printf("pkg/core coverage %.1f%% meets %.1f%% floor\n", total, min); \
+	}'
 
 .PHONY: test-e2e
 test-e2e:
@@ -110,8 +126,8 @@ web-run: build
 	./dist/cyphernetes web
 
 # Define a phony target for the clean command to ensure it always runs
-.PHONY: clean build-kubectl-plugin build-kubectl-plugin-all-platforms
-.SILENT: build build-kubectl-plugin test gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
+.PHONY: clean build-kubectl-plugin build-kubectl-plugin-all-platforms core-coverage
+.SILENT: build build-kubectl-plugin test core-coverage gen-parser clean coverage operator operator-test operator-manifests operator-docker-build operator-docker-push web-build web-test
 
 # Add a help command to list available targets
 help:
@@ -122,4 +138,5 @@ help:
 	@echo "  build-all-platforms                - Build main binary for all platforms."
 	@echo "  build-kubectl-plugin-all-platforms - Build kubectl plugin for all platforms."
 	@echo "  test                               - Run tests."
+	@echo "  core-coverage                      - Enforce pkg/core unit coverage floor."
 	@echo "  clean                              - Remove binaries and clean up."

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -153,13 +154,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 
 							for j := 0; j < len(potentialKinds); j++ {
 								varName := fmt.Sprintf("%s__exp__%d", nodeName, j)
-								var valueStr string
-								switch v := filter.Value.(type) {
-								case string:
-									valueStr = fmt.Sprintf("\"%s\"", v)
-								default:
-									valueStr = fmt.Sprintf("%v", v)
-								}
+								valueStr := renderQueryLiteral(filter.Value)
 								// Map operator names to symbols
 								operator := filter.Operator
 								switch operator {
@@ -246,26 +241,14 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 							for j := 0; j < len(potentialKinds); j++ {
 								varName := fmt.Sprintf("%s__exp__%d", parts[0], j)
 								setPath := fmt.Sprintf("%s.%s", varName, parts[1])
-								var valueStr string
-								switch v := kvp.Value.(type) {
-								case string:
-									valueStr = fmt.Sprintf("\"%s\"", v)
-								default:
-									valueStr = fmt.Sprintf("%v", v)
-								}
+								valueStr := renderQueryLiteral(kvp.Value)
 								setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
 							}
 						} else {
 							// If the node is not kindless, just use it as is
 							varName := fmt.Sprintf("%s__exp__0", parts[0])
 							setPath := fmt.Sprintf("%s.%s", varName, parts[1])
-							var valueStr string
-							switch v := kvp.Value.(type) {
-							case string:
-								valueStr = fmt.Sprintf("'%s'", v)
-							default:
-								valueStr = fmt.Sprintf("%v", v)
-							}
+							valueStr := renderQueryLiteral(kvp.Value)
 							setParts = append(setParts, fmt.Sprintf("%s = %s", setPath, valueStr))
 						}
 					}
@@ -337,4 +320,20 @@ func isKindless(nodeName string, kindlessNodes []*NodePattern) bool {
 		}
 	}
 	return false
+}
+
+func renderQueryLiteral(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return strconv.Quote(v)
+	case nil:
+		return "null"
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

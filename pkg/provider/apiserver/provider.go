@@ -214,7 +214,7 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 	p.resourceMutex.RLock()
 	defer p.resourceMutex.RUnlock()
 
-	gvr, err := p.FindGVR(kind)
+	gvr, err := p.findGVRForResourceOperation(kind)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +246,19 @@ func (p *APIServerProvider) fetchResources(kind, fieldSelector, labelSelector, n
 		converted = append(converted, u.UnstructuredContent())
 	}
 	return converted, nil
+}
+
+func (p *APIServerProvider) findGVRForResourceOperation(kind string) (schema.GroupVersionResource, error) {
+	gvr, err := p.FindGVR(kind)
+	if err == nil {
+		return gvr, nil
+	}
+	if strings.Contains(err.Error(), "ambiguous") {
+		if coreGVR, coreErr := p.FindGVR("core." + kind); coreErr == nil {
+			return coreGVR, nil
+		}
+	}
+	return schema.GroupVersionResource{}, err
 }
 
 // Move the FindGVR implementation from k8s_client.go here
@@ -340,7 +353,7 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 	p.resourceMutex.Lock()
 	defer p.resourceMutex.Unlock()
 
-	gvr, err := p.FindGVR(kind)
+	gvr, err := p.findGVRForResourceOperation(kind)
 	if err != nil {
 		return err
 	}
@@ -381,7 +394,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 	p.resourceMutex.Lock()
 	defer p.resourceMutex.Unlock()
 
-	gvr, err := p.FindGVR(kind)
+	gvr, err := p.findGVRForResourceOperation(kind)
 	if err != nil {
 		return err
 	}
@@ -430,7 +443,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 }
 
 func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
-	gvr, err := p.FindGVR(kind)
+	gvr, err := p.findGVRForResourceOperation(kind)
 	if err != nil {
 		return err
 	}
