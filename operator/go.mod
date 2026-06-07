@@ -2,6 +2,8 @@ module github.com/avitaltamir/cyphernetes/operator
 
 go 1.25.0
 
+toolchain go1.25.4
+
 require (
 	github.com/AvitalTamir/jsonpath v0.0.0
 	github.com/avitaltamir/cyphernetes v0.0.0
