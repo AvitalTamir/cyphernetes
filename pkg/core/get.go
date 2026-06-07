@@ -11,21 +11,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, key string) []map[string]interface{} {
+func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, key string, state *executionState) []map[string]interface{} {
 	if filtered, ok := filteredResults[key]; ok {
 		return filtered
 	}
 
-	resultMapMutex.RLock()
-	defer resultMapMutex.RUnlock()
-
-	if resources, ok := resultMap[key].([]map[string]interface{}); ok {
+	if resources, ok := state.getResources(key); ok {
 		return resources
 	}
 	return nil
 }
 
-func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error {
+func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult, state *executionState) error {
 	debugLog(fmt.Sprintf("Processing nodes, current graph nodes: %+v\n", results.Graph.Nodes))
 
 	// Track seen nodes for deduplication
@@ -51,44 +48,47 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 			node.ResourceProperties.Kind = potentialKinds[0]
 		}
 
-		// check if the node has already been fetched
-		cacheKey, err := q.resourcePropertyName(node)
-		if err != nil {
-			return fmt.Errorf("error getting resource property name: %v", err)
-		}
-		if resultCache[cacheKey] == nil {
-			err := getNodeResources(node, q, c.ExtraFilters)
+		if _, ok := state.getResources(node.ResourceProperties.Name); !ok {
+			err := getNodeResources(node, q, c.ExtraFilters, state)
 			if err != nil {
 				return fmt.Errorf("error getting node resources >> %s", err)
 			}
-			resources := resultMap[node.ResourceProperties.Name].([]map[string]interface{})
-			for _, resource := range resources {
-				metadata, ok := resource["metadata"].(map[string]interface{})
-				if !ok {
-					continue
-				}
-				newNode := Node{
-					Id:   node.ResourceProperties.Name,
-					Kind: resource["kind"].(string),
-					Name: metadata["name"].(string),
-				}
-				if newNode.Kind != "Namespace" {
-					newNode.Namespace = getNamespaceName(metadata)
-				}
-
-				// Check if we've seen this node before
-				nodeKey := fmt.Sprintf("%s/%s", newNode.Kind, newNode.Name)
-				if !seenNodes[nodeKey] {
-					seenNodes[nodeKey] = true
-					debugLog(fmt.Sprintf("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey))
-					results.Graph.Nodes = append(results.Graph.Nodes, newNode)
-				} else {
-					debugLog(fmt.Sprintf("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey))
-				}
+		}
+		resources, ok := state.getResources(node.ResourceProperties.Name)
+		if !ok {
+			return fmt.Errorf("node %s resources were not loaded", node.ResourceProperties.Name)
+		}
+		for _, resource := range resources {
+			metadata, err := getResourceMetadata(resource)
+			if err != nil {
+				return fmt.Errorf("error reading resource metadata for node %s: %w", node.ResourceProperties.Name, err)
 			}
-		} else if resultMap[node.ResourceProperties.Name] == nil {
-			// Copy from cache using the original name
-			resultMap[node.ResourceProperties.Name] = resultCache[cacheKey]
+			kind, err := getResourceKind(resource)
+			if err != nil {
+				return fmt.Errorf("error reading resource kind for node %s: %w", node.ResourceProperties.Name, err)
+			}
+			name, err := getResourceName(metadata)
+			if err != nil {
+				return fmt.Errorf("error reading resource name for node %s: %w", node.ResourceProperties.Name, err)
+			}
+			newNode := Node{
+				Id:   node.ResourceProperties.Name,
+				Kind: kind,
+				Name: name,
+			}
+			if newNode.Kind != "Namespace" {
+				newNode.Namespace = getNamespaceName(metadata)
+			}
+
+			// Check if we've seen this node before
+			nodeKey := fmt.Sprintf("%s/%s/%s", newNode.Kind, newNode.Namespace, newNode.Name)
+			if !seenNodes[nodeKey] {
+				seenNodes[nodeKey] = true
+				debugLog(fmt.Sprintf("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey))
+				results.Graph.Nodes = append(results.Graph.Nodes, newNode)
+			} else {
+				debugLog(fmt.Sprintf("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey))
+			}
 		}
 	}
 	debugLog(fmt.Sprintf("After processNodes, graph nodes: %+v\n", results.Graph.Nodes))
@@ -96,11 +96,29 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult) error
 }
 
 func (q *QueryExecutor) findGVR(kind string) (schema.GroupVersionResource, error) {
-	return q.provider.FindGVR(kind)
+	return tryResolveGVR(q.provider, kind)
 }
 
-func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) (err error) {
-	namespace := Namespace
+func (q *QueryExecutor) providerKind(kind string) (string, error) {
+	_, err := q.provider.FindGVR(kind)
+	if err == nil {
+		return kind, nil
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		return "", err
+	}
+	gvr, err := tryResolveGVR(q.provider, kind)
+	if err != nil {
+		return "", err
+	}
+	if gvr.Group == "" {
+		return "core." + gvr.Resource, nil
+	}
+	return gvr.Resource + "." + gvr.Group, nil
+}
+
+func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter, state *executionState) (err error) {
+	namespace := state.namespace
 
 	// Create a copy of ResourceProperties
 	resourcePropertiesCopy := &ResourceProperties{}
@@ -144,26 +162,28 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 		return fmt.Errorf("the 'name' selector can be used by itself or combined with 'namespace', but not with other label selectors")
 	}
 
-	// Check if the resource has already been fetched
-	cacheKey, err := q.resourcePropertyName(n)
+	// Check if the resource has already been fetched for this exact query shape.
+	cacheKey, err := q.resourceFetchKey(n, namespace, fieldSelector, labelSelector, extraFilters)
 	if err != nil {
-		return fmt.Errorf("error getting resource property name: %v", err)
+		return fmt.Errorf("error getting resource fetch key: %v", err)
 	}
 
-	// Lock for reading from cache
-	resultMapMutex.RLock()
-	cachedResult := resultCache[cacheKey]
-	resultMapMutex.RUnlock()
-
-	if cachedResult == nil {
+	if cachedResult, ok := state.cachedResources(cacheKey); !ok {
 		// Get resources using the provider
-		resources, err := q.provider.GetK8sResources(n.ResourceProperties.Kind, fieldSelector, labelSelector, namespace)
+		providerKind, err := q.providerKind(n.ResourceProperties.Kind)
+		if err != nil {
+			return fmt.Errorf("error resolving resource kind: %v", err)
+		}
+		resources, err := q.provider.GetK8sResources(providerKind, fieldSelector, labelSelector, namespace)
 		if err != nil {
 			return fmt.Errorf("error getting resources: %v", err)
 		}
 
 		// Apply extra filters from WHERE clause
-		resourceList := resources.([]map[string]interface{})
+		resourceList, ok := resources.([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("provider returned %T for %s, expected []map[string]interface{}", resources, n.ResourceProperties.Kind)
+		}
 		var filtered []map[string]interface{}
 
 		var subMatches []*SubMatch
@@ -281,7 +301,7 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 			}
 
 			// for each submatch, run checkSubMatch
-			subMatchResults, err := q.checkSubMatch(subMatch, n.ResourceProperties.Name)
+			subMatchResults, err := q.checkSubMatch(subMatch, n.ResourceProperties.Name, state)
 			if err != nil {
 				return fmt.Errorf("error checking submatch: %v", err)
 			}
@@ -304,16 +324,10 @@ func getNodeResources(n *NodePattern, q *QueryExecutor, extraFilters []*Filter) 
 			filtered = newFiltered
 		}
 
-		// Lock for writing to both maps
-		resultMapMutex.Lock()
-		resultCache[cacheKey] = filtered
-		resultMap[n.ResourceProperties.Name] = filtered
-		resultMapMutex.Unlock()
+		state.cacheResources(cacheKey, n.ResourceProperties.Name, filtered)
 	} else {
 		// If we found it in cache, just copy to resultMap
-		resultMapMutex.Lock()
-		resultMap[n.ResourceProperties.Name] = cachedResult
-		resultMapMutex.Unlock()
+		state.setResources(n.ResourceProperties.Name, cachedResult)
 	}
 
 	return nil
@@ -365,13 +379,16 @@ func compareValues(resourceValue, filterValue interface{}, operator string) bool
 	return false
 }
 
-func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName string) (map[string][]map[string]interface{}, error) {
+func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName string, state *executionState) (map[string][]map[string]interface{}, error) {
+	subMatch = cloneSubMatch(subMatch)
+	subState := newExecutionState()
+	subState.namespace = state.namespace
+
 	// Create temporary results and filtered results maps
 	tempResults := QueryResult{
 		Data: make(map[string]interface{}),
 	}
 	filteredResults := make(map[string][]map[string]interface{})
-	resultMap := make(map[string][]map[string]interface{})
 
 	for _, node := range subMatch.Nodes {
 		if node.ResourceProperties.Name == referenceNodeName {
@@ -399,13 +416,12 @@ func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName stri
 	// Get resources for the reference node first
 	for _, node := range matchClause.Nodes {
 		if node.ResourceProperties.Name == "_ref_"+subMatch.ReferenceNodeName {
-			err := getNodeResources(node, q, nil)
+			err := getNodeResources(node, q, nil, subState)
 			if err != nil {
 				return nil, err
 			}
 			// Initialize filteredResults and resultMap with the reference node's resources
-			filteredResults[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
-			resultMap[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name)
+			filteredResults[node.ResourceProperties.Name] = getResourcesFromMap(filteredResults, node.ResourceProperties.Name, subState)
 			break
 		}
 	}
@@ -417,20 +433,20 @@ func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName stri
 		for _, rel := range matchClause.Relationships {
 			// Get resources for nodes that aren't the reference node
 			if rel.LeftNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
-				err := getNodeResources(rel.LeftNode, q, nil)
+				err := getNodeResources(rel.LeftNode, q, nil, subState)
 				if err != nil {
 					return nil, err
 				}
 			}
 			if rel.RightNode.ResourceProperties.Name != "_ref_"+subMatch.ReferenceNodeName {
-				err := getNodeResources(rel.RightNode, q, nil)
+				err := getNodeResources(rel.RightNode, q, nil, subState)
 				if err != nil {
 					return nil, err
 				}
 			}
 
 			// Process the relationship and update filteredResults
-			filtered, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults)
+			filtered, err := q.processRelationship(rel, matchClause, &tempResults, filteredResults, subState)
 			if err != nil {
 				return nil, err
 			}
@@ -451,7 +467,7 @@ func (q *QueryExecutor) checkSubMatch(subMatch *SubMatch, referenceNodeName stri
 
 		// Update resultMap with filtered results for the next pass
 		for k, v := range filteredResults {
-			resultMap[k] = v
+			subState.setResources(k, v)
 		}
 	}
 

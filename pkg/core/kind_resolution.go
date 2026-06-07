@@ -44,12 +44,12 @@ func FindPotentialKinds(sourceKind string, provider provider.Provider) ([]string
 
 	for _, rule := range rules {
 		// Get proper plural forms using FindGVR
-		gvrA, err := provider.FindGVR(rule.KindA)
+		gvrA, err := tryResolveGVR(provider, rule.KindA)
 		if err != nil {
 			debugLog("Error getting GVR for %s: %v", rule.KindA, err)
 			continue
 		}
-		gvrB, err := provider.FindGVR(rule.KindB)
+		gvrB, err := tryResolveGVR(provider, rule.KindB)
 		if err != nil {
 			debugLog("Error getting GVR for %s: %v", rule.KindB, err)
 			continue

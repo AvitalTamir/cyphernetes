@@ -11,25 +11,21 @@ import (
 )
 
 func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
+	return q.executeSingleQuery(ast, namespace, newExecutionState())
+}
+
+func (q *QueryExecutor) executeSingleQuery(ast *Expression, namespace string, state *executionState) (QueryResult, error) {
 	if ast == nil {
 		return QueryResult{}, fmt.Errorf("empty query: ast cannot be nil")
 	}
-	// Reset match nodes at the start of each query
-	q.matchNodes = nil
 
-	// Store the original namespace to restore it later
-	originalNamespace := Namespace
-	defer func() {
-		Namespace = originalNamespace
-	}()
-
+	state.namespace = namespace
+	executionConfigMu.Lock()
 	if AllNamespaces {
-		Namespace = ""
+		state.namespace = ""
 		AllNamespaces = false // to reset value
-	} else {
-		// Always set the namespace for this query execution, even if empty
-		Namespace = namespace
 	}
+	executionConfigMu.Unlock()
 
 	results := &QueryResult{
 		Data: make(map[string]interface{}),
@@ -44,7 +40,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 		switch c := clause.(type) {
 		case *MatchClause:
 			// Store the nodes from the match clause
-			q.matchNodes = c.Nodes
+			state.matchNodes = c.Nodes
 
 			var filteringOccurred bool
 			filteredResults := make(map[string][]map[string]interface{})
@@ -52,7 +48,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 			for i := 0; i < len(c.Relationships)*2; i++ {
 				filteringOccurred = false
 				for _, rel := range c.Relationships {
-					filtered, err := q.processRelationship(rel, c, results, filteredResults)
+					filtered, err := q.processRelationship(rel, c, results, filteredResults, state)
 					if err != nil {
 						return *results, err
 					}
@@ -63,18 +59,18 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 				// Update resultMap with filtered results for the next pass
 				for k, v := range filteredResults {
-					resultMap[k] = v
+					state.setResources(k, v)
 				}
 			}
 
 			// Process nodes
-			err := q.processNodes(c, results)
+			err := q.processNodes(c, results, state)
 			if err != nil {
 				return *results, err
 			}
 
 		case *SetClause:
-			err := q.handleSetClause(c)
+			err := q.handleSetClause(c, state)
 			if err != nil {
 				return *results, fmt.Errorf("error handling SET clause: %w", err)
 			}
@@ -82,7 +78,8 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 		case *DeleteClause:
 			// Execute a Kubernetes delete operation based on the DeleteClause.
 			for _, nodeId := range c.NodeIds {
-				if resultMap[nodeId] == nil {
+				resources, ok := state.getResources(nodeId)
+				if !ok {
 					// Skip error for expanded node identifiers
 					if strings.Contains(nodeId, "__exp__") {
 						debugLog("skipping error trying to delete expanded node identifier %s", nodeId)
@@ -91,15 +88,20 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 					return *results, fmt.Errorf("node identifier %s not found in result map", nodeId)
 				}
 
-				resources := resultMap[nodeId].([]map[string]interface{})
 				for _, resource := range resources {
-					metadata := resource["metadata"].(map[string]interface{})
-					name := metadata["name"].(string)
+					metadata, err := getResourceMetadata(resource)
+					if err != nil {
+						return *results, fmt.Errorf("error reading resource metadata for node %s: %w", nodeId, err)
+					}
+					name, err := getResourceName(metadata)
+					if err != nil {
+						return *results, fmt.Errorf("error reading resource name for node %s: %w", nodeId, err)
+					}
 					namespace := getNamespaceName(metadata)
 
 					// Find the matching node from the stored match nodes
 					var nodeKind string
-					for _, node := range q.matchNodes {
+					for _, node := range state.matchNodes {
 						if node.ResourceProperties.Name == nodeId {
 							nodeKind = node.ResourceProperties.Kind
 							break
@@ -109,13 +111,17 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 						return *results, fmt.Errorf("could not find kind for node %s in MATCH clause", nodeId)
 					}
 
-					err := q.provider.DeleteK8sResources(nodeKind, name, namespace)
+					providerKind, err := q.providerKind(nodeKind)
+					if err != nil {
+						return *results, fmt.Errorf("error resolving resource kind %s: %v", nodeKind, err)
+					}
+					err = q.provider.DeleteK8sResources(providerKind, name, namespace)
 					if err != nil {
 						return *results, fmt.Errorf("error deleting resource %s/%s: %v", nodeKind, name, err)
 					}
 				}
 
-				delete(resultMap, nodeId)
+				state.deleteResources(nodeId)
 			}
 
 		case *CreateClause:
@@ -130,29 +136,41 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				// Determine which (if any) of the nodes in the relationship have already been fetched in a match clause, and which are new creations
 				var node *NodePattern
 				var foreignNode *NodePattern
+				leftResources, leftExists := state.getResources(rel.LeftNode.ResourceProperties.Name)
+				rightResources, rightExists := state.getResources(rel.RightNode.ResourceProperties.Name)
 
 				// If both nodes exist in the match clause, error out
-				if resultMap[rel.LeftNode.ResourceProperties.Name] != nil && resultMap[rel.RightNode.ResourceProperties.Name] != nil {
+				if leftExists && rightExists {
 					return *results, fmt.Errorf("both nodes '%v', '%v' of relationship in create clause already exist", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
 				}
 
 				// TODO: create both nodes and determine the spec from the relationship instead of this:
 				// If neither node exists in the match clause, error out
-				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil && resultMap[rel.RightNode.ResourceProperties.Name] == nil {
+				if !leftExists && !rightExists {
 					return *results, fmt.Errorf("not yet supported: neither node '%s', '%s' of relationship in create clause already exist", rel.LeftNode.ResourceProperties.Name, rel.RightNode.ResourceProperties.Name)
 				}
 
 				// find out whice node exists in the match clause, then use it to construct the spec according to the relationship
-				if resultMap[rel.LeftNode.ResourceProperties.Name] == nil {
+				var foreignResources []map[string]interface{}
+				if !leftExists {
 					node = rel.LeftNode
 					foreignNode = rel.RightNode
+					foreignResources = rightResources
 				} else {
 					node = rel.RightNode
 					foreignNode = rel.LeftNode
+					foreignResources = leftResources
 				}
 
 				// The foreign node is currently only a name reference, we'll need to find the matching node in the result map
-				foreignNode.ResourceProperties.Kind = resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[0]["kind"].(string)
+				if len(foreignResources) == 0 {
+					return *results, fmt.Errorf("no resources found for foreign node %s", foreignNode.ResourceProperties.Name)
+				}
+				foreignKind, err := getResourceKind(foreignResources[0])
+				if err != nil {
+					return *results, fmt.Errorf("error reading kind for foreign node %s: %w", foreignNode.ResourceProperties.Name, err)
+				}
+				foreignNode.ResourceProperties.Kind = foreignKind
 
 				var relType RelationshipType
 				targetGVR, err := q.findGVR(node.ResourceProperties.Kind)
@@ -161,7 +179,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 				// Find the matching node from stored match nodes to get the kind
 				var foreignNodeKind string
-				for _, matchNode := range q.matchNodes {
+				for _, matchNode := range state.matchNodes {
 					if matchNode.ResourceProperties.Name == foreignNode.ResourceProperties.Name {
 						foreignNodeKind = matchNode.ResourceProperties.Kind
 						break
@@ -234,9 +252,9 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 
 				// loop over the resources array in the resultMap for the foreign node and create the resource
-				for idx, foreignResource := range resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{}) {
+				for idx, foreignResource := range foreignResources {
 					var name string
-					foreignSpec := resultMap[foreignNode.ResourceProperties.Name].([]map[string]interface{})[idx]
+					foreignSpec := foreignResources[idx]
 
 					fields := append([]string{criteriaField}, defaultPropFields...)
 					foreignFields := append([]string{foreignCriteriaField}, foreignDefaultPropFields...)
@@ -313,11 +331,23 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 						}
 					}
 
-					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignResource["metadata"].(map[string]interface{})["name"].(string))
+					foreignMetadata, err := getResourceMetadata(foreignResource)
+					if err != nil {
+						return *results, fmt.Errorf("error reading foreign resource metadata: %w", err)
+					}
+					foreignName, err := getResourceName(foreignMetadata)
+					if err != nil {
+						return *results, fmt.Errorf("error reading foreign resource name: %w", err)
+					}
+					name = getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, foreignName)
+					providerKind, err := q.providerKind(node.ResourceProperties.Kind)
+					if err != nil {
+						return *results, fmt.Errorf("error resolving resource kind %s: %v", node.ResourceProperties.Kind, err)
+					}
 					err = q.provider.CreateK8sResource(
-						node.ResourceProperties.Kind,
+						providerKind,
 						name,
-						Namespace,
+						state.namespace,
 						resourceTemplate,
 					)
 					if err != nil {
@@ -338,7 +368,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 				if !ignoreNode {
 					// check if the node has already been fetched, if so, error out
-					if resultMap[node.ResourceProperties.Name] != nil {
+					if _, exists := state.getResources(node.ResourceProperties.Name); exists {
 						return *results, fmt.Errorf("can't create: node '%s' already exists in match clause", node.ResourceProperties.Name)
 					}
 
@@ -352,10 +382,14 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 					name := getTargetK8sResourceName(resourceTemplate, node.ResourceProperties.Name, "")
 					// create the resource
+					providerKind, err := q.providerKind(node.ResourceProperties.Kind)
+					if err != nil {
+						return *results, fmt.Errorf("error resolving resource kind %s: %v", node.ResourceProperties.Kind, err)
+					}
 					err = q.provider.CreateK8sResource(
-						node.ResourceProperties.Kind,
+						providerKind,
 						name,
-						Namespace,
+						state.namespace,
 						resourceTemplate,
 					)
 					if err != nil {
@@ -382,7 +416,8 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 			for _, item := range c.Items {
 				nodeId := strings.Split(item.JsonPath, ".")[0]
-				if resultMap[nodeId] == nil {
+				resources, ok := state.getResources(nodeId)
+				if !ok {
 					return *results, fmt.Errorf("node identifier %s not found in return clause", nodeId)
 				}
 
@@ -407,7 +442,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 				}
 				var aggregateResult interface{}
 
-				for idx, resource := range resultMap[nodeId].([]map[string]interface{}) {
+				for idx, resource := range resources {
 					// Ensure that the results.Data[nodeId] slice has enough elements to store the current resource.
 					// If the current index (idx) is beyond the current length of the slice,
 					// append a new empty map to the slice to accommodate the new data.
@@ -722,7 +757,7 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 
 			// Apply ORDER BY, LIMIT, and SKIP if specified
 			if len(c.OrderBy) > 0 || c.Limit != nil || c.Skip != nil {
-				err := q.applyColumnarOperations(c, results)
+				err := q.applyColumnarOperations(c, results, state)
 				if err != nil {
 					return *results, fmt.Errorf("error applying columnar operations: %w", err)
 				}
@@ -734,21 +769,13 @@ func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (Q
 	}
 	// build the graph
 	q.buildGraph(results)
-
-	// clear the result cache and result map
-	resultCache = make(map[string]interface{})
-	resultMap = make(map[string]interface{})
 	return *results, nil
 }
 
 // applyColumnarOperations converts QueryResult to columnar format, applies operations, and converts back
-func (q *QueryExecutor) applyColumnarOperations(c *ReturnClause, results *QueryResult) error {
+func (q *QueryExecutor) applyColumnarOperations(c *ReturnClause, results *QueryResult, state *executionState) error {
 	// Convert results to columnar format
 	columnarData := NewColumnarData()
-
-	// Determine if we need to group by pattern matches or treat each resource individually
-	// For now, we'll use a simple heuristic: if there are multiple node types with the same number of items,
-	// we'll assume they form pattern matches. Otherwise, treat each resource individually.
 
 	nodeIds := []string{}
 	nodeSizes := make(map[string]int)
@@ -764,23 +791,7 @@ func (q *QueryExecutor) applyColumnarOperations(c *ReturnClause, results *QueryR
 		}
 	}
 
-	// Check if we have potential pattern matches (multiple nodes with same size > 1)
-	hasPatternMatches := false
-	if len(nodeIds) > 1 {
-		var commonSize int = -1
-		for _, size := range nodeSizes {
-			if size > 1 {
-				if commonSize == -1 {
-					commonSize = size
-				} else if commonSize == size {
-					hasPatternMatches = true
-					break
-				}
-			}
-		}
-	}
-
-	if hasPatternMatches {
+	if state.hasPatternRows() {
 		// Process as pattern matches - each index across all nodes forms one pattern
 		maxSize := 0
 		for _, size := range nodeSizes {

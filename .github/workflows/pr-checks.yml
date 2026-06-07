@@ -36,6 +36,8 @@ jobs:
       run: make operator-manifests
     - name: Run tests
       run: make test
+    - name: Enforce core coverage
+      run: make core-coverage
     - name: Run web tests
       run: make web-test
     - name: Apply operator test CRDs
