@@ -3,8 +3,8 @@ package core
 import "fmt"
 
 func (q *QueryExecutor) buildGraph(result *QueryResult) {
-	debugLog(fmt.Sprintln("Building graph"))
-	debugLog(fmt.Sprintf("Initial nodes: %+v\n", result.Graph.Nodes))
+	debugLog("Building graph")
+	debugLog("Initial nodes: %+v\n", result.Graph.Nodes)
 
 	nodes := []Node{}
 	nodeMap := make(map[string]bool)
@@ -43,7 +43,7 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 			if node.Kind != "Namespace" {
 				node.Namespace = getNamespaceName(metadata)
 			}
-			debugLog(fmt.Sprintf("Adding node from result data: %+v\n", node))
+			debugLog("Adding node from result data: %+v\n", node)
 			addGraphNode(&nodes, nodeMap, node)
 		}
 	}

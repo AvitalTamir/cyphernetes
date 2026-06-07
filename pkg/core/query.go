@@ -293,7 +293,7 @@ func (q *QueryExecutor) rewriteQueryForKindlessNodes(expr *Expression) (*Express
 	query := strings.Join(queryParts, " ")
 
 	// Log the expanded query for debugging
-	debugLog(fmt.Sprintf("Expanded query: %s\n", query))
+	debugLog("Expanded query: %s\n", query)
 
 	// Parse the expanded query into a new AST
 	newAst, err := ParseQuery(query)

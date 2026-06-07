@@ -23,7 +23,7 @@ func getResourcesFromMap(filteredResults map[string][]map[string]interface{}, ke
 }
 
 func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult, state *executionState) error {
-	debugLog(fmt.Sprintf("Processing nodes, current graph nodes: %+v\n", results.Graph.Nodes))
+	debugLog("Processing nodes, current graph nodes: %+v\n", results.Graph.Nodes)
 
 	// Track seen nodes for deduplication
 	seenNodes := make(map[string]bool)
@@ -84,14 +84,14 @@ func (q *QueryExecutor) processNodes(c *MatchClause, results *QueryResult, state
 			nodeKey := fmt.Sprintf("%s/%s/%s", newNode.Kind, newNode.Namespace, newNode.Name)
 			if !seenNodes[nodeKey] {
 				seenNodes[nodeKey] = true
-				debugLog(fmt.Sprintf("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey))
+				debugLog("Adding new unique node from processNodes: %+v with key: %s\n", newNode, nodeKey)
 				results.Graph.Nodes = append(results.Graph.Nodes, newNode)
 			} else {
-				debugLog(fmt.Sprintf("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey))
+				debugLog("Skipping duplicate node in processNodes: %+v with key: %s\n", newNode, nodeKey)
 			}
 		}
 	}
-	debugLog(fmt.Sprintf("After processNodes, graph nodes: %+v\n", results.Graph.Nodes))
+	debugLog("After processNodes, graph nodes: %+v\n", results.Graph.Nodes)
 	return nil
 }
 
