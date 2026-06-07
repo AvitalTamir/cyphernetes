@@ -31,7 +31,11 @@
     "typescript": "~5.6.2"
   },
   "overrides": {
-    "webpack": "5.97.1"
+    "serialize-javascript": "7.0.5",
+    "uuid": "11.1.1",
+    "webpack": "5.104.1",
+    "webpack-dev-server": "5.2.4",
+    "ws": "8.21.0"
   },
   "browserslist": {
     "production": [
@@ -46,6 +50,6 @@
     ]
   },
   "engines": {
-    "node": ">=18.0"
+    "node": ">=20.0"
   }
 }
