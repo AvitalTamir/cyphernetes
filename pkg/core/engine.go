@@ -33,36 +33,27 @@ type QueryResult struct {
 	Graph Graph
 }
 
-var resultCache = make(map[string]interface{})
-var resultMap = make(map[string]interface{})
-
 type QueryExecutor struct {
-	provider       provider.Provider
-	requestChannel chan *apiRequest
-	semaphore      chan struct{}
-	matchNodes     []*NodePattern
-	currentAst     *Expression
+	provider provider.Provider
 }
 
 var (
-	executorInstance *QueryExecutor
-	contextExecutors map[string]*QueryExecutor
-	once             sync.Once
-	GvrCache         map[string]schema.GroupVersionResource
-	ResourceSpecs    map[string][]string
-	executorsLock    sync.RWMutex
-	resultMapMutex   sync.RWMutex
-	Namespace        string
-	LogLevel         string
-	OutputFormat     string
-	AllNamespaces    bool
-	CleanOutput      bool
-	NoColor          bool
+	executorInstance  *QueryExecutor
+	contextExecutors  map[string]*QueryExecutor
+	once              sync.Once
+	GvrCache          map[string]schema.GroupVersionResource
+	ResourceSpecs     map[string][]string
+	executorsLock     sync.RWMutex
+	Namespace         string
+	LogLevel          string
+	OutputFormat      string
+	AllNamespaces     bool
+	CleanOutput       bool
+	NoColor           bool
+	executionConfigMu sync.Mutex
 	// For testing
 	mockFindPotentialKinds func([]*Relationship) []string
 )
-
-type apiRequest struct{}
 
 func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
 	if p == nil {
@@ -70,9 +61,7 @@ func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
 	}
 
 	return &QueryExecutor{
-		provider:       p,
-		requestChannel: make(chan *apiRequest),
-		semaphore:      make(chan struct{}, 1),
+		provider: p,
 	}, nil
 }
 
@@ -84,9 +73,6 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		return ExecuteMultiContextQuery(ast, namespace)
 	}
 
-	// Store the current AST
-	q.currentAst = ast
-
 	// First, check for kindless nodes and rewrite the query if needed
 	rewrittenAst, err := q.rewriteQueryForKindlessNodes(ast)
 	if err != nil {
@@ -94,7 +80,6 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 	}
 	if rewrittenAst != nil {
 		ast = rewrittenAst
-		q.currentAst = rewrittenAst
 	}
 
 	result, err := q.ExecuteSingleQuery(ast, namespace)

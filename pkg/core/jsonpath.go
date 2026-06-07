@@ -17,10 +17,11 @@ func applyWildcardUpdateRecursive(data interface{}, parts []string, depth int, v
 		return setValueAtPath(data, parts[depth], value)
 	}
 
-	// Get the array at current level
-	currentPath := parts[depth]
-	if !strings.HasSuffix(currentPath, ".") {
-		currentPath += "."
+	// Get the array at current level. The wildcard split leaves the array
+	// path before [*]; render it as a valid JSONPath without a dangling dot.
+	currentPath := strings.TrimSuffix(parts[depth], ".")
+	if !strings.HasPrefix(currentPath, "$") {
+		currentPath = "$." + strings.TrimPrefix(currentPath, ".")
 	}
 	array, err := JsonPathCompileAndLookup(data, currentPath)
 	if err != nil {

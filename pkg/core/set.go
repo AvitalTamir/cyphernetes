@@ -226,11 +226,15 @@ func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJ
 		namespace = ns.(string)
 	}
 	kind := resource["kind"].(string)
+	providerKind, err := q.providerKind(kind)
+	if err != nil {
+		return fmt.Errorf("error resolving resource kind %s: %v", kind, err)
+	}
 
-	return q.provider.PatchK8sResource(kind, name, namespace, patchJSON)
+	return q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON)
 }
 
-func (q *QueryExecutor) handleSetClause(c *SetClause) error {
+func (q *QueryExecutor) handleSetClause(c *SetClause, state *executionState) error {
 	debugLog("Processing %d key-value pairs\n", len(c.KeyValuePairs))
 
 	for i, kvp := range c.KeyValuePairs {
@@ -241,7 +245,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 		resultMapKey := parts[0]
 		debugLog("Resource name: %s", resultMapKey)
 
-		resources, ok := resultMap[resultMapKey].([]map[string]interface{})
+		resources, ok := state.getResources(resultMapKey)
 		if !ok {
 			return fmt.Errorf("could not find resources for node %s in MATCH clause", resultMapKey)
 		}
@@ -249,7 +253,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 
 		// Find the matching node from the stored match nodes
 		var nodeKind string
-		for _, node := range q.matchNodes {
+		for _, node := range state.matchNodes {
 			if node.ResourceProperties.Name == resultMapKey {
 				nodeKind = node.ResourceProperties.Kind
 				debugLog("Found kind %s for node %s", nodeKind, resultMapKey)
@@ -307,7 +311,11 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 				debugLog("Patch JSON: %s", string(patchJSON))
 				debugLog("Current resource state: %+v", resource)
 
-				err = q.provider.PatchK8sResource(nodeKind, name, namespace, patchJSON)
+				providerKind, err := q.providerKind(nodeKind)
+				if err != nil {
+					return fmt.Errorf("error resolving resource kind %s: %v", nodeKind, err)
+				}
+				err = q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON)
 				if err != nil {
 					return fmt.Errorf("error patching resource: %s", err)
 				}
@@ -315,7 +323,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause) error {
 
 				// Verify the patch was applied
 				debugLog("Verifying patch was applied")
-				updatedResource, err := q.provider.GetK8sResources(nodeKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
+				updatedResource, err := q.provider.GetK8sResources(providerKind, fmt.Sprintf("metadata.name=%s", name), "", namespace)
 				if err != nil {
 					return fmt.Errorf("error verifying patch: %s", err)
 				}
