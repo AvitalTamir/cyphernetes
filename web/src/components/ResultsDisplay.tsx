@@ -25,7 +25,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error, message,
   const [displayedResult, setDisplayedResult] = useState<string>('');
   const [showNotification, setShowNotification] = useState<boolean>(false);
   const [notificationMessage, setNotificationMessage] = useState<string>('');
-  const notificationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationIdRef = useRef<number>(0);
   const lastResultRef = useRef<string | null>(null);
 

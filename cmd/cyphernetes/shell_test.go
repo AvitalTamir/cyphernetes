@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -117,6 +119,32 @@ func TestFilterInput(t *testing.T) {
 				t.Errorf("filterInput(%v) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestToggleVimMode(t *testing.T) {
+	var out bytes.Buffer
+	rl, err := readline.NewEx(&readline.Config{
+		Stdin:          io.NopCloser(strings.NewReader("")),
+		Stdout:         &out,
+		Stderr:         &out,
+		FuncIsTerminal: func() bool { return false },
+		FuncMakeRaw:    func() error { return nil },
+		FuncExitRaw:    func() error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("failed to create readline instance: %v", err)
+	}
+	defer rl.Close()
+
+	if rl.IsVimMode() {
+		t.Fatal("expected Vim mode to be disabled by default")
+	}
+	if enabled := toggleVimMode(rl); !enabled || !rl.IsVimMode() {
+		t.Fatalf("expected first toggle to enable Vim mode, got enabled=%t IsVimMode=%t", enabled, rl.IsVimMode())
+	}
+	if enabled := toggleVimMode(rl); enabled || rl.IsVimMode() {
+		t.Fatalf("expected second toggle to disable Vim mode, got enabled=%t IsVimMode=%t", enabled, rl.IsVimMode())
 	}
 }
 

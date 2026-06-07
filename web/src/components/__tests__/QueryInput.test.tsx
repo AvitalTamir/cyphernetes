@@ -5,7 +5,7 @@ import QueryInput from '../QueryInput';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 describe('QueryInput Component', () => {
   beforeEach(() => {

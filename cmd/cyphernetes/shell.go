@@ -93,6 +93,12 @@ func filterInput(r rune) (rune, bool) {
 	return r, true
 }
 
+func toggleVimMode(rl *readline.Instance) bool {
+	vimMode := !rl.IsVimMode()
+	rl.SetVimMode(vimMode)
+	return vimMode
+}
+
 func shellPrompt() string {
 	ns := core.Namespace
 	color := getPromptColor(ns)
@@ -485,6 +491,8 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			// Toggle multi-line input mode
 			multiLineInput = !multiLineInput
 			fmt.Printf("Multi-line input mode: %t\n", multiLineInput)
+		} else if input == "\\v" {
+			fmt.Printf("Vi mode: %t\n", toggleVimMode(rl))
 		} else if input == "\\g" {
 			// Toggle graph output
 			disableGraphOutput = !disableGraphOutput
@@ -870,6 +878,7 @@ func printHelp() {
 %s
 %s
 %s
+%s
 
 %s
 %s
@@ -895,6 +904,7 @@ func printHelp() {
 		formatCmd("\\g, \\graph", "Toggle graph output"),
 		formatCmd("\\gl, \\graph-layout", "Toggle graph layout direction"),
 		formatCmd("\\m, \\multiline", "Toggle multiline input mode"),
+		formatCmd("\\v", "Toggle Vi keybindings"),
 		formatCmd("\\r, \\raw", "Toggle raw JSON output"),
 		formatCmd("\\dr, \\dry-run", "Toggle dry-run mode"),
 		formatCmd("\\rr, \\relationship-rules", "List available relationship rules"),
