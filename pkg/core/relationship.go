@@ -707,7 +707,7 @@ func consolidateMatchingRules(rules []RelationshipRule, provider provider.Provid
 }
 
 func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}, state *executionState) (bool, error) {
-	debugLog(fmt.Sprintf("Processing relationship: %+v\n", rel))
+	debugLog("Processing relationship: %+v\n", rel)
 
 	// Determine relationship type and fetch related resources
 	var relType RelationshipType
