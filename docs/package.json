@@ -30,6 +30,9 @@
     "@docusaurus/types": "3.7.0",
     "typescript": "~5.6.2"
   },
+  "overrides": {
+    "webpack": "5.97.1"
+  },
   "browserslist": {
     "production": [
       ">0.5%",

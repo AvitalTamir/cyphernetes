@@ -6,6 +6,12 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 	debugLog(fmt.Sprintln("Building graph"))
 	debugLog(fmt.Sprintf("Initial nodes: %+v\n", result.Graph.Nodes))
 
+	nodes := []Node{}
+	nodeMap := make(map[string]bool)
+	for _, node := range result.Graph.Nodes {
+		addGraphNode(&nodes, nodeMap, node)
+	}
+
 	// Process nodes from result data
 	for key, resources := range result.Data {
 		resourcesSlice, ok := resources.([]interface{})
@@ -17,16 +23,16 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 			if !ok {
 				continue
 			}
-			metadata, ok := resourceMap["metadata"].(map[string]interface{})
-			if !ok {
+			metadata, err := getResourceMetadata(resourceMap)
+			if err != nil {
 				continue
 			}
-			name, ok := metadata["name"].(string)
-			if !ok {
+			name, err := getResourceName(metadata)
+			if err != nil {
 				continue
 			}
-			kind, ok := resourceMap["kind"].(string)
-			if !ok {
+			kind, err := getResourceKind(resourceMap)
+			if err != nil {
 				continue
 			}
 			node := Node{
@@ -38,9 +44,10 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 				node.Namespace = getNamespaceName(metadata)
 			}
 			debugLog(fmt.Sprintf("Adding node from result data: %+v\n", node))
-			result.Graph.Nodes = append(result.Graph.Nodes, node)
+			addGraphNode(&nodes, nodeMap, node)
 		}
 	}
+	result.Graph.Nodes = nodes
 
 	// Process edges
 	var edges []Edge
@@ -56,6 +63,14 @@ func (q *QueryExecutor) buildGraph(result *QueryResult) {
 		}
 	}
 	result.Graph.Edges = edges
+}
+
+func addGraphNode(nodes *[]Node, seen map[string]bool, node Node) {
+	key := fmt.Sprintf("%s/%s/%s", node.Kind, node.Namespace, node.Name)
+	if !seen[key] {
+		seen[key] = true
+		*nodes = append(*nodes, node)
+	}
 }
 
 func getNamespaceName(metadata map[string]interface{}) string {

@@ -706,7 +706,7 @@ func consolidateMatchingRules(rules []RelationshipRule, provider provider.Provid
 	return consolidated
 }
 
-func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}) (bool, error) {
+func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, results *QueryResult, filteredResults map[string][]map[string]interface{}, state *executionState) (bool, error) {
 	debugLog(fmt.Sprintf("Processing relationship: %+v\n", rel))
 
 	// Determine relationship type and fetch related resources
@@ -749,6 +749,7 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	}
 
 	// Find all possible rules between these kinds
+	var selectedRule *RelationshipRule
 	if relType == "" {
 		matchingRules := findRelationshipRulesBetweenKinds(leftKind.Resource, rightKind.Resource)
 
@@ -763,36 +764,34 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 			consolidatedRule := consolidateMatchingRules(matchingRules, q.provider)
 			// Use the consolidated rule's relationship type
 			relType = consolidatedRule.Relationship
-
-			// Replace the rule in relationshipRules (temporarily, just for this query)
-			for i, rule := range relationshipRules {
-				if rule.Relationship == relType {
-					// Create a copy to avoid modifying the global rule
-					tempRule := relationshipRules[i]
-					tempRule.MatchCriteria = consolidatedRule.MatchCriteria
-					relationshipRules[i] = tempRule
-					break
-				}
-			}
+			selectedRule = &consolidatedRule
 		} else {
 			// Just one rule, use its relationship type
 			relType = matchingRules[0].Relationship
+			ruleCopy := matchingRules[0]
+			selectedRule = &ruleCopy
 		}
 
 		debugLog("Selected relationship type %s from %d possible rules between %s and %s",
 			relType, len(matchingRules), leftKind.Resource, rightKind.Resource)
 	}
 
-	rule, err := findRuleByRelationshipType(relType)
-	if err != nil {
-		return false, fmt.Errorf("error determining relationship type >> %s", err)
+	var rule RelationshipRule
+	if selectedRule != nil {
+		rule = *selectedRule
+	} else {
+		var err error
+		rule, err = findRuleByRelationshipType(relType)
+		if err != nil {
+			return false, fmt.Errorf("error determining relationship type >> %s", err)
+		}
 	}
 
 	// Fetch and process related resources
 	for _, node := range c.Nodes {
 		if node.ResourceProperties.Name == rel.LeftNode.ResourceProperties.Name || node.ResourceProperties.Name == rel.RightNode.ResourceProperties.Name {
 			if results.Data[node.ResourceProperties.Name] == nil {
-				err := getNodeResources(node, q, c.ExtraFilters)
+				err := getNodeResources(node, q, c.ExtraFilters, state)
 				if err != nil {
 					return false, err
 				}
@@ -803,22 +802,20 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	var resourcesA, resourcesB []map[string]interface{}
 	var filteredDirection Direction
 
-	resultMapMutex.RLock()
 	if rule.KindA == rightKind.Resource {
-		resourcesA = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
-		resourcesB = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
+		resourcesA = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name, state)
+		resourcesB = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name, state)
 		filteredDirection = Left
 	} else if rule.KindA == leftKind.Resource {
-		resourcesA = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name)
-		resourcesB = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name)
+		resourcesA = getResourcesFromMap(filteredResults, rel.LeftNode.ResourceProperties.Name, state)
+		resourcesB = getResourcesFromMap(filteredResults, rel.RightNode.ResourceProperties.Name, state)
 		filteredDirection = Right
 	} else {
-		resultMapMutex.RUnlock()
 		return false, fmt.Errorf("relationship rule not found for %s and %s", rel.LeftNode.ResourceProperties.Kind, rel.RightNode.ResourceProperties.Kind)
 	}
-	resultMapMutex.RUnlock()
 
 	matchedResources := applyRelationshipRule(resourcesA, resourcesB, rule, filteredDirection)
+	state.markPatternRows()
 
 	// Add nodes and edges based on the matched resources
 	rightResources := matchedResources["right"].([]map[string]interface{})
@@ -826,35 +823,51 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 
 	// Add nodes
 	for _, rightResource := range rightResources {
-		if metadata, ok := rightResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.RightNode.ResourceProperties.Name,
-					Kind: rightResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
+		metadata, err := getResourceMetadata(rightResource)
+		if err != nil {
+			return false, fmt.Errorf("error reading right resource metadata: %w", err)
 		}
+		name, err := getResourceName(metadata)
+		if err != nil {
+			return false, fmt.Errorf("error reading right resource name: %w", err)
+		}
+		kind, err := getResourceKind(rightResource)
+		if err != nil {
+			return false, fmt.Errorf("error reading right resource kind: %w", err)
+		}
+		node := Node{
+			Id:   rel.RightNode.ResourceProperties.Name,
+			Kind: kind,
+			Name: name,
+		}
+		if node.Kind != "Namespace" {
+			node.Namespace = getNamespaceName(metadata)
+		}
+		results.Graph.Nodes = append(results.Graph.Nodes, node)
 	}
 
 	for _, leftResource := range leftResources {
-		if metadata, ok := leftResource["metadata"].(map[string]interface{}); ok {
-			if name, ok := metadata["name"].(string); ok {
-				node := Node{
-					Id:   rel.LeftNode.ResourceProperties.Name,
-					Kind: leftResource["kind"].(string),
-					Name: name,
-				}
-				if node.Kind != "Namespace" {
-					node.Namespace = getNamespaceName(metadata)
-				}
-				results.Graph.Nodes = append(results.Graph.Nodes, node)
-			}
+		metadata, err := getResourceMetadata(leftResource)
+		if err != nil {
+			return false, fmt.Errorf("error reading left resource metadata: %w", err)
 		}
+		name, err := getResourceName(metadata)
+		if err != nil {
+			return false, fmt.Errorf("error reading left resource name: %w", err)
+		}
+		kind, err := getResourceKind(leftResource)
+		if err != nil {
+			return false, fmt.Errorf("error reading left resource kind: %w", err)
+		}
+		node := Node{
+			Id:   rel.LeftNode.ResourceProperties.Name,
+			Kind: kind,
+			Name: name,
+		}
+		if node.Kind != "Namespace" {
+			node.Namespace = getNamespaceName(metadata)
+		}
+		results.Graph.Nodes = append(results.Graph.Nodes, node)
 	}
 
 	// Process edges
@@ -863,8 +876,32 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 			// Check if these resources actually match according to the criteria
 			for _, criterion := range rule.MatchCriteria {
 				if matchByCriterion(rightResource, leftResource, criterion) || matchByCriterion(leftResource, rightResource, criterion) {
-					rightNodeId := fmt.Sprintf("%s/%s", rightResource["kind"].(string), rightResource["metadata"].(map[string]interface{})["name"].(string))
-					leftNodeId := fmt.Sprintf("%s/%s", leftResource["kind"].(string), leftResource["metadata"].(map[string]interface{})["name"].(string))
+					rightKind, err := getResourceKind(rightResource)
+					if err != nil {
+						return false, fmt.Errorf("error reading right resource kind: %w", err)
+					}
+					leftKind, err := getResourceKind(leftResource)
+					if err != nil {
+						return false, fmt.Errorf("error reading left resource kind: %w", err)
+					}
+					rightMetadata, err := getResourceMetadata(rightResource)
+					if err != nil {
+						return false, fmt.Errorf("error reading right resource metadata: %w", err)
+					}
+					leftMetadata, err := getResourceMetadata(leftResource)
+					if err != nil {
+						return false, fmt.Errorf("error reading left resource metadata: %w", err)
+					}
+					rightName, err := getResourceName(rightMetadata)
+					if err != nil {
+						return false, fmt.Errorf("error reading right resource name: %w", err)
+					}
+					leftName, err := getResourceName(leftMetadata)
+					if err != nil {
+						return false, fmt.Errorf("error reading left resource name: %w", err)
+					}
+					rightNodeId := fmt.Sprintf("%s/%s", rightKind, rightName)
+					leftNodeId := fmt.Sprintf("%s/%s", leftKind, leftName)
 					results.Graph.Edges = append(results.Graph.Edges, Edge{
 						From: rightNodeId,
 						To:   leftNodeId,
@@ -881,22 +918,8 @@ func (q *QueryExecutor) processRelationship(rel *Relationship, c *MatchClause, r
 	filteredResults[rel.RightNode.ResourceProperties.Name] = matchedResources["right"].([]map[string]interface{})
 	filteredResults[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"].([]map[string]interface{})
 
-	resultMapMutex.Lock()
-	if resultMap[rel.RightNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.RightNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["right"].([]map[string]interface{})) {
-			resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-		}
-	} else {
-		resultMap[rel.RightNode.ResourceProperties.Name] = matchedResources["right"]
-	}
-	if resultMap[rel.LeftNode.ResourceProperties.Name] != nil {
-		if len(resultMap[rel.LeftNode.ResourceProperties.Name].([]map[string]interface{})) > len(matchedResources["left"].([]map[string]interface{})) {
-			resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-		}
-	} else {
-		resultMap[rel.LeftNode.ResourceProperties.Name] = matchedResources["left"]
-	}
-	resultMapMutex.Unlock()
+	state.setResourcesIfMoreSelective(rel.RightNode.ResourceProperties.Name, matchedResources["right"].([]map[string]interface{}))
+	state.setResourcesIfMoreSelective(rel.LeftNode.ResourceProperties.Name, matchedResources["left"].([]map[string]interface{}))
 
 	return filteredA || filteredB, nil
 }
