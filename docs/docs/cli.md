@@ -15,6 +15,22 @@ sidebar_position: 4
   cyphernetes --dry-run web
   ```
 
+> Note: Selecting a Kubernetes context.
+
+  By default Cyphernetes uses your kubeconfig's current context. The global
+  `--context` flag lets you target a different context per invocation, just like
+  `kubectl --context`. It works with every command (`query`, `shell`, `web`,
+  `operator`) and respects the `KUBECONFIG` environment variable.
+
+  ```bash
+  cyphernetes --context staging query 'MATCH (p:Pod) RETURN p.metadata.name'
+  cyphernetes --context staging shell
+  ```
+
+  This is independent of the in-query `IN` multi-context syntax
+  (e.g. `IN prod, staging MATCH (p:Pod) RETURN p.metadata.name`); an explicit
+  `IN` clause overrides `--context` for that query.
+
 ## Shell
 
 Cyphernetes comes with a shell that lets you interactively query the Kubernetes API using Cyphernetes.

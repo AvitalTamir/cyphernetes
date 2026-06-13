@@ -90,6 +90,9 @@ kubectl cypher -n kube-system "MATCH (p:Pod) RETURN p.metadata.name"
 # Query all namespaces
 kubectl cypher -A "MATCH (p:Pod) WHERE p.metadata.name CONTAINS 'nginx' RETURN p"
 
+# Query against a specific kubeconfig context
+kubectl cypher --context staging "MATCH (p:Pod) RETURN p.metadata.name"
+
 # Output in YAML format
 kubectl cypher --format yaml "MATCH (s:Service) RETURN s"
 
@@ -101,6 +104,7 @@ kubectl cypher --dry-run "MATCH (p:Pod) SET p.metadata.labels.new='value' RETURN
 
 - `-n, --namespace string`: The namespace to query against (default "default")
 - `-A, --all-namespaces`: Query all namespaces
+- `--context string`: The kubeconfig context to use (defaults to the current context)
 - `--format string`: Output format (json or yaml) (default "json")
 - `--dry-run`: Enable dry-run mode for all operations
 - `--no-color`: Disable colored output

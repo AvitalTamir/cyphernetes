@@ -6,7 +6,35 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 )
+
+func TestContextFlagRegistered(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("context")
+	if flag == nil {
+		t.Fatal("expected --context persistent flag to be registered")
+	}
+	if flag.DefValue != "" {
+		t.Errorf("expected --context default to be empty, got %q", flag.DefValue)
+	}
+}
+
+func TestContextFlagBindsToCoreKubeContext(t *testing.T) {
+	original := core.KubeContext
+	defer func() {
+		core.KubeContext = original
+		// Reset the flag value so other tests start clean.
+		_ = rootCmd.PersistentFlags().Set("context", original)
+	}()
+
+	if err := rootCmd.PersistentFlags().Set("context", "my-context"); err != nil {
+		t.Fatalf("failed to set --context flag: %v", err)
+	}
+	if core.KubeContext != "my-context" {
+		t.Errorf("expected core.KubeContext to be %q, got %q", "my-context", core.KubeContext)
+	}
+}
 
 func TestExecuteNoArgs(t *testing.T) {
 	// Capture stdout

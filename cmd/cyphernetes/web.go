@@ -85,7 +85,8 @@ func runWeb(cmd *cobra.Command, args []string) {
 
 	// Create the API server provider
 	providerConfig := &apiserver.APIServerProviderConfig{
-		DryRun: DryRun,
+		DryRun:  DryRun,
+		Context: core.KubeContext,
 	}
 	provider, err := apiserver.NewAPIServerProviderWithOptions(providerConfig)
 	if err != nil {
