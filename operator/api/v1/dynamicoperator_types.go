@@ -22,6 +22,14 @@ type DynamicOperatorSpec struct {
 
 	// OnDelete is the Cyphernetes query to execute when a resource is deleted
 	OnDelete string `json:"onDelete,omitempty"`
+
+	// DryRun, when true, evaluates the onCreate/onUpdate/onDelete queries in
+	// Kubernetes dry-run mode without persisting any changes, and skips the
+	// operator's own mutations (finalizers and owner references). It lets you
+	// preview what the operator would do. Defaults to false.
+	// +kubebuilder:default=false
+	// +optional
+	DryRun bool `json:"dryRun,omitempty"`
 }
 
 // DynamicOperatorStatus defines the observed state of DynamicOperator

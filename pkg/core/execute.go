@@ -10,8 +10,10 @@ import (
 	"github.com/AvitalTamir/jsonpath"
 )
 
-func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string) (QueryResult, error) {
-	return q.executeSingleQuery(ast, namespace, newExecutionState())
+func (q *QueryExecutor) ExecuteSingleQuery(ast *Expression, namespace string, opts ...ExecuteOption) (QueryResult, error) {
+	state := newExecutionState()
+	state.dryRun = resolveExecuteOptions(opts).dryRun
+	return q.executeSingleQuery(ast, namespace, state)
 }
 
 func (q *QueryExecutor) executeSingleQuery(ast *Expression, namespace string, state *executionState) (QueryResult, error) {
@@ -115,7 +117,7 @@ func (q *QueryExecutor) executeSingleQuery(ast *Expression, namespace string, st
 					if err != nil {
 						return *results, fmt.Errorf("error resolving resource kind %s: %v", nodeKind, err)
 					}
-					err = q.provider.DeleteK8sResources(providerKind, name, namespace)
+					err = q.provider.DeleteK8sResources(providerKind, name, namespace, state.dryRun)
 					if err != nil {
 						return *results, fmt.Errorf("error deleting resource %s/%s: %v", nodeKind, name, err)
 					}
@@ -349,6 +351,7 @@ func (q *QueryExecutor) executeSingleQuery(ast *Expression, namespace string, st
 						name,
 						state.namespace,
 						resourceTemplate,
+						state.dryRun,
 					)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %v", err)
@@ -391,6 +394,7 @@ func (q *QueryExecutor) executeSingleQuery(ast *Expression, namespace string, st
 						name,
 						state.namespace,
 						resourceTemplate,
+						state.dryRun,
 					)
 					if err != nil {
 						return *results, fmt.Errorf("error creating resource >> %v", err)

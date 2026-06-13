@@ -215,7 +215,7 @@ func TestPatchJsonPathAndSetHelpers(t *testing.T) {
 	provider := newHardeningProvider()
 	executor, _ := NewQueryExecutor(provider)
 	patchJSON, _ := json.Marshal([]map[string]interface{}{{"op": "add", "path": "/metadata/labels/team", "value": "core"}})
-	if err := executor.PatchK8sResource(resource, patchJSON); err != nil {
+	if err := executor.PatchK8sResource(resource, patchJSON, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(provider.patches) != 1 || !strings.Contains(provider.patches[0], "/metadata/labels/team") {

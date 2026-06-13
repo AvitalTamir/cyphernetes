@@ -17,15 +17,15 @@ func (m *MockProvider) GetK8sResources(kind string, fieldSelector string, labelS
 	return []map[string]interface{}{}, nil
 }
 
-func (m *MockProvider) DeleteK8sResources(kind string, name string, namespace string) error {
+func (m *MockProvider) DeleteK8sResources(kind string, name string, namespace string, dryRun bool) error {
 	return nil
 }
 
-func (m *MockProvider) CreateK8sResource(kind string, name string, namespace string, spec interface{}) error {
+func (m *MockProvider) CreateK8sResource(kind string, name string, namespace string, spec interface{}, dryRun bool) error {
 	return nil
 }
 
-func (m *MockProvider) PatchK8sResource(kind string, name string, namespace string, patchJSON []byte) error {
+func (m *MockProvider) PatchK8sResource(kind string, name string, namespace string, patchJSON []byte, dryRun bool) error {
 	return nil
 }
 
@@ -39,10 +39,6 @@ func (m *MockProvider) GetOpenAPIResourceSpecs() (map[string][]string, error) {
 
 func (m *MockProvider) CreateProviderForContext(context string) (provider.Provider, error) {
 	return &MockProvider{}, nil
-}
-
-func (m *MockProvider) ToggleDryRun() {
-	// do nothing
 }
 
 func TestJsonPath(t *testing.T) {

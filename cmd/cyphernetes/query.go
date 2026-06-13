@@ -60,7 +60,6 @@ var queryCmd = &cobra.Command{
 func runQuery(args []string, w io.Writer) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
-		DryRun:    DryRun,
 		QuietMode: true,
 	})
 	if err != nil {
@@ -102,7 +101,7 @@ func runQuery(args []string, w io.Writer) {
 	}
 
 	// Execute the query against the Kubernetes API.
-	results, err := executeMethod(executor, ast, core.Namespace)
+	results, err := executeMethod(executor, ast, core.Namespace, core.WithDryRun(DryRun))
 	if err != nil {
 		fmt.Fprintln(w, "Error executing query: ", err)
 		return

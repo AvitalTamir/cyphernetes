@@ -54,9 +54,7 @@ func handleQuery(c *gin.Context) {
 	}
 
 	// Create the API server provider
-	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
-		DryRun: DryRun,
-	})
+	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{})
 	if err != nil {
 		fmt.Printf("Provider error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error creating provider: %v", err)})
@@ -80,7 +78,7 @@ func handleQuery(c *gin.Context) {
 	}
 
 	// Execute the query
-	result, err := executor.Execute(ast, core.Namespace)
+	result, err := executor.Execute(ast, core.Namespace, core.WithDryRun(DryRun))
 	if err != nil {
 		fmt.Printf("Execution error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error executing query: %v", err)})
@@ -209,10 +207,10 @@ func handleSetConfig(c *gin.Context) {
 		return
 	}
 
-	// Update dry run mode if provided
+	// Update dry run mode if provided. Dry-run is applied per query execution
+	// (see WithDryRun where queries are run), so we only store the flag here.
 	if config.DryRun != nil {
 		DryRun = *config.DryRun
-		executor.Provider().ToggleDryRun()
 	}
 
 	// Return the updated configuration

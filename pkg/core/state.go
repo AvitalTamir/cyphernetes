@@ -13,6 +13,7 @@ type executionState struct {
 	resultCache map[string]interface{}
 	matchNodes  []*NodePattern
 	namespace   string
+	dryRun      bool
 	graphNodes  map[string]bool
 	graphEdges  map[string]bool
 	hasPatterns bool
