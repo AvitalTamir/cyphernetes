@@ -33,8 +33,8 @@ sidebar_position: 4
   2. In-cluster config, when running inside a Pod.
   3. The kubeconfig's `current-context` (default).
 
-  The kubeconfig file itself is resolved the same way as `kubectl`: `$KUBECONFIG`
-  if set, otherwise `~/.kube/config`.
+  Cyphernetes reads your kubeconfig from `$KUBECONFIG` if that variable is set,
+  and otherwise from `~/.kube/config` — the same as `kubectl`.
 
   This is independent of the in-query `IN` multi-context syntax
   (e.g. `IN prod, staging MATCH (p:Pod) RETURN p.metadata.name`); an explicit
