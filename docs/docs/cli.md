@@ -27,6 +27,15 @@ sidebar_position: 4
   cyphernetes --context staging shell
   ```
 
+  **Which context is used** — Cyphernetes picks the first that applies:
+
+  1. `--context <name>` flag, if set (uses the kubeconfig, never in-cluster config).
+  2. In-cluster config, when running inside a Pod.
+  3. The kubeconfig's `current-context` (default).
+
+  The kubeconfig file itself is resolved the same way as `kubectl`: `$KUBECONFIG`
+  if set, otherwise `~/.kube/config`.
+
   This is independent of the in-query `IN` multi-context syntax
   (e.g. `IN prod, staging MATCH (p:Pod) RETURN p.metadata.name`); an explicit
   `IN` clause overrides `--context` for that query.
