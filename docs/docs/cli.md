@@ -29,9 +29,10 @@ sidebar_position: 4
 
   **Which context is used** — Cyphernetes picks the first that applies:
 
-  1. `--context <name>` flag, if set (uses the kubeconfig, never in-cluster config).
-  2. In-cluster config, when running inside a Pod.
-  3. The kubeconfig's `current-context` (default).
+  1. The context named by `--context`, read from your kubeconfig. Setting this
+     flag always uses the kubeconfig, even when running inside a Pod.
+  2. In-cluster config, when running inside a Pod and `--context` is not set.
+  3. The kubeconfig's `current-context`, when neither of the above applies.
 
   Cyphernetes reads your kubeconfig from `$KUBECONFIG` if that variable is set,
   and otherwise from `~/.kube/config` — the same as `kubectl`.
