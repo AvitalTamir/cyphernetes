@@ -1,6 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import refractor from 'refractor/core';
-import { registerCypher, commentPatterns } from '../utils/cypherHighlight';
+import cyphernetes, { commentPatterns, CYPHER_LANGUAGE } from '../utils/cypherHighlight';
 
 const blockPattern = commentPatterns[0].pattern;
 const linePattern = commentPatterns[1].pattern;
@@ -32,23 +31,32 @@ describe('cypher comment patterns', () => {
   });
 });
 
-describe('registerCypher', () => {
-  test('patches the live grammar so it has an array comment rule', () => {
-    registerCypher();
-    const comment = refractor.languages.cypher.comment;
-    expect(Array.isArray(comment)).toBe(true);
+describe('cyphernetes grammar registrar', () => {
+  // A minimal stand-in for the refractor/Prism instance.
+  function fakePrism() {
+    return { languages: {} as Record<string, Record<string, unknown>> };
+  }
+
+  test('registers under the CYPHER_LANGUAGE name with an array comment rule', () => {
+    const prism = fakePrism();
+    cyphernetes(prism);
+    const grammar = prism.languages[CYPHER_LANGUAGE];
+    expect(grammar).toBeDefined();
+    expect(grammar.comment).toBe(commentPatterns);
   });
 
-  test('refractor tokenizes a multi-line comment as a comment', () => {
-    registerCypher();
-    const tokens = JSON.stringify(refractor.highlight('/*\n a\n*/ MATCH (n)', 'cypher'));
-    expect(tokens).toContain('"comment"');
+  test('preserves the base cypher tokens (keyword, string)', () => {
+    const prism = fakePrism();
+    cyphernetes(prism);
+    const grammar = prism.languages[CYPHER_LANGUAGE];
+    expect(grammar.keyword).toBeDefined();
+    expect(grammar.string).toBeDefined();
   });
 
-  test('refractor still tokenizes single-line comments and keywords', () => {
-    registerCypher();
-    const tokens = JSON.stringify(refractor.highlight('MATCH (n) // tail', 'cypher'));
-    expect(tokens).toContain('"comment"');
-    expect(tokens).toContain('"keyword"');
+  test('does not clobber the stock cypher grammar', () => {
+    const prism = fakePrism();
+    cyphernetes(prism);
+    expect(prism.languages.cypher).toBeDefined();
+    expect(prism.languages.cypher.comment).not.toBe(commentPatterns);
   });
 });

@@ -2,13 +2,13 @@ import React, { useState, useRef, KeyboardEvent, useEffect, useCallback, useMemo
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { fetchAutocompleteSuggestions } from '../api/queryApi';
-import { registerCypher } from '../utils/cypherHighlight';
+import cyphernetes, { CYPHER_LANGUAGE } from '../utils/cypherHighlight';
 import HistoryModal from './HistoryModal';
 import './QueryInput.css';
 
-// Make the Cypher grammar highlight both single-line (//) and multi-line
-// (/* */) comments.
-registerCypher();
+// Register a Cypher grammar that highlights both single-line (//) and
+// multi-line (/* */) comments.
+SyntaxHighlighter.registerLanguage(CYPHER_LANGUAGE, cyphernetes);
 
 interface QueryInputProps {
   onSubmit: (query: string, selectedText: string | null) => void;
@@ -447,7 +447,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
           </div>
         )}
         <SyntaxHighlighter
-          language="cypher"
+          language={CYPHER_LANGUAGE}
           style={dracula}
           wrapLines={true}
           wrapLongLines={true}

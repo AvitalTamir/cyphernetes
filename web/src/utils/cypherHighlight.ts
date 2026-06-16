@@ -1,5 +1,11 @@
-import refractor from 'refractor/core';
 import baseCypher from 'react-syntax-highlighter/dist/esm/languages/prism/cypher';
+
+// Language name we register the extended grammar under. It is deliberately NOT
+// "cypher": react-syntax-highlighter auto-registers the stock cypher grammar
+// into the shared refractor instance, and refractor.register() refuses to
+// overwrite an already-registered language. Registering under our own name
+// guarantees our grammar (with multi-line comment support) is the one used.
+export const CYPHER_LANGUAGE = 'cyphernetes';
 
 // Prism token patterns for Cypher comments.
 //
@@ -13,18 +19,21 @@ export const commentPatterns = [
   { pattern: /\/\/.*/, greedy: true },
 ];
 
-// Make refractor's Cypher grammar recognize multi-line `/* */` comments.
-//
-// react-syntax-highlighter registers the stock Cypher grammar (whose comment
-// rule only matches single-line `//`) into a shared refractor instance, and
-// refractor.register() refuses to overwrite an already-registered language.
-// So registering an "extended" grammar is a silent no-op. Instead we ensure the
-// base grammar exists and then patch its comment rule directly on the live
-// grammar object that the highlighter actually uses.
-export function registerCypher(): void {
-  refractor.register(baseCypher);
-  const grammar = refractor.languages.cypher;
-  if (grammar) {
-    grammar.comment = commentPatterns;
-  }
-}
+type PrismLike = { languages: Record<string, Record<string, unknown>> };
+
+// refractor/Prism syntax registrar: populates the stock cypher grammar, then
+// registers a copy under CYPHER_LANGUAGE whose comment rule also matches
+// multi-line `/* */` comments. Imports only `baseCypher` (a subpath of the
+// direct react-syntax-highlighter dependency), so it resolves under pnpm's
+// strict node_modules layout as well as npm's.
+const cyphernetes = (prism: PrismLike) => {
+  baseCypher(prism); // populates prism.languages.cypher
+  prism.languages[CYPHER_LANGUAGE] = {
+    ...prism.languages.cypher,
+    comment: commentPatterns,
+  };
+};
+cyphernetes.displayName = CYPHER_LANGUAGE;
+cyphernetes.aliases = [] as string[];
+
+export default cyphernetes;
