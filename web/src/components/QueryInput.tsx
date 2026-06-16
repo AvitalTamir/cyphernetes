@@ -1,9 +1,14 @@
 import React, { useState, useRef, KeyboardEvent, useEffect, useCallback, useMemo } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { fetchAutocompleteSuggestions } from '../api/queryApi';
+import cypher from '../utils/cypherHighlight';
 import HistoryModal from './HistoryModal';
 import './QueryInput.css';
+
+// Register a Cypher grammar that highlights both single-line (//) and
+// multi-line (/* */) comments.
+SyntaxHighlighter.registerLanguage('cypher', cypher);
 
 interface QueryInputProps {
   onSubmit: (query: string, selectedText: string | null) => void;
