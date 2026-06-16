@@ -1693,6 +1693,60 @@ func TestParserErrors(t *testing.T) {
 	}
 }
 
+func TestParseQueryWithComments(t *testing.T) {
+	// Each query with comments must parse to the same AST as its
+	// comment-free equivalent.
+	tests := []struct {
+		name        string
+		withComment string
+		plain       string
+	}{
+		{
+			name:        "single-line comment",
+			withComment: "MATCH (d:Deployment) // grab deployments\nRETURN d.spec.replicas",
+			plain:       "MATCH (d:Deployment) RETURN d.spec.replicas",
+		},
+		{
+			name:        "multi-line comment between clauses",
+			withComment: "MATCH (d:Deployment)\n/*\nThis is a multi-line comment\nWoot\n*/\nRETURN d.spec.replicas",
+			plain:       "MATCH (d:Deployment) RETURN d.spec.replicas",
+		},
+		{
+			name:        "inline multi-line comment",
+			withComment: "MATCH (d:Deployment) /* inline */ RETURN d.spec.replicas",
+			plain:       "MATCH (d:Deployment) RETURN d.spec.replicas",
+		},
+		{
+			name:        "mixed single and multi-line comments",
+			withComment: "// header\nMATCH (d:Deployment) /* mid */ WHERE d.metadata.name = \"nginx\" // trailing\nRETURN d",
+			plain:       "MATCH (d:Deployment) WHERE d.metadata.name = \"nginx\" RETURN d",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotCommented, err := ParseQuery(tt.withComment)
+			if err != nil {
+				t.Fatalf("ParseQuery(%q) returned error: %v", tt.withComment, err)
+			}
+			gotPlain, err := ParseQuery(tt.plain)
+			if err != nil {
+				t.Fatalf("ParseQuery(%q) returned error: %v", tt.plain, err)
+			}
+			if !reflect.DeepEqual(gotCommented, gotPlain) {
+				t.Errorf("AST mismatch:\n with comment = %+v\n without      = %+v", gotCommented, gotPlain)
+			}
+		})
+	}
+
+	t.Run("unterminated multi-line comment errors", func(t *testing.T) {
+		_, err := ParseQuery("MATCH (d:Deployment) /* never closed RETURN d")
+		if err == nil {
+			t.Fatal("ParseQuery() expected error for unterminated comment, got nil")
+		}
+	})
+}
+
 func TestTemporalExpressions(t *testing.T) {
 	tests := []struct {
 		name     string

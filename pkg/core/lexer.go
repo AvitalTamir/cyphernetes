@@ -41,10 +41,11 @@ func (l *Lexer) NextToken() Token {
 		// Skip whitespace first
 		l.skipWhitespace()
 
-		// Check for single-line comments (//)
+		// Check for comments (// single-line or /* */ multi-line)
 		if l.s.Peek() == '/' {
 			ch1 := l.s.Next() // Tentatively consume the first '/'
-			if l.s.Peek() == '/' {
+			switch l.s.Peek() {
+			case '/':
 				l.s.Next() // Consume the second '/'
 				// It's a comment, skip to the end of the line or EOF
 				for {
@@ -62,7 +63,25 @@ func (l *Lexer) NextToken() Token {
 				// After skipping the comment (or hitting EOF during skip),
 				// continue the main loop to find the *next* token.
 				continue // Restarts the outer 'for' loop
-			} else {
+			case '*':
+				l.s.Next() // Consume the '*'
+				// It's a multi-line comment, skip until the closing '*/'.
+				for {
+					ch := l.s.Next()
+					if ch == scanner.EOF {
+						// Unterminated comment: surface it as an illegal token
+						// so the parser reports a syntax error.
+						return Token{Type: ILLEGAL, Literal: "/*"}
+					}
+					if ch == '*' && l.s.Peek() == '/' {
+						l.s.Next() // Consume the closing '/'
+						break
+					}
+				}
+				// After skipping the comment, continue the main loop to find
+				// the *next* token.
+				continue // Restarts the outer 'for' loop
+			default:
 				// It was just a single '/'. We already consumed it (ch1).
 				// Treat single '/' as ILLEGAL.
 				return Token{Type: ILLEGAL, Literal: string(ch1)}
