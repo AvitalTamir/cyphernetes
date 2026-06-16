@@ -166,73 +166,9 @@ var (
 	operatorRegex   = regexp.MustCompile(`(?i)(?:\s+)(=~|!=|>=|<=|=|>|<)(?:\s+)`)
 )
 
-// commentColor is the ANSI code (bright black / grey) used to dim comments.
-const commentColor = 90
-
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
-	return []rune(highlightLine(string(line)))
-}
+	lineStr := string(line)
 
-// highlightLine colorizes a query line, treating // and /* */ comments as
-// comments so their contents are not re-colorized as code. String literals are
-// skipped while scanning so comment markers inside them (e.g. "http://x") are
-// not mistaken for comments.
-func highlightLine(line string) string {
-	var b strings.Builder
-	codeStart := 0
-	i := 0
-	n := len(line)
-	for i < n {
-		c := line[i]
-		switch {
-		case c == '"' || c == '\'':
-			// Skip over the string literal (keeping it in the pending code
-			// fragment so colorizeFragment still colors it).
-			quote := c
-			i++
-			for i < n {
-				if line[i] == '\\' && i+1 < n {
-					i += 2
-					continue
-				}
-				if line[i] == quote {
-					i++
-					break
-				}
-				i++
-			}
-		case c == '/' && i+1 < n && line[i+1] == '/':
-			b.WriteString(colorizeFragment(line[codeStart:i]))
-			end := i
-			for end < n && line[end] != '\n' {
-				end++
-			}
-			b.WriteString(wrapInColor(line[i:end], commentColor))
-			i = end
-			codeStart = end
-		case c == '/' && i+1 < n && line[i+1] == '*':
-			b.WriteString(colorizeFragment(line[codeStart:i]))
-			end := n
-			if j := strings.Index(line[i+2:], "*/"); j >= 0 {
-				end = i + 2 + j + 2 // include the closing */
-			} else if nl := strings.IndexByte(line[i:], '\n'); nl >= 0 {
-				// Unterminated on this line: color only up to the newline.
-				end = i + nl
-			}
-			b.WriteString(wrapInColor(line[i:end], commentColor))
-			i = end
-			codeStart = end
-		default:
-			i++
-		}
-	}
-	b.WriteString(colorizeFragment(line[codeStart:]))
-	return b.String()
-}
-
-// colorizeFragment applies the keyword/node/property/etc. coloring pipeline to
-// a fragment of query text (with comments already stripped out).
-func colorizeFragment(lineStr string) string {
 	// Coloring for keywords
 	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := keywordsRegex.FindStringSubmatch(match)
@@ -302,7 +238,7 @@ func colorizeFragment(lineStr string) string {
 		return wrapInColor("{", 37) + colorizePropertyContent(inner) + wrapInColor("}", 37)
 	})
 
-	return lineStr
+	return []rune(lineStr)
 }
 
 func colorizePropertyContent(content string) string {
