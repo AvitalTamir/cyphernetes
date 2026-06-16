@@ -208,6 +208,81 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 	}
 }
 
+func TestSyntaxHighlighterComments(t *testing.T) {
+	h := &syntaxHighlighter{}
+
+	// Cases with a precisely known full output.
+	exact := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "pure single-line comment",
+			input:    "// hello world",
+			expected: "\x1b[90m// hello world\x1b[0m",
+		},
+		{
+			name:     "pure multi-line comment",
+			input:    "/* a comment */",
+			expected: "\x1b[90m/* a comment */\x1b[0m",
+		},
+		{
+			name:     "code followed by single-line comment",
+			input:    "RETURN n // get n",
+			expected: "\x1b[35mRETURN\x1b[0m n \x1b[90m// get n\x1b[0m",
+		},
+	}
+	for _, tt := range exact {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(h.Paint([]rune(tt.input), 0))
+			if result != tt.expected {
+				t.Errorf("\nPaint() = %#v\n   want = %#v", result, tt.expected)
+			}
+		})
+	}
+
+	// Cases where we assert key substrings (the full output is verbose).
+	substr := []struct {
+		name           string
+		input          string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:        "inline multi-line comment between code",
+			input:       "MATCH /* x */ (n) RETURN n",
+			mustContain: []string{"\x1b[90m/* x */\x1b[0m", "\x1b[35mMATCH\x1b[0m", "\x1b[35mRETURN\x1b[0m"},
+		},
+		{
+			name:        "unterminated multi-line comment colors to end of line",
+			input:       "MATCH /* oops",
+			mustContain: []string{"\x1b[90m/* oops\x1b[0m", "\x1b[35mMATCH\x1b[0m"},
+		},
+		{
+			name:           "slashes inside a string are not treated as a comment",
+			input:          `WHERE n.name = "http://x"`,
+			mustContain:    []string{"\x1b[36m\"http://x\"\x1b[0m"},
+			mustNotContain: []string{"\x1b[90m//"},
+		},
+	}
+	for _, tt := range substr {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(h.Paint([]rune(tt.input), 0))
+			for _, s := range tt.mustContain {
+				if !strings.Contains(result, s) {
+					t.Errorf("Paint() = %#v\n   missing %#v", result, s)
+				}
+			}
+			for _, s := range tt.mustNotContain {
+				if strings.Contains(result, s) {
+					t.Errorf("Paint() = %#v\n   should not contain %#v", result, s)
+				}
+			}
+		})
+	}
+}
+
 func TestExecuteMacro(t *testing.T) {
 	// Create a new MacroManager
 	mm := NewMacroManager()
