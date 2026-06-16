@@ -28,6 +28,38 @@ func NewLexer(input string) *Lexer {
 	return &Lexer{s: s}
 }
 
+// skipCommentBody skips the rest of a comment whose leading '/' has already
+// been consumed. `second` is the rune immediately after that '/': '/' for a
+// single-line comment or '*' for a multi-line comment.
+func (l *Lexer) skipCommentBody(second rune) {
+	if second == '/' {
+		l.s.Next() // consume the second '/'
+		for {
+			c := l.s.Peek()
+			if c == '\n' {
+				l.s.Next() // consume the newline
+				return
+			}
+			if c == scanner.EOF {
+				return
+			}
+			l.s.Next()
+		}
+	}
+	// Multi-line comment: second == '*'
+	l.s.Next() // consume the '*'
+	for {
+		c := l.s.Next()
+		if c == scanner.EOF {
+			return
+		}
+		if c == '*' && l.s.Peek() == '/' {
+			l.s.Next() // consume the closing '/'
+			return
+		}
+	}
+}
+
 // NextToken returns the next token in the input
 func (l *Lexer) NextToken() Token {
 	// If we have a buffered token, return it
@@ -211,7 +243,30 @@ func (l *Lexer) NextToken() Token {
 					return Token{Type: ILLEGAL, Literal: fullLit.String() + "\\"}
 				}
 
-				// Consume the separator ('.', '"', '/', '-')
+				// A '/' that begins a comment (// or /*) is a token separator,
+				// not part of a complex identifier. Return the identifier built
+				// so far and skip the comment. (The '/' is consumed here to look
+				// ahead; text/scanner cannot peek two runes.)
+				if peek == '/' {
+					l.s.Next() // consume the '/'
+					if after := l.s.Peek(); after == '/' || after == '*' {
+						l.skipCommentBody(after)
+						resultTok := Token{Type: IDENT, Literal: fullLit.String()}
+						l.lastToken = resultTok
+						return resultTok
+					}
+					// Not a comment: '/' is a genuine identifier separator
+					// (e.g. an annotation key like "io/foo-bar").
+					fullLit.WriteRune('/')
+					scanTok := l.s.Scan()
+					if scanTok != scanner.Ident {
+						return Token{Type: ILLEGAL, Literal: fullLit.String()}
+					}
+					fullLit.WriteString(l.s.TokenText())
+					continue
+				}
+
+				// Consume the separator ('.', '"', '-')
 				next := l.s.Next()
 				fullLit.WriteRune(next) // Append the separator
 				debugLog("Added separator '%c' to complex identifier: '%s'", next, fullLit.String())

@@ -518,6 +518,47 @@ func TestLexerComments(t *testing.T) {
 				{Type: EOF, Literal: ""},
 			},
 		},
+		{
+			// A comment glued to the end of an identifier acts as a token
+			// separator, not part of a complex identifier.
+			name:  "block comment immediately after an identifier",
+			input: "n/*c*/.x",
+			expected: []Token{
+				{Type: IDENT, Literal: "n"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "x"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "line comment immediately after an identifier",
+			input: "n//c\n.x",
+			expected: []Token{
+				{Type: IDENT, Literal: "n"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "x"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "block comment glued to a trailing identifier",
+			input: "RETURN n/* c */",
+			expected: []Token{
+				{Type: RETURN, Literal: "RETURN"},
+				{Type: IDENT, Literal: "n"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			// Regression: a single '/' followed by a non-comment char is still
+			// a complex-identifier separator (e.g. annotation keys).
+			name:  "slash inside an identifier is not a comment",
+			input: "io/foo-bar",
+			expected: []Token{
+				{Type: IDENT, Literal: "io/foo-bar"},
+				{Type: EOF, Literal: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {
