@@ -40,6 +40,7 @@ var queryCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 			QuietMode: true,
+			Context:   core.KubeContext,
 		})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error creating provider: ", err)
@@ -61,6 +62,7 @@ func runQuery(args []string, w io.Writer) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 		QuietMode: true,
+		Context:   core.KubeContext,
 	})
 	if err != nil {
 		fmt.Fprintln(w, "Error creating provider: ", err)

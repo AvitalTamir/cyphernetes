@@ -63,6 +63,7 @@ func runQuery(args []string, w io.Writer) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
 		QuietMode: true,
+		Context:   core.KubeContext,
 	})
 	if err != nil {
 		fmt.Fprintln(w, "Error creating provider: ", err)
@@ -183,6 +184,7 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVarP(&core.Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().BoolVarP(&core.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
+	rootCmd.PersistentFlags().StringVar(&core.KubeContext, "context", "", "The kubeconfig context to use (defaults to the current context)")
 	rootCmd.PersistentFlags().BoolVar(&core.NoColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVar(&DryRun, "dry-run", false, "Enable dry-run mode for all operations")
 

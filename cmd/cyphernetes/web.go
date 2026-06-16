@@ -84,7 +84,9 @@ func runWeb(cmd *cobra.Command, args []string) {
 	url := fmt.Sprintf("http://localhost:%s", port)
 
 	// Create the API server provider
-	providerConfig := &apiserver.APIServerProviderConfig{}
+	providerConfig := &apiserver.APIServerProviderConfig{
+		Context: core.KubeContext,
+	}
 	provider, err := apiserver.NewAPIServerProviderWithOptions(providerConfig)
 	if err != nil {
 		fmt.Printf("Error creating provider: %v\n", err)

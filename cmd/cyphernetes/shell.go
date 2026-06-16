@@ -56,8 +56,10 @@ var ShellCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		showSplash()
 
-		// Create the API server provider
-		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{})
+		// Create provider with context config
+		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+			Context: core.KubeContext,
+		})
 		if err != nil {
 			fmt.Printf("Error creating provider: %v\n", err)
 			return
@@ -134,6 +136,9 @@ func getCurrentContext() (string, string, error) {
 func getCurrentContextFromConfig() (string, string, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configOverrides := &clientcmd.ConfigOverrides{}
+	if core.KubeContext != "" {
+		configOverrides.CurrentContext = core.KubeContext
+	}
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 
 	config, err := kubeConfig.RawConfig()
@@ -141,10 +146,15 @@ func getCurrentContextFromConfig() (string, string, error) {
 		return "", "", fmt.Errorf("error getting current context from kubeconfig: %v", err)
 	}
 
+	// Honor an explicit --context override, falling back to the kubeconfig's
+	// current-context when no override is set.
 	currentContextName := config.CurrentContext
+	if core.KubeContext != "" {
+		currentContextName = core.KubeContext
+	}
 	currentContext, exists := config.Contexts[currentContextName]
 	if !exists {
-		return "", "", fmt.Errorf("current context %s does not exist in kubeconfig", currentContextName)
+		return "", "", fmt.Errorf("context %s does not exist in kubeconfig", currentContextName)
 	}
 
 	namespace := currentContext.Namespace
@@ -265,7 +275,9 @@ type Listener interface {
 
 func initAndRunShell(_ *cobra.Command, _ []string) {
 	// Create the API server provider
-	p, err := apiserver.NewAPIServerProvider()
+	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+		Context: core.KubeContext,
+	})
 	if err != nil {
 		fmt.Println("Error creating provider:", err)
 		os.Exit(1)
