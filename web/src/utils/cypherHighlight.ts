@@ -1,3 +1,4 @@
+import refractor from 'refractor/core';
 import baseCypher from 'react-syntax-highlighter/dist/esm/languages/prism/cypher';
 
 // Prism token patterns for Cypher comments.
@@ -12,16 +13,18 @@ export const commentPatterns = [
   { pattern: /\/\/.*/, greedy: true },
 ];
 
-// refractor/Prism syntax registrar. Registers the stock Cypher grammar (which
-// only recognizes single-line `//` comments) and then swaps its comment rule
-// for one that also covers multi-line block comments.
-const cypherWithBlockComments = (prism: any) => {
-  baseCypher(prism);
-  if (prism.languages?.cypher) {
-    prism.languages.cypher.comment = commentPatterns;
+// Make refractor's Cypher grammar recognize multi-line `/* */` comments.
+//
+// react-syntax-highlighter registers the stock Cypher grammar (whose comment
+// rule only matches single-line `//`) into a shared refractor instance, and
+// refractor.register() refuses to overwrite an already-registered language.
+// So registering an "extended" grammar is a silent no-op. Instead we ensure the
+// base grammar exists and then patch its comment rule directly on the live
+// grammar object that the highlighter actually uses.
+export function registerCypher(): void {
+  refractor.register(baseCypher);
+  const grammar = refractor.languages.cypher;
+  if (grammar) {
+    grammar.comment = commentPatterns;
   }
-};
-cypherWithBlockComments.displayName = 'cypher';
-cypherWithBlockComments.aliases = [] as string[];
-
-export default cypherWithBlockComments;
+}

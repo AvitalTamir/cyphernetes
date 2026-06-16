@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import cypherWithBlockComments, { commentPatterns } from '../utils/cypherHighlight';
+import refractor from 'refractor/core';
+import { registerCypher, commentPatterns } from '../utils/cypherHighlight';
 
 const blockPattern = commentPatterns[0].pattern;
 const linePattern = commentPatterns[1].pattern;
@@ -31,20 +32,23 @@ describe('cypher comment patterns', () => {
   });
 });
 
-describe('cypherWithBlockComments registrar', () => {
-  test('registers a cypher grammar whose comment rule covers block comments', () => {
-    const prism: any = { languages: {} };
-    cypherWithBlockComments(prism);
-    expect(prism.languages.cypher).toBeDefined();
-    const comment = prism.languages.cypher.comment;
+describe('registerCypher', () => {
+  test('patches the live grammar so it has an array comment rule', () => {
+    registerCypher();
+    const comment = refractor.languages.cypher.comment;
     expect(Array.isArray(comment)).toBe(true);
-    expect('/* x */'.match(comment[0].pattern)?.[0]).toBe('/* x */');
   });
 
-  test('preserves the base cypher tokens (keyword, string)', () => {
-    const prism: any = { languages: {} };
-    cypherWithBlockComments(prism);
-    expect(prism.languages.cypher.keyword).toBeDefined();
-    expect(prism.languages.cypher.string).toBeDefined();
+  test('refractor tokenizes a multi-line comment as a comment', () => {
+    registerCypher();
+    const tokens = JSON.stringify(refractor.highlight('/*\n a\n*/ MATCH (n)', 'cypher'));
+    expect(tokens).toContain('"comment"');
+  });
+
+  test('refractor still tokenizes single-line comments and keywords', () => {
+    registerCypher();
+    const tokens = JSON.stringify(refractor.highlight('MATCH (n) // tail', 'cypher'));
+    expect(tokens).toContain('"comment"');
+    expect(tokens).toContain('"keyword"');
   });
 });
