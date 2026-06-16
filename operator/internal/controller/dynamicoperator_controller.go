@@ -339,9 +339,17 @@ func (r *DynamicOperatorReconciler) handleCreate(ctx context.Context, dynamicOpe
 	log.Log.Info("handleCreate called", "resource", getName(obj), "namespace", namespace)
 
 	if dynamicOperator.Spec.OnCreate != "" {
-		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnCreate, obj, namespace)
+		err := r.executeCyphernetesQuery(dynamicOperator, dynamicOperator.Spec.OnCreate, obj, namespace)
 		if err != nil {
 			log.Log.Error(err, "Failed to execute onCreate query")
+			return
+		}
+
+		// In dry-run mode we must not mutate the cluster, so skip adding the
+		// finalizer to the watched resource. onDelete is still previewed via the
+		// regular delete event (see handleDelete).
+		if dynamicOperator.Spec.DryRun {
+			log.Log.Info("Dry-run mode: skipping finalizer addition", "resource", getName(obj))
 			return
 		}
 
@@ -379,7 +387,7 @@ func (r *DynamicOperatorReconciler) addFinalizer(ctx context.Context, dynamicOpe
 
 func (r *DynamicOperatorReconciler) handleUpdate(ctx context.Context, dynamicOperator *operatorv1.DynamicOperator, obj interface{}, namespace string) {
 	if dynamicOperator.Spec.OnUpdate != "" {
-		err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnUpdate, obj, namespace)
+		err := r.executeCyphernetesQuery(dynamicOperator, dynamicOperator.Spec.OnUpdate, obj, namespace)
 		if err != nil {
 			log.Log.Error(err, "Failed to execute onUpdate query")
 		}
@@ -397,12 +405,27 @@ func (r *DynamicOperatorReconciler) handleDelete(ctx context.Context, dynamicOpe
 
 	log.Log.Info("Object details", "name", u.GetName(), "namespace", u.GetNamespace(), "finalizers", u.GetFinalizers())
 
+	// In dry-run mode we never added a finalizer, so the resource is deleted
+	// immediately and this handler runs after the fact. Preview the onDelete
+	// query (in dry-run) without requiring or removing a finalizer.
+	if dynamicOperator.Spec.DryRun {
+		if dynamicOperator.Spec.OnDelete != "" {
+			log.Log.Info("Dry-run mode: previewing onDelete query", "resource", u.GetName())
+			if err := r.executeCyphernetesQuery(dynamicOperator, dynamicOperator.Spec.OnDelete, obj, namespace); err != nil {
+				log.Log.Error(err, "Failed to preview onDelete query")
+			}
+		} else {
+			log.Log.Info("No onDelete query specified", "resource", u.GetName())
+		}
+		return
+	}
+
 	// Check if the object has our finalizer
 	if containsString(u.GetFinalizers(), finalizerName) {
 		log.Log.Info("Finalizer found, executing onDelete query", "resource", u.GetName())
 		// Execute onDelete query if specified
 		if dynamicOperator.Spec.OnDelete != "" {
-			err := r.executeCyphernetesQuery(dynamicOperator.Spec.OnDelete, obj, namespace)
+			err := r.executeCyphernetesQuery(dynamicOperator, dynamicOperator.Spec.OnDelete, obj, namespace)
 			if err != nil {
 				log.Log.Error(err, "Failed to execute onDelete query")
 				// Continue with finalizer removal even if the query fails
@@ -469,7 +492,7 @@ func getName(obj interface{}) string {
 	return unstructuredObj.GetName()
 }
 
-func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj interface{}, namespace string) error {
+func (r *DynamicOperatorReconciler) executeCyphernetesQuery(dynamicOperator *operatorv1.DynamicOperator, query string, obj interface{}, namespace string) error {
 	// Convert the object to a map for easier JSON path access
 	objMap := make(map[string]interface{})
 	objJSON, err := json.Marshal(obj)
@@ -493,7 +516,7 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 
 	// Execute each statement
 	for _, statement := range statements {
-		err := r.executeStatement(statement, objMap, namespace)
+		err := r.executeStatement(dynamicOperator, statement, objMap, namespace)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err)
 		}
@@ -505,7 +528,7 @@ func (r *DynamicOperatorReconciler) executeCyphernetesQuery(query string, obj in
 	return nil
 }
 
-func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap map[string]interface{}, namespace string) error {
+func (r *DynamicOperatorReconciler) executeStatement(dynamicOperator *operatorv1.DynamicOperator, statement string, objMap map[string]interface{}, namespace string) error {
 	// Regular expression to find all {{$.path.to.property}} patterns
 	re := regexp.MustCompile(`\{\{\$(.[^}]+)\}\}`)
 
@@ -539,8 +562,10 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 		return err
 	}
 
-	// Execute the sanitized statement
-	result, err := r.QueryExecutor.Execute(ast, namespace)
+	// Execute the sanitized statement. Dry-run is applied per call so a single
+	// shared executor safely serves both dry-run and real operators, even when
+	// their informer goroutines fire concurrently.
+	result, err := r.QueryExecutor.Execute(ast, namespace, core.WithDryRun(dynamicOperator.Spec.DryRun))
 
 	if err != nil {
 		// Check if the error is due to "already exists"
@@ -551,8 +576,10 @@ func (r *DynamicOperatorReconciler) executeStatement(statement string, objMap ma
 		}
 	}
 
-	// Check if we need to add owner references to created resources
-	if createClause := findCreateClause(ast); createClause != nil {
+	// Check if we need to add owner references to created resources. In dry-run
+	// mode nothing was actually created, so there is no resource to fetch or own;
+	// skip owner-reference handling entirely to keep the cluster untouched.
+	if createClause := findCreateClause(ast); createClause != nil && !dynamicOperator.Spec.DryRun {
 		var nodesToAddOwnerRef []*core.NodePattern
 		var matchCreateNode *core.NodePattern
 

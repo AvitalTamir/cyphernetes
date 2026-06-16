@@ -56,9 +56,8 @@ var ShellCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		showSplash()
 
-		// Create provider with dry-run config
+		// Create provider with context config
 		provider, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
-			DryRun:  DryRun,
 			Context: core.KubeContext,
 		})
 		if err != nil {
@@ -277,7 +276,6 @@ type Listener interface {
 func initAndRunShell(_ *cobra.Command, _ []string) {
 	// Create the API server provider
 	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
-		DryRun:  DryRun,
 		Context: core.KubeContext,
 	})
 	if err != nil {
@@ -518,8 +516,8 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 				fmt.Println("Graph layout: Top to Bottom")
 			}
 		} else if input == "\\dr" {
-			// Toggle dry-run mode
-			executor.Provider().ToggleDryRun()
+			// Toggle dry-run mode. Dry-run is applied per query execution
+			// (see WithDryRun below), so we only need to flip the flag here.
 			DryRun = !DryRun
 			fmt.Printf("Dry-run mode: %t\n\n", DryRun)
 		} else if input == "\\rr" {
@@ -710,7 +708,7 @@ func executeStatement(query string) (string, error) {
 		return "", fmt.Errorf("error parsing query >> %s", err)
 	}
 
-	results, err := executor.Execute(ast, core.Namespace)
+	results, err := executor.Execute(ast, core.Namespace, core.WithDryRun(DryRun))
 	if err != nil {
 		return "", fmt.Errorf("error executing query >> %s", err)
 	}

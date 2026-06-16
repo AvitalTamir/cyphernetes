@@ -121,7 +121,7 @@ func TestRunQuery(t *testing.T) {
 				newQueryExecutor = func(p provider.Provider) (*core.QueryExecutor, error) {
 					return &core.QueryExecutor{}, nil
 				}
-				executeMethod = func(_ *core.QueryExecutor, expr *core.Expression, namespace string) (core.QueryResult, error) {
+				executeMethod = func(_ *core.QueryExecutor, expr *core.Expression, namespace string, _ ...core.ExecuteOption) (core.QueryResult, error) {
 					return tt.mockExecute(expr, namespace)
 				}
 			}

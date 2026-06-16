@@ -63,21 +63,21 @@ func (p *hardeningProvider) GetK8sResources(kind, fieldSelector, labelSelector, 
 	return out, nil
 }
 
-func (p *hardeningProvider) DeleteK8sResources(kind, name, namespace string) error {
+func (p *hardeningProvider) DeleteK8sResources(kind, name, namespace string, dryRun bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.deletes = append(p.deletes, fmt.Sprintf("%s/%s/%s", kind, namespace, name))
 	return nil
 }
 
-func (p *hardeningProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+func (p *hardeningProvider) CreateK8sResource(kind, name, namespace string, body interface{}, dryRun bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.creates = append(p.creates, fmt.Sprintf("%s/%s/%s", kind, namespace, name))
 	return nil
 }
 
-func (p *hardeningProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
+func (p *hardeningProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte, dryRun bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.patches = append(p.patches, fmt.Sprintf("%s/%s/%s:%s", kind, namespace, name, string(patchJSON)))
@@ -114,8 +114,6 @@ func (p *hardeningProvider) GetOpenAPIResourceSpecs() (map[string][]string, erro
 func (p *hardeningProvider) CreateProviderForContext(context string) (provider.Provider, error) {
 	return p, nil
 }
-
-func (p *hardeningProvider) ToggleDryRun() {}
 
 func TestExecutionUsesSelectorAwareCacheKeys(t *testing.T) {
 	executor, _ := NewQueryExecutor(newHardeningProvider())
