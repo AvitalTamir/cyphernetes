@@ -10,6 +10,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/avitaltamir/cyphernetes/pkg/core"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -23,11 +24,22 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 
 	corev1 "k8s.io/api/core/v1"
 )
+
+// buildOperatorKubeConfig loads the kubernetes rest.Config for operator commands,
+// honoring the KUBECONFIG env var and the global --context flag.
+func buildOperatorKubeConfig() (*rest.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	overrides := &clientcmd.ConfigOverrides{}
+	if core.KubeContext != "" {
+		overrides.CurrentContext = core.KubeContext
+	}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
+}
 
 //go:embed manifests/*.yaml
 var manifestsFS embed.FS
@@ -69,8 +81,7 @@ func runDeploy(cmd *cobra.Command, args []string) {
 	fmt.Println("🚀 Deploying Cyphernetes operator...")
 
 	// Load kubernetes configuration
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	config, err := buildOperatorKubeConfig()
 	if err != nil {
 		fmt.Printf("Error building kubeconfig: %v\n", err)
 		os.Exit(1)
@@ -154,7 +165,7 @@ func applyManifest(manifest []byte) error {
 		return fmt.Errorf("error decoding manifest: %w", err)
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
+	config, err := buildOperatorKubeConfig()
 	if err != nil {
 		return fmt.Errorf("error building kubeconfig: %w", err)
 	}
@@ -280,8 +291,7 @@ func runRemove(cmd *cobra.Command, args []string) {
 	fmt.Println("🧹 Removing Cyphernetes operator...")
 
 	// Load kubernetes configuration
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	config, err := buildOperatorKubeConfig()
 	if err != nil {
 		fmt.Printf("Error building kubeconfig: %v\n", err)
 		os.Exit(1)
@@ -337,7 +347,7 @@ func deleteManifest(manifest []byte) error {
 		return fmt.Errorf("error decoding manifest: %w", err)
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
+	config, err := buildOperatorKubeConfig()
 	if err != nil {
 		return fmt.Errorf("error building kubeconfig: %w", err)
 	}

@@ -159,7 +159,9 @@ func handleConvertResourceName(c *gin.Context) {
 		return
 	}
 
-	p, err := apiserver.NewAPIServerProvider()
+	p, err := apiserver.NewAPIServerProviderWithOptions(&apiserver.APIServerProviderConfig{
+		Context: core.KubeContext,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create API server provider"})
 		return
@@ -186,8 +188,11 @@ func handleGetContext(c *gin.Context) {
 		return
 	}
 
-	// Get current context
+	// Get current context, honoring an explicit --context override.
 	currentContext := config.CurrentContext
+	if core.KubeContext != "" {
+		currentContext = core.KubeContext
+	}
 	if currentContext == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "No current context set"})
 		return

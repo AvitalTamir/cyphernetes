@@ -33,8 +33,12 @@ type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
 	Kubeconfig    *rest.Config
-	DryRun        bool
-	QuietMode     bool
+	// Context is the kubeconfig context to use. When set, it takes precedence
+	// over Kubeconfig and the in-cluster config and forces loading from the
+	// kubeconfig with the given context as current-context.
+	Context   string
+	DryRun    bool
+	QuietMode bool
 }
 
 type APIServerProvider struct {
@@ -72,6 +76,20 @@ func NewAPIServerProvider() (provider.Provider, error) {
 	})
 }
 
+// buildRestConfigFromKubeconfig loads a *rest.Config from the standard kubeconfig
+// loading rules (honoring the KUBECONFIG env var and $HOME/.kube/config). When
+// context is non-empty it overrides the kubeconfig's current-context, mirroring
+// kubectl's --context flag.
+func buildRestConfigFromKubeconfig(context string) (*rest.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
+	if context != "" {
+		configOverrides.CurrentContext = context
+	}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+	return kubeConfig.ClientConfig()
+}
+
 func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.Provider, error) {
 	var err error
 	clientset := config.Clientset
@@ -80,8 +98,20 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	// If clients are not provided, create them
 	if clientset == nil || dynamicClient == nil {
 		var restConfig *rest.Config
+		// Config selection precedence:
+		//   1. An explicit context (--context) forces loading from the kubeconfig
+		//      with that context as current-context, ignoring in-cluster config.
+		//   2. A caller-provided *rest.Config (Kubeconfig).
+		//   3. In-cluster config when running inside a pod.
+		//   4. The default kubeconfig (KUBECONFIG env or $HOME/.kube/config).
+		if config.Context != "" {
+			restConfig, err = buildRestConfigFromKubeconfig(config.Context)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create config for context %s: %v", config.Context, err)
+			}
+		}
 		// If user provided a kubeconfig, use that.
-		if config.Kubeconfig != nil {
+		if restConfig == nil && config.Kubeconfig != nil {
 			restConfig = config.Kubeconfig
 		}
 		// If caller did not provide a kubeconfig, try in-cluster config first
@@ -95,10 +125,7 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		// nor the caller provided a kubeconfig,
 		// try loading the config from KUBECONFIG env or $HOME/.kube/config file
 		if restConfig == nil {
-			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-			configOverrides := &clientcmd.ConfigOverrides{}
-			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-			restConfig, err = kubeConfig.ClientConfig()
+			restConfig, err = buildRestConfigFromKubeconfig("")
 			if err != nil {
 				return nil, fmt.Errorf("failed to create config: %v", err)
 			}
@@ -1144,15 +1171,8 @@ func (p *APIServerProvider) resolveReference(ref string) *openapi_v3.Schema {
 
 // Add this method to implement the Provider interface
 func (p *APIServerProvider) CreateProviderForContext(context string) (provider.Provider, error) {
-	// Create new config for the context
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: context,
-	}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
 	// Get REST config for the context
-	restConfig, err := kubeConfig.ClientConfig()
+	restConfig, err := buildRestConfigFromKubeconfig(context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config for context %s: %v", context, err)
 	}

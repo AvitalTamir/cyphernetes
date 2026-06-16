@@ -38,13 +38,16 @@ type QueryExecutor struct {
 }
 
 var (
-	executorInstance  *QueryExecutor
-	contextExecutors  map[string]*QueryExecutor
-	once              sync.Once
-	GvrCache          map[string]schema.GroupVersionResource
-	ResourceSpecs     map[string][]string
-	executorsLock     sync.RWMutex
-	Namespace         string
+	executorInstance *QueryExecutor
+	contextExecutors map[string]*QueryExecutor
+	once             sync.Once
+	GvrCache         map[string]schema.GroupVersionResource
+	ResourceSpecs    map[string][]string
+	executorsLock    sync.RWMutex
+	Namespace        string
+	// KubeContext is the kubeconfig context to use. When empty, the kubeconfig's
+	// current-context is used. Set via the global --context CLI flag.
+	KubeContext       string
 	LogLevel          string
 	OutputFormat      string
 	AllNamespaces     bool
