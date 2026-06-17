@@ -285,6 +285,43 @@ func TestSyntaxHighlighterComments(t *testing.T) {
 	}
 }
 
+// TestHighlightLineBlockCommentState mirrors how multi-line input mode paints
+// each entered line separately: a /* */ comment whose body spans several lines
+// must stay dimmed on every line, not just the opening one.
+func TestHighlightLineBlockCommentState(t *testing.T) {
+	// Line 1 opens a block comment that does not close on this line.
+	line1, in1 := highlightLineState("/* open", false)
+	if !in1 {
+		t.Fatalf("expected to remain inside a block comment after %q", "/* open")
+	}
+	if line1 != "\x1b[90m/* open\x1b[0m" {
+		t.Errorf("line1 = %#v, want the whole line dimmed", line1)
+	}
+
+	// Line 2 continues the comment, closes it, then has real code that should
+	// be colorized as code (not dimmed).
+	line2, in2 := highlightLineState("still in comment */ RETURN n", in1)
+	if in2 {
+		t.Errorf("expected the block comment to close on line2, but it stayed open")
+	}
+	if !strings.Contains(line2, "\x1b[90mstill in comment */\x1b[0m") {
+		t.Errorf("line2 = %#v\n   missing dimmed comment body up to the closing */", line2)
+	}
+	if !strings.Contains(line2, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("line2 = %#v\n   missing colorized RETURN after the comment closed", line2)
+	}
+
+	// A line fully inside an unterminated comment stays dimmed and keeps the
+	// state open.
+	line3, in3 := highlightLineState("entirely inside", true)
+	if !in3 {
+		t.Errorf("expected state to stay open for a line with no closing */")
+	}
+	if line3 != "\x1b[90mentirely inside\x1b[0m" {
+		t.Errorf("line3 = %#v, want the whole line dimmed", line3)
+	}
+}
+
 func TestExecuteMacro(t *testing.T) {
 	// Create a new MacroManager
 	mm := NewMacroManager()

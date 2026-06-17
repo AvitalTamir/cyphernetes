@@ -181,15 +181,44 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 	return []rune(highlightLine(string(line)))
 }
 
-// highlightLine colorizes a query line, treating // and /* */ comments as
+// highlightLine colorizes a single query line in isolation (not continuing an
+// open block comment from a previous line). See highlightLineState for details.
+func highlightLine(line string) string {
+	out, _ := highlightLineState(line, false)
+	return out
+}
+
+// highlightLineState colorizes a query line, treating // and /* */ comments as
 // comments so their contents are not re-colorized as code. String literals are
 // skipped while scanning so comment markers inside them (e.g. "http://x") are
 // not mistaken for comments.
-func highlightLine(line string) string {
+//
+// inBlockComment says whether the line begins inside an unterminated /* */
+// block comment opened on a previous line; the returned bool says whether it
+// ends still inside one. Threading this state across calls lets the shell dim
+// block comments whose body spans several entered lines in multi-line input
+// mode, where each line is painted separately.
+func highlightLineState(line string, inBlockComment bool) (string, bool) {
 	var b strings.Builder
-	codeStart := 0
-	i := 0
 	n := len(line)
+	start := 0
+
+	// Continuing an open block comment: dim up to its closing */ (or the whole
+	// line if it never closes here), then resume normal scanning.
+	if inBlockComment {
+		if j := strings.Index(line, "*/"); j >= 0 {
+			end := j + 2 // include the closing */
+			b.WriteString(wrapInColor(line[:end], commentColor))
+			start = end
+			inBlockComment = false
+		} else {
+			b.WriteString(wrapInColor(line, commentColor))
+			return b.String(), true
+		}
+	}
+
+	codeStart := start
+	i := start
 	for i < n {
 		c := line[i]
 		switch {
@@ -226,6 +255,10 @@ func highlightLine(line string) string {
 			} else if nl := strings.IndexByte(line[i:], '\n'); nl >= 0 {
 				// Unterminated on this line: color only up to the newline.
 				end = i + nl
+			} else {
+				// Unterminated with no newline: the block comment carries over
+				// to the next entered line.
+				inBlockComment = true
 			}
 			b.WriteString(wrapInColor(line[i:end], commentColor))
 			i = end
@@ -235,7 +268,7 @@ func highlightLine(line string) string {
 		}
 	}
 	b.WriteString(colorizeFragment(line[codeStart:]))
-	return b.String()
+	return b.String(), inBlockComment
 }
 
 // colorizeFragment applies the keyword/node/property/etc. coloring pipeline to
@@ -415,6 +448,10 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	fmt.Println("")
 	var cmds []string
 	var input string
+	// inBlockComment carries /* */ block-comment state across the per-line
+	// painting in multi-line input mode so a comment body spanning several
+	// entered lines stays dimmed. Reset at the start of each new command.
+	var inBlockComment bool
 	executing := false
 
 	go func() {
@@ -464,7 +501,12 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 				continue
 			}
 			cmds = append(cmds, line)
-			lastLine := rl.Config.Painter.Paint([]rune(line), 0)
+			if len(cmds) == 1 {
+				// New command starting: clear any leftover block-comment state.
+				inBlockComment = false
+			}
+			var lastLine string
+			lastLine, inBlockComment = highlightLineState(line, inBlockComment)
 			// delete one line up
 			fmt.Print("\033[A\033[K")
 			if len(cmds) == 1 {
@@ -472,7 +514,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			} else {
 				fmt.Print(multiLinePrompt())
 			}
-			fmt.Println(string(lastLine))
+			fmt.Println(lastLine)
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
 				rl.SetPrompt(multiLinePrompt())
 				continue
