@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -174,6 +175,54 @@ var _ = Describe("Comment Query Operations", func() {
 		Expect(deployments).To(HaveLen(1))
 
 		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, dep)).Should(Succeed())
+	})
+
+	It("Should handle comments embedded in a relationship pattern", func() {
+		By("Creating a deployment and a service that selects it")
+		dep := newCommentTestDeployment("comment-rel-deployment", 1)
+		Expect(k8sClient.Create(ctx, dep)).Should(Succeed())
+
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "comment-rel-service",
+				Namespace: testNamespace,
+				Labels:    map[string]string{"app": "comment-rel-deployment"},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{"app": "comment-rel-deployment"},
+				Ports:    []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(80)}},
+			},
+		}
+		Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
+
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: "comment-rel-service"}, &corev1.Service{})
+		}, timeout, interval).Should(Succeed())
+
+		provider, err := apiserver.NewAPIServerProvider()
+		Expect(err).NotTo(HaveOccurred())
+		executor, err := core.NewQueryExecutor(provider)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Running a relationship query with comments between and inside the node patterns")
+		ast, err := core.ParseQuery(`
+			MATCH (d:Deployment) /* the workload */ ->( /* exposed by */ s:Service)
+			WHERE s.metadata.name = "comment-rel-service"
+			RETURN d.metadata.name AS name
+		`)
+		Expect(err).NotTo(HaveOccurred())
+		result, err := executor.Execute(ast, testNamespace)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(result.Data).To(HaveKey("d"))
+		nodes, ok := result.Data["d"].([]interface{})
+		Expect(ok).To(BeTrue(), "Expected result.Data['d'] to be a slice")
+		Expect(nodes).To(HaveLen(1))
+		Expect(nodes[0].(map[string]interface{})["name"]).To(Equal("comment-rel-deployment"))
+
+		By("Cleaning up")
+		Expect(k8sClient.Delete(ctx, svc)).Should(Succeed())
 		Expect(k8sClient.Delete(ctx, dep)).Should(Succeed())
 	})
 })
