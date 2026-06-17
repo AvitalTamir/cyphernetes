@@ -163,7 +163,14 @@ func getCurrentContextFromConfig() (string, string, error) {
 	return currentContextName, namespace, nil
 }
 
-type syntaxHighlighter struct{}
+type syntaxHighlighter struct {
+	// inBlockComment is the /* */ carry-over state at the start of the line
+	// being painted. The shell updates it after each committed line so a
+	// continuation line is dimmed live (while typing), not only once submitted.
+	// Paint only reads it: readline calls Paint on every keystroke, so writing
+	// here would corrupt rendering of the line still in progress.
+	inBlockComment bool
+}
 
 var (
 	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|set|delete|create|sum|count|contains|as|in|not|and|return)\b`)
@@ -178,14 +185,8 @@ var (
 const commentColor = 90
 
 func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
-	return []rune(highlightLine(string(line)))
-}
-
-// highlightLine colorizes a single query line in isolation (not continuing an
-// open block comment from a previous line). See highlightLineState for details.
-func highlightLine(line string) string {
-	out, _ := highlightLineState(line, false)
-	return out
+	out, _ := highlightLineState(string(line), h.inBlockComment)
+	return []rune(out)
 }
 
 // highlightLineState colorizes a query line, treating // and /* */ comments as
@@ -416,13 +417,18 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	}
 
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
+	// highlighter holds the block-comment carry-over state used to dim
+	// multi-line /* */ comments. readline calls its Paint() on every keystroke;
+	// the shell updates highlighter.inBlockComment after each committed line so
+	// continuation lines are dimmed live while being typed.
+	highlighter := &syntaxHighlighter{}
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:                 shellPrompt(),
 		HistoryFile:            historyFile,
 		AutoComplete:           completer,
 		InterruptPrompt:        "", // Set this to empty string
 		EOFPrompt:              "exit",
-		Painter:                &syntaxHighlighter{},
+		Painter:                highlighter,
 		DisableAutoSaveHistory: true,
 		HistorySearchFold:      true,
 		FuncFilterInputRune:    filterInput,
@@ -448,15 +454,11 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	fmt.Println("")
 	var cmds []string
 	var input string
-	// inBlockComment carries /* */ block-comment state across the per-line
-	// painting in multi-line input mode so a comment body spanning several
-	// entered lines stays dimmed. Reset at the start of each new command.
-	var inBlockComment bool
 	executing := false
 
 	go func() {
 		for range sigChan {
-			handleInterrupt(rl, &cmds, &executing)
+			handleInterrupt(rl, &cmds, &executing, highlighter)
 		}
 	}()
 
@@ -503,10 +505,10 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			cmds = append(cmds, line)
 			if len(cmds) == 1 {
 				// New command starting: clear any leftover block-comment state.
-				inBlockComment = false
+				highlighter.inBlockComment = false
 			}
 			var lastLine string
-			lastLine, inBlockComment = highlightLineState(line, inBlockComment)
+			lastLine, highlighter.inBlockComment = highlightLineState(line, highlighter.inBlockComment)
 			// delete one line up
 			fmt.Print("\033[A\033[K")
 			if len(cmds) == 1 {
@@ -516,15 +518,21 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			}
 			fmt.Println(lastLine)
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
+				// More lines to come: highlighter.inBlockComment now carries this
+				// line's open/closed state so the next line is dimmed while typing.
 				rl.SetPrompt(multiLinePrompt())
 				continue
 			}
 			cmd := strings.Join(cmds, " ")
 			cmd = strings.TrimSuffix(cmd, ";")
 			cmds = cmds[:0]
+			// Command complete: reset so the next command's first line paints clean.
+			highlighter.inBlockComment = false
 			rl.SetPrompt(shellPrompt())
 			input = strings.TrimSpace(cmd)
 		} else {
+			// Single-line mode: each line is a full command painted standalone.
+			highlighter.inBlockComment = false
 			input = strings.TrimSpace(line)
 		}
 
@@ -891,7 +899,7 @@ func init() {
 	ShellCmd.Flags().StringVar(&core.OutputFormat, "format", "json", "Output format (json or yaml)")
 }
 
-func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
+func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool, highlighter *syntaxHighlighter) {
 	if *executing {
 		// If we're executing a query, do nothing
 		return
@@ -904,6 +912,10 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 
 	// Clear the current input and reset the prompt
 	*cmds = []string{}
+	if highlighter != nil {
+		// Abandoning a partial multi-line command clears any open /* */ state.
+		highlighter.inBlockComment = false
+	}
 	rl.SetPrompt(shellPrompt())
 	rl.Refresh()
 }

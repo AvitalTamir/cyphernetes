@@ -322,6 +322,30 @@ func TestHighlightLineBlockCommentState(t *testing.T) {
 	}
 }
 
+// TestSyntaxHighlighterPaintHonorsBlockCommentState verifies that Paint (the
+// method readline calls on every keystroke to render the line being edited)
+// uses the highlighter's carry-over state. This is what dims a continuation
+// line live, while typing, rather than only after it is submitted.
+func TestSyntaxHighlighterPaintHonorsBlockCommentState(t *testing.T) {
+	h := &syntaxHighlighter{}
+
+	// Not inside a comment: a bare line paints as code.
+	if got := string(h.Paint([]rune("RETURN n"), 0)); !strings.Contains(got, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("Paint(%q) = %#v, want RETURN colorized as a keyword", "RETURN n", got)
+	}
+
+	// Inside an open block comment (as the shell sets after an unterminated
+	// opening line): the same line is dimmed as comment body, not code.
+	h.inBlockComment = true
+	got := string(h.Paint([]rune("RETURN n"), 0))
+	if !strings.Contains(got, "\x1b[90mRETURN n\x1b[0m") {
+		t.Errorf("Paint(%q) with open block comment = %#v, want the line dimmed", "RETURN n", got)
+	}
+	if strings.Contains(got, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("Paint(%q) with open block comment = %#v, should not colorize RETURN as code", "RETURN n", got)
+	}
+}
+
 func TestExecuteMacro(t *testing.T) {
 	// Create a new MacroManager
 	mm := NewMacroManager()
