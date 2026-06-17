@@ -86,15 +86,15 @@ func (m *MockProvider) GetK8sResources(kind, fieldSelector, labelSelector, names
 	return []map[string]interface{}{}, nil
 }
 
-func (m *MockProvider) DeleteK8sResources(kind, name, namespace string) error {
+func (m *MockProvider) DeleteK8sResources(kind, name, namespace string, dryRun bool) error {
 	return nil
 }
 
-func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+func (m *MockProvider) CreateK8sResource(kind, name, namespace string, body interface{}, dryRun bool) error {
 	return nil
 }
 
-func (m *MockProvider) PatchK8sResource(group, version, resource string, patch []byte) error {
+func (m *MockProvider) PatchK8sResource(group, version, resource string, patch []byte, dryRun bool) error {
 	return nil
 }
 
@@ -104,10 +104,6 @@ func (m *MockProvider) CreateProviderForContext(context string) (provider.Provid
 
 func (m *MockProvider) GetDiscoveryClient() (discovery.DiscoveryInterface, error) {
 	return m.clientset.Discovery(), nil
-}
-
-func (m *MockProvider) ToggleDryRun() {
-	// do nothing
 }
 
 var _ = Describe("DynamicOperator Controller", func() {

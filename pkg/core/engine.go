@@ -38,13 +38,16 @@ type QueryExecutor struct {
 }
 
 var (
-	executorInstance  *QueryExecutor
-	contextExecutors  map[string]*QueryExecutor
-	once              sync.Once
-	GvrCache          map[string]schema.GroupVersionResource
-	ResourceSpecs     map[string][]string
-	executorsLock     sync.RWMutex
-	Namespace         string
+	executorInstance *QueryExecutor
+	contextExecutors map[string]*QueryExecutor
+	once             sync.Once
+	GvrCache         map[string]schema.GroupVersionResource
+	ResourceSpecs    map[string][]string
+	executorsLock    sync.RWMutex
+	Namespace        string
+	// KubeContext is the kubeconfig context to use. When empty, the kubeconfig's
+	// current-context is used. Set via the global --context CLI flag.
+	KubeContext       string
 	LogLevel          string
 	OutputFormat      string
 	AllNamespaces     bool
@@ -65,12 +68,35 @@ func NewQueryExecutor(p provider.Provider) (*QueryExecutor, error) {
 	}, nil
 }
 
-func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult, error) {
+// ExecuteOption configures a single query execution.
+type ExecuteOption func(*executeOptions)
+
+type executeOptions struct {
+	dryRun bool
+}
+
+// WithDryRun runs the execution's mutations (CREATE/SET/DELETE) in Kubernetes
+// dry-run mode when dryRun is true: changes are validated by the API server but
+// not persisted. Dry-run is scoped to this single Execute call, so the same
+// executor can serve dry-run and real queries concurrently.
+func WithDryRun(dryRun bool) ExecuteOption {
+	return func(o *executeOptions) { o.dryRun = dryRun }
+}
+
+func resolveExecuteOptions(opts []ExecuteOption) executeOptions {
+	var o executeOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+	return o
+}
+
+func (q *QueryExecutor) Execute(ast *Expression, namespace string, opts ...ExecuteOption) (QueryResult, error) {
 	if ast == nil {
 		return QueryResult{}, fmt.Errorf("empty query: ast cannot be nil")
 	}
 	if len(ast.Contexts) > 0 {
-		return ExecuteMultiContextQuery(ast, namespace)
+		return ExecuteMultiContextQuery(ast, namespace, opts...)
 	}
 
 	// First, check for kindless nodes and rewrite the query if needed
@@ -82,7 +108,7 @@ func (q *QueryExecutor) Execute(ast *Expression, namespace string) (QueryResult,
 		ast = rewrittenAst
 	}
 
-	result, err := q.ExecuteSingleQuery(ast, namespace)
+	result, err := q.ExecuteSingleQuery(ast, namespace, opts...)
 	if err != nil {
 		return result, err
 	}

@@ -88,4 +88,33 @@ You can easily template `DynamicOperator` resources using the cyphernetes cli:
 cyphernetes operator create my-operator --on-create "MATCH (n) RETURN n" | kubectl apply -f -
 ```
 
+## Dry-run mode
+
+A `DynamicOperator` can be created in dry-run mode by setting `dryRun: true` (it defaults to `false`).
+In dry-run mode the operator still watches the target resource and evaluates the
+`onCreate`/`onUpdate`/`onDelete` queries, but every mutation is sent to the Kubernetes API
+with the dry-run option, so **nothing is actually persisted**. The operator also skips its own
+side effects in this mode (it does not add finalizers or owner references to your resources).
+
+This lets you preview what an operator *would* do — visible in the operator logs as
+`Dry run mode: would create/patch/delete ...` — before enabling it for real.
+
+```yaml
+apiVersion: cyphernetes-operator.cyphernet.es/v1
+kind: DynamicOperator
+metadata:
+  name: ingress-activator-operator
+  namespace: default
+spec:
+  resourceKind: deployments
+  namespace: default
+  dryRun: true # preview only; no changes are persisted
+  onUpdate: |
+    MATCH (d:Deployment {name: "{{$.metadata.name}}"})->(s:Service)->(i:Ingress)
+    WHERE d.spec.replicas = 0
+    SET i.spec.ingressClassName = "inactive";
+```
+
+To make the operator apply changes for real, remove the `dryRun` field or set it to `false`.
+
 

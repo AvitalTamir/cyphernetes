@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, error) {
+func ExecuteMultiContextQuery(ast *Expression, namespace string, opts ...ExecuteOption) (QueryResult, error) {
 	if len(ast.Contexts) == 0 {
 		return QueryResult{}, fmt.Errorf("no contexts provided for multi-context query")
 	}
@@ -30,7 +30,7 @@ func ExecuteMultiContextQuery(ast *Expression, namespace string) (QueryResult, e
 		modifiedAst := prefixVariables(ast, context)
 
 		// Use ExecuteSingleQuery instead of Execute
-		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace)
+		result, err := executor.ExecuteSingleQuery(modifiedAst, namespace, opts...)
 		if err != nil {
 			return combinedResults, fmt.Errorf("error executing query in context %s: %v", context, err)
 		}

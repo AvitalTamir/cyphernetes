@@ -86,6 +86,7 @@ func init() {
 	// Add other flags
 	rootCmd.PersistentFlags().StringVarP(&core.Namespace, "namespace", "n", "default", "The namespace to query against")
 	rootCmd.PersistentFlags().BoolVarP(&core.AllNamespaces, "all-namespaces", "A", false, "Query all namespaces")
+	rootCmd.PersistentFlags().StringVar(&core.KubeContext, "context", "", "The kubeconfig context to use (defaults to the current context)")
 	rootCmd.PersistentFlags().BoolVar(&core.NoColor, "no-color", false, "Disable colored output in shell and query results")
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "Show version and exit")
 	rootCmd.PersistentFlags().BoolVar(&DryRun, "dry-run", false, "Enable dry-run mode for all operations")

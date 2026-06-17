@@ -218,7 +218,7 @@ func updateResultMap(resource map[string]interface{}, path []string, value inter
 	current[path[len(path)-1]] = value
 }
 
-func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJSON []byte) error {
+func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJSON []byte, dryRun bool) error {
 	// Get the resource details
 	name := resource["metadata"].(map[string]interface{})["name"].(string)
 	namespace := ""
@@ -231,7 +231,7 @@ func (q *QueryExecutor) PatchK8sResource(resource map[string]interface{}, patchJ
 		return fmt.Errorf("error resolving resource kind %s: %v", kind, err)
 	}
 
-	return q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON)
+	return q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON, dryRun)
 }
 
 func (q *QueryExecutor) handleSetClause(c *SetClause, state *executionState) error {
@@ -315,7 +315,7 @@ func (q *QueryExecutor) handleSetClause(c *SetClause, state *executionState) err
 				if err != nil {
 					return fmt.Errorf("error resolving resource kind %s: %v", nodeKind, err)
 				}
-				err = q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON)
+				err = q.provider.PatchK8sResource(providerKind, name, namespace, patchJSON, state.dryRun)
 				if err != nil {
 					return fmt.Errorf("error patching resource: %s", err)
 				}

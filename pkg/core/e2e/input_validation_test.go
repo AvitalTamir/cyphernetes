@@ -81,7 +81,7 @@ var _ = Describe("Input Validation", func() {
 	Context("PatchK8sResource", func() {
 		It("should handle invalid inputs correctly", func() {
 			By("Testing with empty kind")
-			err = provider.PatchK8sResource("", "name", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("", "name", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`), false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid resource kind"))
 
@@ -100,25 +100,25 @@ var _ = Describe("Input Validation", func() {
 					},
 				},
 			}
-			err = provider.CreateK8sResource("pod", "test-patch-pod", "default", testPod)
+			err = provider.CreateK8sResource("pod", "test-patch-pod", "default", testPod, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				_ = provider.DeleteK8sResources("pod", "test-patch-pod", "default")
+				_ = provider.DeleteK8sResources("pod", "test-patch-pod", "default", false)
 			})
 
 			By("Testing with invalid JSON patch")
-			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`invalid json`))
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`invalid json`), false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid"))
 
 			By("Testing with invalid patch operation")
-			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`[{"op": "invalid", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("pod", "test-patch-pod", "default", []byte(`[{"op": "invalid", "path": "/metadata/labels/test", "value": "test"}]`), false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("the server rejected our request"))
 
 			By("Testing with non-existent resource")
-			err = provider.PatchK8sResource("pod", "non-existent-pod", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`))
+			err = provider.PatchK8sResource("pod", "non-existent-pod", "default", []byte(`[{"op": "add", "path": "/metadata/labels/test", "value": "test"}]`), false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})

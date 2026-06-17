@@ -33,8 +33,11 @@ type APIServerProviderConfig struct {
 	Clientset     kubernetes.Interface
 	DynamicClient dynamic.Interface
 	Kubeconfig    *rest.Config
-	DryRun        bool
-	QuietMode     bool
+	// Context is the kubeconfig context to use. When set, it takes precedence
+	// over Kubeconfig and the in-cluster config and forces loading from the
+	// kubeconfig with the given context as current-context.
+	Context   string
+	QuietMode bool
 }
 
 type APIServerProvider struct {
@@ -46,7 +49,6 @@ type APIServerProvider struct {
 	requestChannel     chan *apiRequest
 	semaphore          chan struct{}
 	resourceMutex      sync.RWMutex
-	dryRun             bool
 	quietMode          bool
 	namespacedCache    map[string]bool
 	namespacedMutex    sync.RWMutex
@@ -72,6 +74,20 @@ func NewAPIServerProvider() (provider.Provider, error) {
 	})
 }
 
+// buildRestConfigFromKubeconfig loads a *rest.Config from the standard kubeconfig
+// loading rules (honoring the KUBECONFIG env var and $HOME/.kube/config). When
+// context is non-empty it overrides the kubeconfig's current-context, mirroring
+// kubectl's --context flag.
+func buildRestConfigFromKubeconfig(context string) (*rest.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
+	if context != "" {
+		configOverrides.CurrentContext = context
+	}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+	return kubeConfig.ClientConfig()
+}
+
 func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.Provider, error) {
 	var err error
 	clientset := config.Clientset
@@ -80,8 +96,20 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 	// If clients are not provided, create them
 	if clientset == nil || dynamicClient == nil {
 		var restConfig *rest.Config
+		// Config selection precedence:
+		//   1. An explicit context (--context) forces loading from the kubeconfig
+		//      with that context as current-context, ignoring in-cluster config.
+		//   2. A caller-provided *rest.Config (Kubeconfig).
+		//   3. In-cluster config when running inside a pod.
+		//   4. The default kubeconfig (KUBECONFIG env or $HOME/.kube/config).
+		if config.Context != "" {
+			restConfig, err = buildRestConfigFromKubeconfig(config.Context)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create config for context %s: %v", config.Context, err)
+			}
+		}
 		// If user provided a kubeconfig, use that.
-		if config.Kubeconfig != nil {
+		if restConfig == nil && config.Kubeconfig != nil {
 			restConfig = config.Kubeconfig
 		}
 		// If caller did not provide a kubeconfig, try in-cluster config first
@@ -95,10 +123,7 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		// nor the caller provided a kubeconfig,
 		// try loading the config from KUBECONFIG env or $HOME/.kube/config file
 		if restConfig == nil {
-			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-			configOverrides := &clientcmd.ConfigOverrides{}
-			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-			restConfig, err = kubeConfig.ClientConfig()
+			restConfig, err = buildRestConfigFromKubeconfig("")
 			if err != nil {
 				return nil, fmt.Errorf("failed to create config: %v", err)
 			}
@@ -125,16 +150,9 @@ func NewAPIServerProviderWithOptions(config *APIServerProviderConfig) (provider.
 		gvrCache:           make(map[string]schema.GroupVersionResource),
 		requestChannel:     make(chan *apiRequest),
 		semaphore:          make(chan struct{}, 1),
-		dryRun:             config.DryRun,
 		quietMode:          config.QuietMode,
 		namespacedCache:    make(map[string]bool),
 		knownResourceKinds: make([]string, 0),
-	}
-
-	if config.DryRun {
-		if !config.QuietMode {
-			fmt.Println("Provider initialized in dry-run mode")
-		}
 	}
 
 	// Start the request processor
@@ -349,7 +367,7 @@ func (p *APIServerProvider) FindGVR(kind string) (schema.GroupVersionResource, e
 }
 
 // Implement other Provider interface methods...
-func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) error {
+func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string, dryRun bool) error {
 	p.resourceMutex.Lock()
 	defer p.resourceMutex.Unlock()
 
@@ -364,7 +382,7 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 	}
 
 	var deleteOpts metav1.DeleteOptions
-	if p.dryRun {
+	if dryRun {
 		deleteOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
@@ -372,7 +390,7 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 	if namespace != "" && isNamespaced {
 		deleteErr = p.dynamicClient.Resource(gvr).Namespace(namespace).Delete(context.TODO(), name, deleteOpts)
 		if deleteErr == nil {
-			if p.dryRun {
+			if dryRun {
 				fmt.Printf("Dry run mode: would delete %s/%s\n", strings.ToLower(kind), name)
 			} else {
 				fmt.Printf("Deleted %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
@@ -390,7 +408,7 @@ func (p *APIServerProvider) DeleteK8sResources(kind, name, namespace string) err
 	return deleteErr
 }
 
-func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body interface{}) error {
+func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body interface{}, dryRun bool) error {
 	p.resourceMutex.Lock()
 	defer p.resourceMutex.Unlock()
 
@@ -416,7 +434,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 	metadata["name"] = name
 
 	createOpts := metav1.CreateOptions{}
-	if p.dryRun {
+	if dryRun {
 		createOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
@@ -424,7 +442,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 		metadata["namespace"] = namespace
 		_, err = p.dynamicClient.Resource(gvr).Namespace(namespace).Create(context.TODO(), unstructuredObj, createOpts)
 		if err == nil {
-			if p.dryRun {
+			if dryRun {
 				fmt.Printf("\nDry run mode: would create %s/%s", strings.ToLower(kind), name)
 			} else {
 				fmt.Printf("\nCreated %s/%s in namespace %s", strings.ToLower(kind), name, namespace)
@@ -442,7 +460,7 @@ func (p *APIServerProvider) CreateK8sResource(kind, name, namespace string, body
 	return err
 }
 
-func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte) error {
+func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patchJSON []byte, dryRun bool) error {
 	gvr, err := p.findGVRForResourceOperation(kind)
 	if err != nil {
 		return err
@@ -457,7 +475,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 
 	// Create patch options with dry run if needed
 	patchOpts := metav1.PatchOptions{}
-	if p.dryRun {
+	if dryRun {
 		patchOpts.DryRun = []string{metav1.DryRunAll}
 	}
 
@@ -582,7 +600,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 						return fmt.Errorf("error applying container merge patch: %v", err)
 					}
 
-					if p.dryRun {
+					if dryRun {
 						fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 					} else {
 						fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
@@ -645,7 +663,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 					return fmt.Errorf("error applying merge patch: %v", err)
 				}
 
-				if p.dryRun {
+				if dryRun {
 					fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 				} else {
 					fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
@@ -776,7 +794,7 @@ func (p *APIServerProvider) PatchK8sResource(kind, name, namespace string, patch
 		}
 	}
 
-	if p.dryRun {
+	if dryRun {
 		fmt.Printf("Dry run mode: would patch %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
 	} else {
 		fmt.Printf("Patched %s/%s in namespace %s\n", strings.ToLower(kind), name, namespace)
@@ -1144,15 +1162,8 @@ func (p *APIServerProvider) resolveReference(ref string) *openapi_v3.Schema {
 
 // Add this method to implement the Provider interface
 func (p *APIServerProvider) CreateProviderForContext(context string) (provider.Provider, error) {
-	// Create new config for the context
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{
-		CurrentContext: context,
-	}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
 	// Get REST config for the context
-	restConfig, err := kubeConfig.ClientConfig()
+	restConfig, err := buildRestConfigFromKubeconfig(context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config for context %s: %v", context, err)
 	}
@@ -1172,7 +1183,6 @@ func (p *APIServerProvider) CreateProviderForContext(context string) (provider.P
 	return NewAPIServerProviderWithOptions(&APIServerProviderConfig{
 		Clientset:     clientset,
 		DynamicClient: dynamicClient,
-		DryRun:        p.dryRun,
 		QuietMode:     p.quietMode,
 	})
 }
@@ -1307,10 +1317,6 @@ func (p *APIServerProvider) isNamespacedResource(gvr schema.GroupVersionResource
 	}
 
 	return false, fmt.Errorf("resource %q not found", gvr.Resource)
-}
-
-func (p *APIServerProvider) ToggleDryRun() {
-	p.dryRun = !p.dryRun
 }
 
 func (p *APIServerProvider) GetKnownResourceKinds() []string {

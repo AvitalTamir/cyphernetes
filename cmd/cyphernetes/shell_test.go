@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -420,6 +422,74 @@ func Test_describeRelationshipRule(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("describeRelationshipRule() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+const shellTestKubeconfig = `apiVersion: v1
+kind: Config
+current-context: ctx-a
+clusters:
+- name: cluster-a
+  cluster:
+    server: https://server-a.example.com
+- name: cluster-b
+  cluster:
+    server: https://server-b.example.com
+contexts:
+- name: ctx-a
+  context:
+    cluster: cluster-a
+    user: user-a
+    namespace: ns-a
+- name: ctx-b
+  context:
+    cluster: cluster-b
+    user: user-b
+    namespace: ns-b
+users:
+- name: user-a
+  user:
+    token: token-a
+- name: user-b
+  user:
+    token: token-b
+`
+
+func TestGetCurrentContextFromConfigHonorsKubeContext(t *testing.T) {
+	dir := t.TempDir()
+	kubeconfigPath := filepath.Join(dir, "config")
+	if err := os.WriteFile(kubeconfigPath, []byte(shellTestKubeconfig), 0o600); err != nil {
+		t.Fatalf("failed to write temp kubeconfig: %v", err)
+	}
+	t.Setenv("KUBECONFIG", kubeconfigPath)
+
+	originalKubeContext := core.KubeContext
+	defer func() { core.KubeContext = originalKubeContext }()
+
+	tests := []struct {
+		name        string
+		kubeContext string
+		wantContext string
+		wantNs      string
+	}{
+		{"defaults to current-context", "", "ctx-a", "ns-a"},
+		{"honors --context override", "ctx-b", "ctx-b", "ns-b"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			core.KubeContext = tt.kubeContext
+			gotContext, gotNs, err := getCurrentContextFromConfig()
+			if err != nil {
+				t.Fatalf("getCurrentContextFromConfig() returned error: %v", err)
+			}
+			if gotContext != tt.wantContext {
+				t.Errorf("context = %q, want %q", gotContext, tt.wantContext)
+			}
+			if gotNs != tt.wantNs {
+				t.Errorf("namespace = %q, want %q", gotNs, tt.wantNs)
 			}
 		})
 	}
