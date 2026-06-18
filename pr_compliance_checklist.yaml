@@ -1,0 +1,24 @@
+pr_compliances:
+    - title: "Docs updated for user-facing changes"
+      compliance_label: true
+      objective: "Docs reflect public API, CLI, or query-language changes."
+      success_criteria: "Docs under docs/ (including LANGUAGE.md) or examples update with user-facing changes."
+      failure_criteria: "User-facing changes without doc updates."
+
+    - title: "Tests colocated with the code they cover"
+      compliance_label: true
+      objective: "New behavior is covered by Go tests next to the code under test."
+      success_criteria: "Changes add or update _test.go files in the same package, with an issue reference in a test comment when fixing a reported issue."
+      failure_criteria: "New or changed behavior lands without corresponding test coverage."
+
+    - title: "Consistent Naming Conventions"
+      compliance_label: true
+      objective: "All new identifiers follow Go and project naming standards."
+      success_criteria: "Identifiers follow Go conventions (MixedCaps/PascalCase for exported, mixedCaps for unexported, no underscores) and match surrounding code."
+      failure_criteria: "Inconsistent or non-standard naming that deviates from Go and project conventions."
+
+    - title: "Remove AI-generated noise"
+      compliance_label: true
+      objective: "Changes should not introduce AI-generated slop."
+      success_criteria: "No extra comments, abnormal defensive checks, swallowed errors, interface{}/any casts to bypass types, or style inconsistent with the file."
+      failure_criteria: "Added AI-like comments, abnormal defensive code, ignored errors, type-bypassing casts, or inconsistent style."
