@@ -28,6 +28,38 @@ func NewLexer(input string) *Lexer {
 	return &Lexer{s: s}
 }
 
+// skipCommentBody skips the rest of a comment whose leading '/' has already
+// been consumed. `second` is the rune immediately after that '/': '/' for a
+// single-line comment or '*' for a multi-line comment.
+func (l *Lexer) skipCommentBody(second rune) {
+	if second == '/' {
+		l.s.Next() // consume the second '/'
+		for {
+			c := l.s.Peek()
+			if c == '\n' {
+				l.s.Next() // consume the newline
+				return
+			}
+			if c == scanner.EOF {
+				return
+			}
+			l.s.Next()
+		}
+	}
+	// Multi-line comment: second == '*'
+	l.s.Next() // consume the '*'
+	for {
+		c := l.s.Next()
+		if c == scanner.EOF {
+			return
+		}
+		if c == '*' && l.s.Peek() == '/' {
+			l.s.Next() // consume the closing '/'
+			return
+		}
+	}
+}
+
 // NextToken returns the next token in the input
 func (l *Lexer) NextToken() Token {
 	// If we have a buffered token, return it
@@ -41,10 +73,11 @@ func (l *Lexer) NextToken() Token {
 		// Skip whitespace first
 		l.skipWhitespace()
 
-		// Check for single-line comments (//)
+		// Check for comments (// single-line or /* */ multi-line)
 		if l.s.Peek() == '/' {
 			ch1 := l.s.Next() // Tentatively consume the first '/'
-			if l.s.Peek() == '/' {
+			switch l.s.Peek() {
+			case '/':
 				l.s.Next() // Consume the second '/'
 				// It's a comment, skip to the end of the line or EOF
 				for {
@@ -62,7 +95,25 @@ func (l *Lexer) NextToken() Token {
 				// After skipping the comment (or hitting EOF during skip),
 				// continue the main loop to find the *next* token.
 				continue // Restarts the outer 'for' loop
-			} else {
+			case '*':
+				l.s.Next() // Consume the '*'
+				// It's a multi-line comment, skip until the closing '*/'.
+				for {
+					ch := l.s.Next()
+					if ch == scanner.EOF {
+						// Unterminated comment: surface it as an illegal token
+						// so the parser reports a syntax error.
+						return Token{Type: ILLEGAL, Literal: "/*"}
+					}
+					if ch == '*' && l.s.Peek() == '/' {
+						l.s.Next() // Consume the closing '/'
+						break
+					}
+				}
+				// After skipping the comment, continue the main loop to find
+				// the *next* token.
+				continue // Restarts the outer 'for' loop
+			default:
 				// It was just a single '/'. We already consumed it (ch1).
 				// Treat single '/' as ILLEGAL.
 				return Token{Type: ILLEGAL, Literal: string(ch1)}
@@ -192,7 +243,30 @@ func (l *Lexer) NextToken() Token {
 					return Token{Type: ILLEGAL, Literal: fullLit.String() + "\\"}
 				}
 
-				// Consume the separator ('.', '"', '/', '-')
+				// A '/' that begins a comment (// or /*) is a token separator,
+				// not part of a complex identifier. Return the identifier built
+				// so far and skip the comment. (The '/' is consumed here to look
+				// ahead; text/scanner cannot peek two runes.)
+				if peek == '/' {
+					l.s.Next() // consume the '/'
+					if after := l.s.Peek(); after == '/' || after == '*' {
+						l.skipCommentBody(after)
+						resultTok := Token{Type: IDENT, Literal: fullLit.String()}
+						l.lastToken = resultTok
+						return resultTok
+					}
+					// Not a comment: '/' is a genuine identifier separator
+					// (e.g. an annotation key like "io/foo-bar").
+					fullLit.WriteRune('/')
+					scanTok := l.s.Scan()
+					if scanTok != scanner.Ident {
+						return Token{Type: ILLEGAL, Literal: fullLit.String()}
+					}
+					fullLit.WriteString(l.s.TokenText())
+					continue
+				}
+
+				// Consume the separator ('.', '"', '-')
 				next := l.s.Next()
 				fullLit.WriteRune(next) // Append the separator
 				debugLog("Added separator '%c' to complex identifier: '%s'", next, fullLit.String())

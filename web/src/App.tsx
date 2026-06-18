@@ -3,6 +3,7 @@ import QueryInput from './components/QueryInput';
 import ResultsDisplay from './components/ResultsDisplay';
 import GraphVisualization from './components/GraphVisualization';
 import { executeQuery, QueryResponse } from './api/queryApi';
+import { splitQueries } from './utils/queries';
 import './App.css';
 
 interface AccumulatedResult {
@@ -67,14 +68,7 @@ function App() {
         graphRef.current.resetGraph();
       }
 
-      let textToExecute = selectedText || query;
-      textToExecute = textToExecute.replaceAll(/\/\/.*\n/g, '');
-      textToExecute = textToExecute.replace(/\n/g, ' ');
-      
-      const queries = textToExecute
-        .replace(/;$/, '')
-        .split(';')
-        .map(q => q.trim())
+      const queries = splitQueries(selectedText || query);
 
       const results: QueryResponse[] = [];
       const uniqueResults = new Set<string>();

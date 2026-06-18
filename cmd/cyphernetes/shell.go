@@ -163,7 +163,14 @@ func getCurrentContextFromConfig() (string, string, error) {
 	return currentContextName, namespace, nil
 }
 
-type syntaxHighlighter struct{}
+type syntaxHighlighter struct {
+	// inBlockComment is the /* */ carry-over state at the start of the line
+	// being painted. The shell updates it after each committed line so a
+	// continuation line is dimmed live (while typing), not only once submitted.
+	// Paint only reads it: readline calls Paint on every keystroke, so writing
+	// here would corrupt rendering of the line still in progress.
+	inBlockComment bool
+}
 
 var (
 	keywordsRegex   = regexp.MustCompile(`(?i)\b(match|where|set|delete|create|sum|count|contains|as|in|not|and|return)\b`)
@@ -174,9 +181,100 @@ var (
 	operatorRegex   = regexp.MustCompile(`(?i)(?:\s+)(=~|!=|>=|<=|=|>|<)(?:\s+)`)
 )
 
-func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
-	lineStr := string(line)
+// commentColor is the ANSI code (bright black / grey) used to dim comments.
+const commentColor = 90
 
+func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
+	out, _ := highlightLineState(string(line), h.inBlockComment)
+	return []rune(out)
+}
+
+// highlightLineState colorizes a query line, treating // and /* */ comments as
+// comments so their contents are not re-colorized as code. String literals are
+// skipped while scanning so comment markers inside them (e.g. "http://x") are
+// not mistaken for comments.
+//
+// inBlockComment says whether the line begins inside an unterminated /* */
+// block comment opened on a previous line; the returned bool says whether it
+// ends still inside one. Threading this state across calls lets the shell dim
+// block comments whose body spans several entered lines in multi-line input
+// mode, where each line is painted separately.
+func highlightLineState(line string, inBlockComment bool) (string, bool) {
+	var b strings.Builder
+	n := len(line)
+	start := 0
+
+	// Continuing an open block comment: dim up to its closing */ (or the whole
+	// line if it never closes here), then resume normal scanning.
+	if inBlockComment {
+		if j := strings.Index(line, "*/"); j >= 0 {
+			end := j + 2 // include the closing */
+			b.WriteString(wrapInColor(line[:end], commentColor))
+			start = end
+			inBlockComment = false
+		} else {
+			b.WriteString(wrapInColor(line, commentColor))
+			return b.String(), true
+		}
+	}
+
+	codeStart := start
+	i := start
+	for i < n {
+		c := line[i]
+		switch {
+		case c == '"' || c == '\'':
+			// Skip over the string literal (keeping it in the pending code
+			// fragment so colorizeFragment still colors it).
+			quote := c
+			i++
+			for i < n {
+				if line[i] == '\\' && i+1 < n {
+					i += 2
+					continue
+				}
+				if line[i] == quote {
+					i++
+					break
+				}
+				i++
+			}
+		case c == '/' && i+1 < n && line[i+1] == '/':
+			b.WriteString(colorizeFragment(line[codeStart:i]))
+			end := i
+			for end < n && line[end] != '\n' {
+				end++
+			}
+			b.WriteString(wrapInColor(line[i:end], commentColor))
+			i = end
+			codeStart = end
+		case c == '/' && i+1 < n && line[i+1] == '*':
+			b.WriteString(colorizeFragment(line[codeStart:i]))
+			end := n
+			if j := strings.Index(line[i+2:], "*/"); j >= 0 {
+				end = i + 2 + j + 2 // include the closing */
+			} else if nl := strings.IndexByte(line[i:], '\n'); nl >= 0 {
+				// Unterminated on this line: color only up to the newline.
+				end = i + nl
+			} else {
+				// Unterminated with no newline: the block comment carries over
+				// to the next entered line.
+				inBlockComment = true
+			}
+			b.WriteString(wrapInColor(line[i:end], commentColor))
+			i = end
+			codeStart = end
+		default:
+			i++
+		}
+	}
+	b.WriteString(colorizeFragment(line[codeStart:]))
+	return b.String(), inBlockComment
+}
+
+// colorizeFragment applies the keyword/node/property/etc. coloring pipeline to
+// a fragment of query text (with comments already stripped out).
+func colorizeFragment(lineStr string) string {
 	// Coloring for keywords
 	lineStr = keywordsRegex.ReplaceAllStringFunc(lineStr, func(match string) string {
 		parts := keywordsRegex.FindStringSubmatch(match)
@@ -246,7 +344,7 @@ func (h *syntaxHighlighter) Paint(line []rune, pos int) []rune {
 		return wrapInColor("{", 37) + colorizePropertyContent(inner) + wrapInColor("}", 37)
 	})
 
-	return []rune(lineStr)
+	return lineStr
 }
 
 func colorizePropertyContent(content string) string {
@@ -319,13 +417,18 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 	}
 
 	historyFile := os.Getenv("HOME") + "/.cyphernetes/history"
+	// highlighter holds the block-comment carry-over state used to dim
+	// multi-line /* */ comments. readline calls its Paint() on every keystroke;
+	// the shell updates highlighter.inBlockComment after each committed line so
+	// continuation lines are dimmed live while being typed.
+	highlighter := &syntaxHighlighter{}
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:                 shellPrompt(),
 		HistoryFile:            historyFile,
 		AutoComplete:           completer,
 		InterruptPrompt:        "", // Set this to empty string
 		EOFPrompt:              "exit",
-		Painter:                &syntaxHighlighter{},
+		Painter:                highlighter,
 		DisableAutoSaveHistory: true,
 		HistorySearchFold:      true,
 		FuncFilterInputRune:    filterInput,
@@ -355,7 +458,7 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 
 	go func() {
 		for range sigChan {
-			handleInterrupt(rl, &cmds, &executing)
+			handleInterrupt(rl, &cmds, &executing, highlighter)
 		}
 	}()
 
@@ -400,7 +503,12 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 				continue
 			}
 			cmds = append(cmds, line)
-			lastLine := rl.Config.Painter.Paint([]rune(line), 0)
+			if len(cmds) == 1 {
+				// New command starting: clear any leftover block-comment state.
+				highlighter.inBlockComment = false
+			}
+			var lastLine string
+			lastLine, highlighter.inBlockComment = highlightLineState(line, highlighter.inBlockComment)
 			// delete one line up
 			fmt.Print("\033[A\033[K")
 			if len(cmds) == 1 {
@@ -408,17 +516,23 @@ func initAndRunShell(_ *cobra.Command, _ []string) {
 			} else {
 				fmt.Print(multiLinePrompt())
 			}
-			fmt.Println(string(lastLine))
+			fmt.Println(lastLine)
 			if !strings.HasSuffix(line, ";") && !strings.HasPrefix(line, "\\") && line != "exit" && line != "help" {
+				// More lines to come: highlighter.inBlockComment now carries this
+				// line's open/closed state so the next line is dimmed while typing.
 				rl.SetPrompt(multiLinePrompt())
 				continue
 			}
 			cmd := strings.Join(cmds, " ")
 			cmd = strings.TrimSuffix(cmd, ";")
 			cmds = cmds[:0]
+			// Command complete: reset so the next command's first line paints clean.
+			highlighter.inBlockComment = false
 			rl.SetPrompt(shellPrompt())
 			input = strings.TrimSpace(cmd)
 		} else {
+			// Single-line mode: each line is a full command painted standalone.
+			highlighter.inBlockComment = false
 			input = strings.TrimSpace(line)
 		}
 
@@ -785,7 +899,7 @@ func init() {
 	ShellCmd.Flags().StringVar(&core.OutputFormat, "format", "json", "Output format (json or yaml)")
 }
 
-func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
+func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool, highlighter *syntaxHighlighter) {
 	if *executing {
 		// If we're executing a query, do nothing
 		return
@@ -798,6 +912,10 @@ func handleInterrupt(rl *readline.Instance, cmds *[]string, executing *bool) {
 
 	// Clear the current input and reset the prompt
 	*cmds = []string{}
+	if highlighter != nil {
+		// Abandoning a partial multi-line command clears any open /* */ state.
+		highlighter.inBlockComment = false
+	}
 	rl.SetPrompt(shellPrompt())
 	rl.Refresh()
 }

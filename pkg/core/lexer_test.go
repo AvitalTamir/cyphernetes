@@ -352,3 +352,224 @@ func TestLexer(t *testing.T) {
 		})
 	}
 }
+
+func TestLexerComments(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []Token
+	}{
+		{
+			name:  "single-line comment is skipped",
+			input: "MATCH // this is a comment\n(d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "multi-line comment spanning lines is skipped",
+			input: "MATCH /*\nThis is a multi-line comment\nWoot\n*/ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "multi-line comment on a single line is skipped",
+			input: "MATCH /* inline */ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "multi-line comment adjacent to tokens without spaces",
+			input: "MATCH(/*x*/d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "empty multi-line comment",
+			input: "MATCH /**/ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "asterisks inside multi-line comment do not terminate early",
+			input: "MATCH /* a * b ** c */ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "multi-line comment at start of input",
+			input: "/* leading */ MATCH (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "multi-line comment at end of input",
+			input: "MATCH (d:Deployment) /* trailing */",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "unterminated multi-line comment yields ILLEGAL",
+			input: "MATCH /* never closed",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: ILLEGAL, Literal: "/*"},
+			},
+		},
+		{
+			// The '/' after the '*' is comment body, not a closer, so this
+			// is an unterminated comment.
+			name:  "slash-star-slash is unterminated",
+			input: "MATCH /*/",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: ILLEGAL, Literal: "/*"},
+			},
+		},
+		{
+			// Comments do not nest: the first '*/' closes the whole comment.
+			name:  "comments do not nest",
+			input: "MATCH /*/*/ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			// The closer must not over-consume: a lone '/' after the comment
+			// is still ILLEGAL.
+			name:  "lone slash after closed comment is ILLEGAL",
+			input: "MATCH /* */ /",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: ILLEGAL, Literal: "/"},
+			},
+		},
+		{
+			name:  "asterisk immediately before closer",
+			input: "MATCH /***/ (d:Deployment)",
+			expected: []Token{
+				{Type: MATCH, Literal: "MATCH"},
+				{Type: LPAREN, Literal: "("},
+				{Type: IDENT, Literal: "d"},
+				{Type: COLON, Literal: ":"},
+				{Type: IDENT, Literal: "Deployment"},
+				{Type: RPAREN, Literal: ")"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			// A comment glued to the end of an identifier acts as a token
+			// separator, not part of a complex identifier.
+			name:  "block comment immediately after an identifier",
+			input: "n/*c*/.x",
+			expected: []Token{
+				{Type: IDENT, Literal: "n"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "x"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "line comment immediately after an identifier",
+			input: "n//c\n.x",
+			expected: []Token{
+				{Type: IDENT, Literal: "n"},
+				{Type: DOT, Literal: "."},
+				{Type: IDENT, Literal: "x"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			name:  "block comment glued to a trailing identifier",
+			input: "RETURN n/* c */",
+			expected: []Token{
+				{Type: RETURN, Literal: "RETURN"},
+				{Type: IDENT, Literal: "n"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+		{
+			// Regression: a single '/' followed by a non-comment char is still
+			// a complex-identifier separator (e.g. annotation keys).
+			name:  "slash inside an identifier is not a comment",
+			input: "io/foo-bar",
+			expected: []Token{
+				{Type: IDENT, Literal: "io/foo-bar"},
+				{Type: EOF, Literal: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input)
+			for i, expected := range tt.expected {
+				got := lexer.NextToken()
+				if got.Type != expected.Type || got.Literal != expected.Literal {
+					t.Errorf("token[%d] - got=%+v, want=%+v", i, got, expected)
+				}
+			}
+		})
+	}
+}

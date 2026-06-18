@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import cyphernetes, { CYPHER_LANGUAGE } from '../utils/cypherHighlight';
 import './HistoryModal.css';
+
+// Use the same extended Cypher grammar as the editor so multi-line (/* */)
+// comments are highlighted consistently in the history view.
+SyntaxHighlighter.registerLanguage(CYPHER_LANGUAGE, cyphernetes);
 
 interface HistoryModalProps {
   isOpen: boolean;
@@ -86,7 +91,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, history, o
               }}
             >
               <SyntaxHighlighter
-                language="cypher"
+                language={CYPHER_LANGUAGE}
                 style={dracula}
                 customStyle={{
                   margin: 0,

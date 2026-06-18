@@ -58,7 +58,10 @@ In the `MATCH` clause we draw a pattern or patterns of resources.
 > 💡 Note that the names of resources are always returned in the special `name` field, even when not specified in the `RETURN` clause.
 
 ```graphql
-// Comments are supported
+// Single-line comments are supported
+/*
+  ...and so are multi-line comments
+*/
 MATCH (d:Deployment) RETURN d.spec.replicas
 ```
 

@@ -210,6 +210,142 @@ func TestSyntaxHighlighterPaint(t *testing.T) {
 	}
 }
 
+func TestSyntaxHighlighterComments(t *testing.T) {
+	h := &syntaxHighlighter{}
+
+	// Cases with a precisely known full output.
+	exact := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "pure single-line comment",
+			input:    "// hello world",
+			expected: "\x1b[90m// hello world\x1b[0m",
+		},
+		{
+			name:     "pure multi-line comment",
+			input:    "/* a comment */",
+			expected: "\x1b[90m/* a comment */\x1b[0m",
+		},
+		{
+			name:     "code followed by single-line comment",
+			input:    "RETURN n // get n",
+			expected: "\x1b[35mRETURN\x1b[0m n \x1b[90m// get n\x1b[0m",
+		},
+	}
+	for _, tt := range exact {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(h.Paint([]rune(tt.input), 0))
+			if result != tt.expected {
+				t.Errorf("\nPaint() = %#v\n   want = %#v", result, tt.expected)
+			}
+		})
+	}
+
+	// Cases where we assert key substrings (the full output is verbose).
+	substr := []struct {
+		name           string
+		input          string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			name:        "inline multi-line comment between code",
+			input:       "MATCH /* x */ (n) RETURN n",
+			mustContain: []string{"\x1b[90m/* x */\x1b[0m", "\x1b[35mMATCH\x1b[0m", "\x1b[35mRETURN\x1b[0m"},
+		},
+		{
+			name:        "unterminated multi-line comment colors to end of line",
+			input:       "MATCH /* oops",
+			mustContain: []string{"\x1b[90m/* oops\x1b[0m", "\x1b[35mMATCH\x1b[0m"},
+		},
+		{
+			name:           "slashes inside a string are not treated as a comment",
+			input:          `WHERE n.name = "http://x"`,
+			mustContain:    []string{"\x1b[36m\"http://x\"\x1b[0m"},
+			mustNotContain: []string{"\x1b[90m//"},
+		},
+	}
+	for _, tt := range substr {
+		t.Run(tt.name, func(t *testing.T) {
+			result := string(h.Paint([]rune(tt.input), 0))
+			for _, s := range tt.mustContain {
+				if !strings.Contains(result, s) {
+					t.Errorf("Paint() = %#v\n   missing %#v", result, s)
+				}
+			}
+			for _, s := range tt.mustNotContain {
+				if strings.Contains(result, s) {
+					t.Errorf("Paint() = %#v\n   should not contain %#v", result, s)
+				}
+			}
+		})
+	}
+}
+
+// TestHighlightLineBlockCommentState mirrors how multi-line input mode paints
+// each entered line separately: a /* */ comment whose body spans several lines
+// must stay dimmed on every line, not just the opening one.
+func TestHighlightLineBlockCommentState(t *testing.T) {
+	// Line 1 opens a block comment that does not close on this line.
+	line1, in1 := highlightLineState("/* open", false)
+	if !in1 {
+		t.Fatalf("expected to remain inside a block comment after %q", "/* open")
+	}
+	if line1 != "\x1b[90m/* open\x1b[0m" {
+		t.Errorf("line1 = %#v, want the whole line dimmed", line1)
+	}
+
+	// Line 2 continues the comment, closes it, then has real code that should
+	// be colorized as code (not dimmed).
+	line2, in2 := highlightLineState("still in comment */ RETURN n", in1)
+	if in2 {
+		t.Errorf("expected the block comment to close on line2, but it stayed open")
+	}
+	if !strings.Contains(line2, "\x1b[90mstill in comment */\x1b[0m") {
+		t.Errorf("line2 = %#v\n   missing dimmed comment body up to the closing */", line2)
+	}
+	if !strings.Contains(line2, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("line2 = %#v\n   missing colorized RETURN after the comment closed", line2)
+	}
+
+	// A line fully inside an unterminated comment stays dimmed and keeps the
+	// state open.
+	line3, in3 := highlightLineState("entirely inside", true)
+	if !in3 {
+		t.Errorf("expected state to stay open for a line with no closing */")
+	}
+	if line3 != "\x1b[90mentirely inside\x1b[0m" {
+		t.Errorf("line3 = %#v, want the whole line dimmed", line3)
+	}
+}
+
+// TestSyntaxHighlighterPaintHonorsBlockCommentState verifies that Paint (the
+// method readline calls on every keystroke to render the line being edited)
+// uses the highlighter's carry-over state. This is what dims a continuation
+// line live, while typing, rather than only after it is submitted.
+func TestSyntaxHighlighterPaintHonorsBlockCommentState(t *testing.T) {
+	h := &syntaxHighlighter{}
+
+	// Not inside a comment: a bare line paints as code.
+	if got := string(h.Paint([]rune("RETURN n"), 0)); !strings.Contains(got, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("Paint(%q) = %#v, want RETURN colorized as a keyword", "RETURN n", got)
+	}
+
+	// Inside an open block comment (as the shell sets after an unterminated
+	// opening line): the same line is dimmed as comment body, not code.
+	h.inBlockComment = true
+	got := string(h.Paint([]rune("RETURN n"), 0))
+	if !strings.Contains(got, "\x1b[90mRETURN n\x1b[0m") {
+		t.Errorf("Paint(%q) with open block comment = %#v, want the line dimmed", "RETURN n", got)
+	}
+	if strings.Contains(got, "\x1b[35mRETURN\x1b[0m") {
+		t.Errorf("Paint(%q) with open block comment = %#v, should not colorize RETURN as code", "RETURN n", got)
+	}
+}
+
 func TestExecuteMacro(t *testing.T) {
 	// Create a new MacroManager
 	mm := NewMacroManager()
