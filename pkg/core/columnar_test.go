@@ -260,3 +260,51 @@ func TestColumnarDataPatternMatches(t *testing.T) {
 		}
 	}
 }
+
+// TestColumnarDataDifferentColumnNames tests that AddRow correctly handles rows from
+// different node types that have non-overlapping column names (e.g. ORDER BY queries
+// returning aliased fields from multiple node types like deployment_name/replicaset_name).
+func TestColumnarDataDifferentColumnNames(t *testing.T) {
+	for _, firstNodeId := range []string{"d", "rs"} {
+		t.Run("first_node="+firstNodeId, func(t *testing.T) {
+			cd := NewColumnarData()
+
+			deploy := map[string]interface{}{"deployment_name": "test-deployment-1"}
+			rs := map[string]interface{}{"replicaset_name": "test-rs-1"}
+
+			if firstNodeId == "d" {
+				cd.AddRow(deploy, "d", 0)
+				cd.AddRow(rs, "rs", 0)
+			} else {
+				cd.AddRow(rs, "rs", 0)
+				cd.AddRow(deploy, "d", 0)
+			}
+
+			result := cd.ConvertToQueryResult()
+
+			deployData, ok := result["d"].([]interface{})
+			if !ok || len(deployData) != 1 {
+				t.Fatalf("Expected 1 deployment row, got %v", result["d"])
+			}
+			deployMap, ok := deployData[0].(map[string]interface{})
+			if !ok {
+				t.Fatalf("Expected deployment row to be a map")
+			}
+			if _, ok := deployMap["deployment_name"].(string); !ok {
+				t.Errorf("Expected deployment_name to be a string, got %T (%v)", deployMap["deployment_name"], deployMap["deployment_name"])
+			}
+
+			rsData, ok := result["rs"].([]interface{})
+			if !ok || len(rsData) != 1 {
+				t.Fatalf("Expected 1 replicaset row, got %v", result["rs"])
+			}
+			rsMap, ok := rsData[0].(map[string]interface{})
+			if !ok {
+				t.Fatalf("Expected replicaset row to be a map")
+			}
+			if _, ok := rsMap["replicaset_name"].(string); !ok {
+				t.Errorf("Expected replicaset_name to be a string, got %T (%v)", rsMap["replicaset_name"], rsMap["replicaset_name"])
+			}
+		})
+	}
+}
