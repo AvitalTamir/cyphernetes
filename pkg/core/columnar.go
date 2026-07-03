@@ -28,12 +28,24 @@ func NewColumnarData() *ColumnarData {
 
 // AddRow adds a row of data to the columnar structure with pattern match tracking
 func (cd *ColumnarData) AddRow(data map[string]interface{}, nodeId string, patternMatchId int) {
-	// If this is the first row, extract column names from data keys
-	if len(cd.Columns) == 0 {
-		for key := range data {
-			cd.Columns = append(cd.Columns, key)
+	// Find any new columns in this row's data that are not yet tracked
+	colSet := make(map[string]bool, len(cd.Columns))
+	for _, col := range cd.Columns {
+		colSet[col] = true
+	}
+	var newCols []string
+	for key := range data {
+		if !colSet[key] {
+			newCols = append(newCols, key)
 		}
-		sort.Strings(cd.Columns)
+	}
+	if len(newCols) > 0 {
+		sort.Strings(newCols)
+		// Extend all existing rows with nil values for the new columns
+		for i := range cd.Rows {
+			cd.Rows[i] = append(cd.Rows[i], make([]interface{}, len(newCols))...)
+		}
+		cd.Columns = append(cd.Columns, newCols...)
 	}
 
 	// Build row data in column order
